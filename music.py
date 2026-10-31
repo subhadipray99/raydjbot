@@ -149,7 +149,9 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
             "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
-            "socket_timeout": 5,
+            "retries": 0,
+            "extractor_retries": 0,
+            "socket_timeout": 4,
             "ffmpeg_location": ffmpeg_exe,
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
@@ -175,6 +177,8 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
             "quiet": True,
             "no_warnings": True,
             "ignoreerrors": True,
+            "retries": 2,
+            "socket_timeout": 8,
             "ffmpeg_location": ffmpeg_exe,
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
