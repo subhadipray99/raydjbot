@@ -120,6 +120,7 @@ class RadioBroadcaster:
         title = music_manager.current.title
         logger.info(f"Skipping track requested: '{title}'")
         self._skip_flag = True
+        music_manager._queue_updated_event.set()
         if self._active_proc:
             try:
                 self._active_proc.terminate()
@@ -143,6 +144,7 @@ class RadioBroadcaster:
                 # 1. If no track currently playing, check if there is one in the queue
                 if not music_manager.current and music_manager.queue:
                     music_manager.current = music_manager.queue.pop(0)
+                    music_manager._queue_updated_event.set()
                     self._skip_flag = False
 
                 track = music_manager.current
@@ -152,6 +154,7 @@ class RadioBroadcaster:
                     # Once finished or skipped, reset current
                     music_manager.current = None
                     music_manager.started_at = 0.0
+                    music_manager._queue_updated_event.set()
                     self._skip_flag = False
                 else:
                     # Queue is empty: stream silence keeping the station alive 24/7

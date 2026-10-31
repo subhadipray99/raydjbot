@@ -413,11 +413,14 @@ PLAYER_HTML = """<!DOCTYPE html>
       }
       let html = '';
       queue.forEach((t, i) => {
+        const readyBadge = t.is_cached
+          ? '<span style="display:inline-block;background:rgba(16,185,129,0.2);color:#34d399;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;margin-left:6px;vertical-align:middle;">⚡ READY</span>'
+          : '';
         html += `
           <div class="queue-item">
             <img class="queue-thumb" src="${t.thumbnail}" alt="Thumbnail">
             <div class="queue-info">
-              <div class="queue-title">#${i + 1} &bull; ${t.title}</div>
+              <div class="queue-title">#${i + 1} &bull; ${t.title} ${readyBadge}</div>
               <div class="queue-sub">${t.duration_str} &bull; Requested by @${t.requester}</div>
             </div>
           </div>
@@ -535,6 +538,7 @@ def create_app() -> web.Application:
 
 
 async def start_web_server(port: int) -> web.AppRunner:
+    music_manager.start()
     broadcaster.start()
     app = create_app()
     runner = web.AppRunner(app)

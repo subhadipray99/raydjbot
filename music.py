@@ -359,10 +359,12 @@ class MusicManager:
         self.bot = None
 
         self._new_track_event = asyncio.Event()
+        self._queue_updated_event = asyncio.Event()
         self._download_tasks: dict[str, asyncio.Task] = {}
+        self._prefetch_task: asyncio.Task | None = None
 
     def start(self, bot_instance=None):
-        """Start the 24/7 radio broadcast engine."""
+        """Start the 24/7 radio broadcast engine and top-3 prefetch worker."""
         if bot_instance:
             self.bot = bot_instance
         try:
@@ -372,10 +374,83 @@ class MusicManager:
         except Exception as e:
             logger.error(f"Failed to start audio broadcaster: {e}")
 
+        if not self._prefetch_task or self._prefetch_task.done():
+            self._prefetch_task = asyncio.create_task(self._prefetch_worker())
+            logger.info("Top-3 queue background prefetcher started.")
+
+    def is_track_cached(self, track: Track | None) -> bool:
+        """Check if audio file for a track is already cached on disk."""
+        if not track:
+            return False
+        f = os.path.join("cache", f"{track.id}.mp3")
+        return os.path.exists(f) and os.path.getsize(f) > 10000
+
+    def _clean_old_cache(self, keep_limit: int = 25):
+        """Keep the cache directory clean by removing tracks that are no longer active or queued."""
+        try:
+            cache_dir = "cache"
+            if not os.path.exists(cache_dir):
+                return
+            active_ids = set()
+            if self.current:
+                active_ids.add(f"{self.current.id}.mp3")
+            for t in self.queue:
+                active_ids.add(f"{t.id}.mp3")
+
+            files = []
+            for f in os.listdir(cache_dir):
+                if f.endswith(".mp3"):
+                    p = os.path.join(cache_dir, f)
+                    files.append((p, os.path.getmtime(p), f))
+
+            if len(files) > keep_limit:
+                files.sort(key=lambda x: x[1])  # oldest first
+                for p, mtime, f in files:
+                    if f not in active_ids:
+                        try:
+                            os.remove(p)
+                            logger.info(f"Cleaned up old cached audio: {f}")
+                        except Exception:
+                            pass
+                        if len([x for x in os.listdir(cache_dir) if x.endswith(".mp3")]) <= keep_limit:
+                            break
+        except Exception as e:
+            logger.debug(f"Cache cleanup error: {e}")
+
+    async def _prefetch_worker(self):
+        """Continuously pre-downloads top 3 songs in queue to disk so playback transitions instantly."""
+        while True:
+            try:
+                # Inspect top 3 queued tracks
+                top_tracks = list(self.queue[:3])
+                for t in top_tracks:
+                    if self.is_track_cached(t):
+                        continue
+                    logger.info(f"Pre-buffering queued track: '{t.title}' ({t.id})...")
+                    await self.ensure_track_audio_file(t)
+                    await asyncio.sleep(0.5)
+
+                self._clean_old_cache(keep_limit=25)
+
+                try:
+                    await asyncio.wait_for(self._queue_updated_event.wait(), timeout=5.0)
+                    self._queue_updated_event.clear()
+                except asyncio.TimeoutError:
+                    pass
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in queue prefetch worker: {e}")
+                await asyncio.sleep(3.0)
+
     async def ensure_track_audio_file(self, track: Track | None) -> str | None:
         """Download or retrieve local cached MP3 audio file for a track (deduplicated)."""
         if not track:
             return None
+        out_file = os.path.join("cache", f"{track.id}.mp3")
+        if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+            return out_file
+
         if track.id in self._download_tasks:
             return await self._download_tasks[track.id]
 
@@ -403,9 +478,11 @@ class MusicManager:
 
         self.queue.append(track)
         self._new_track_event.set()
+        self._queue_updated_event.set()
 
-        # Start downloading in background immediately so it is ready when popped
-        asyncio.create_task(self.ensure_track_audio_file(track))
+        # If nothing is currently playing and this is the only track, start downloading immediately
+        if self.current is None and len(self.queue) == 1:
+            asyncio.create_task(self.ensure_track_audio_file(track))
 
         pos = len(self.queue)
         if self.current is None and pos == 1:
@@ -428,13 +505,19 @@ class MusicManager:
 
         base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
 
+        queue_items = []
+        for t in self.queue:
+            d = t.to_dict()
+            d["is_cached"] = self.is_track_cached(t)
+            queue_items.append(d)
+
         return {
             "is_playing": self.current is not None and self.started_at > 0,
             "is_loading": self.current is not None and self.started_at == 0,
             "position_sec": round(position, 2),
             "now_playing": self.current.to_dict() if self.current else None,
             "radio_stream_url": f"{base_url}/radio.mp3",
-            "queue": [t.to_dict() for t in self.queue],
+            "queue": queue_items,
             "queue_count": len(self.queue),
         }
 
