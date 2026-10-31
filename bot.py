@@ -51,13 +51,20 @@ class HighriseBot(BaseBot):
         super().__init__()
         self.bot_id: str | None = None
         self.session_metadata: SessionMetadata | None = None
+        self._has_announced: bool = False
 
     async def on_start(self, session_metadata: SessionMetadata) -> None:
         """Triggered when connection to room is established."""
         self.session_metadata = session_metadata
         self.bot_id = str(session_metadata.user_id)
         logger.info(f"Bot successfully connected to room! Bot User ID: {self.bot_id}")
-        await self.highrise.chat("Bot is now online! Type !help to see available commands.")
+        
+        # Only broadcast welcome message once on initial startup, not on every reconnect
+        if not self._has_announced:
+            await self.highrise.chat("Bot is now online! Type !help to see available commands.")
+            self._has_announced = True
+        else:
+            logger.info("Bot reconnected silently (avoiding chat spam).")
 
     async def on_user_join(self, user: User, position: Position | AnchorPosition | None = None) -> None:
         """Triggered when a user joins the room."""
