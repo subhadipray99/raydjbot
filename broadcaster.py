@@ -2,14 +2,16 @@ import asyncio
 import logging
 import os
 import subprocess
+import time
+import imageio_ffmpeg
 from music import music_manager, Track
+import config
 
 logger = logging.getLogger("Broadcaster")
 
 
 def _generate_silence_chunk() -> bytes:
     """Generate 1 second of silent 44.1kHz 128kbps stereo MP3 frames."""
-    import imageio_ffmpeg
     try:
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
         cmd = [
@@ -34,30 +36,32 @@ def _generate_silence_chunk() -> bytes:
 
 
 class RadioBroadcaster:
-    """Central broadcast engine feeding continuous audio into Highrise room's Custom Radio Station.
-    Streams user requested songs from local cache; keeps the stream alive with silence when idle."""
+    """24/7 Autonomous Live Radio Station engine for Highrise room.
+    Continuously feeds audio to connected clients. Streams queued songs without gaps
+    and maintains live connection with silence when idle."""
 
     def __init__(self):
         self._subscribers: set[asyncio.Queue] = set()
         self._runner_task: asyncio.Task | None = None
         self._active_proc: asyncio.subprocess.Process | None = None
+        self._skip_flag: bool = False
         self._silence_chunk: bytes | None = None
         self.bot = None
 
     def subscribe(self) -> asyncio.Queue:
-        """Register a new HTTP listener queue (e.g. Highrise room client or browser)."""
-        q = asyncio.Queue(maxsize=40)
+        """Register a new HTTP listener (Highrise in-room radio player or browser)."""
+        q = asyncio.Queue(maxsize=50)
         self._subscribers.add(q)
         logger.info(f"Listener connected to /radio.mp3. Active listeners: {len(self._subscribers)}")
         return q
 
     def unsubscribe(self, q: asyncio.Queue):
-        """Unregister a listener queue upon client disconnect."""
+        """Unregister a listener upon disconnect."""
         self._subscribers.discard(q)
         logger.info(f"Listener disconnected from /radio.mp3. Active listeners: {len(self._subscribers)}")
 
     def broadcast(self, chunk: bytes):
-        """Distribute an MP3 audio chunk to all active subscribers with overflow protection."""
+        """Send an MP3 chunk to all connected listeners."""
         if not self._subscribers:
             return
         for q in list(self._subscribers):
@@ -71,58 +75,125 @@ class RadioBroadcaster:
             except asyncio.QueueFull:
                 pass
 
+    def skip_current(self) -> tuple[bool, str]:
+        """Skip currently playing track immediately and advance to next."""
+        if not music_manager.current:
+            return False, "No music is currently playing on the queue."
+        title = music_manager.current.title
+        logger.info(f"Skipping track requested: '{title}'")
+        self._skip_flag = True
+        if self._active_proc:
+            try:
+                self._active_proc.terminate()
+            except Exception:
+                pass
+        return True, f"⏭️ Skipped: \"{title}\""
+
     def start(self, bot_instance=None):
-        """Launch the persistent audio broadcast engine."""
+        """Launch the persistent 24/7 radio broadcast engine."""
         if bot_instance:
             self.bot = bot_instance
         if not self._runner_task or self._runner_task.done():
             self._runner_task = asyncio.create_task(self._run())
-            logger.info("Custom radio broadcast engine initialized.")
+            logger.info("24/7 Live Radio Station engine initialized.")
+
+    def _get_silence_chunk(self) -> bytes:
+        if not self._silence_chunk:
+            self._silence_chunk = _generate_silence_chunk()
+        return self._silence_chunk
 
     async def _run(self):
-        """Main broadcast loop: streams requested song when active, otherwise keeps stream alive with silence."""
-        logger.info("Custom radio broadcast loop running.")
+        """Main autonomous radio station loop."""
+        logger.info("24/7 Live Radio Station loop running.")
         while True:
             try:
+                # 1. If no track currently playing, check if there is one in the queue
+                if not music_manager.current and music_manager.queue:
+                    music_manager.current = music_manager.queue.pop(0)
+                    music_manager.started_at = time.time()
+                    self._skip_flag = False
+                    await self._announce_now_playing(music_manager.current)
+
                 track = music_manager.current
                 if track:
-                    # Retrieve or wait for local cached MP3 audio file
-                    file_path = await music_manager.ensure_track_audio_file(track)
-                    if file_path and os.path.exists(file_path) and music_manager.current == track:
-                        await self._stream_local_file_ffmpeg(track, file_path)
-                    elif music_manager.current == track:
-                        logger.warning(f"Could not prepare audio file for '{track.title}'. Skipping.")
-                        if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
-                            try:
-                                await self.bot.highrise.chat(f"⚠️ Could not load audio for \"{track.title}\". Skipping.")
-                            except Exception:
-                                pass
-                        music_manager.notify_track_finished(track)
-                        await asyncio.sleep(1)
+                    # Stream the current track
+                    await self._play_track(track)
+                    # Once finished or skipped, reset current
+                    music_manager.current = None
+                    music_manager.started_at = 0.0
+                    self._skip_flag = False
                 else:
-                    # Queue is idle: keep the radio connection open 24/7 with silence
-                    await self._stream_idle_silence()
+                    # Queue is empty: stream silence keeping the station alive 24/7
+                    await self._stream_idle_silence_tick()
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Unexpected error in broadcast loop: {e}", exc_info=True)
+                logger.error(f"Error in radio broadcast loop: {e}", exc_info=True)
                 await asyncio.sleep(1)
 
-    async def _stream_local_file_ffmpeg(self, track: Track, file_path: str):
-        """Stream locally cached audio file in real-time as standard MP3."""
-        import imageio_ffmpeg
-        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    async def _announce_now_playing(self, track: Track):
+        """Announce new track in room chat."""
+        if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
+            try:
+                base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
+                announcement = (
+                    f"🎶 Now Playing: \"{track.title}\" [{track.duration_str}]\n"
+                    f"👤 Requested by: @{track.requester}\n"
+                    f"📻 Room Radio: {base_url}/radio.mp3"
+                )
+                await self.bot.highrise.chat(announcement)
+            except Exception as e:
+                logger.error(f"Error announcing track in room chat: {e}")
 
+    async def _ensure_audio_file_while_streaming(self, track: Track) -> str | None:
+        """Download or retrieve audio file while continuously streaming silence so the connection never starves."""
+        silence = self._get_silence_chunk()
+        chunk_size = max(len(silence) // 4, 417)
+        slices = [silence[i:i + chunk_size] for i in range(0, len(silence), chunk_size)]
+
+        download_task = asyncio.create_task(music_manager.ensure_track_audio_file(track))
+        slice_idx = 0
+
+        while not download_task.done():
+            if self._skip_flag:
+                download_task.cancel()
+                return None
+            # Broadcast silence slice so Highrise never times out
+            self.broadcast(slices[slice_idx % len(slices)])
+            slice_idx += 1
+            await asyncio.sleep(0.25)
+
+        try:
+            return await download_task
+        except Exception as e:
+            logger.error(f"Error in audio download for '{track.title}': {e}")
+            return None
+
+    async def _play_track(self, track: Track):
+        """Stream audio file for the track through ffmpeg."""
+        file_path = await self._ensure_audio_file_while_streaming(track)
+
+        if not file_path or not os.path.exists(file_path):
+            if not self._skip_flag:
+                logger.warning(f"Could not load audio file for '{track.title}'. Skipping.")
+                if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
+                    try:
+                        await self.bot.highrise.chat(f"⚠️ Could not load audio for \"{track.title}\". Skipping to next song.")
+                    except Exception:
+                        pass
+            return
+
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
         cmd = [
             ffmpeg_exe,
-            "-re",               # Read local file at real-time native frame rate
+            "-re",               # Read local file at native 1x real-time rate
             "-i", file_path,     # Local audio file
             "-vn",               # Disable video
-            "-ar", "44100",      # Standard 44.1 kHz audio
-            "-ac", "2",          # Stereo channels
+            "-ar", "44100",      # 44.1 kHz
+            "-ac", "2",          # Stereo
             "-b:a", "128k",      # 128 kbps constant bitrate
-            "-f", "mp3",         # MP3 output format
+            "-f", "mp3",         # MP3 container
             "pipe:1"             # Pipe to stdout
         ]
 
@@ -134,17 +205,16 @@ class RadioBroadcaster:
                 stderr=asyncio.subprocess.DEVNULL
             )
             self._active_proc = proc
-            logger.info(f"Broadcasting requested song from local audio: \"{track.title}\" [{track.duration_str}]")
+            logger.info(f"Broadcasting requested song: \"{track.title}\" [{track.duration_str}]")
 
             while True:
-                # Break immediately if skip was pressed or track changed
-                if music_manager._skip_event.is_set() or music_manager.current != track:
-                    logger.info(f"Track '{track.title}' interrupted or skipped.")
+                if self._skip_flag:
+                    logger.info(f"Track '{track.title}' was skipped.")
                     break
 
                 chunk = await proc.stdout.read(4096)
                 if not chunk:
-                    logger.info(f"Track '{track.title}' finished playback.")
+                    logger.info(f"Track '{track.title}' completed playback.")
                     break
 
                 self.broadcast(chunk)
@@ -161,34 +231,27 @@ class RadioBroadcaster:
                     pass
             self._active_proc = None
 
-            # Clean up the file after playback finishes
+            # Clean up local cache file
             try:
                 if os.path.exists(file_path):
                     os.remove(file_path)
             except Exception:
                 pass
 
-            # If track naturally completed and wasn't skipped, signal music_manager
-            if music_manager.current == track and not music_manager._skip_event.is_set():
-                music_manager.notify_track_finished(track)
+    async def _stream_idle_silence_tick(self):
+        """Stream silence keeping the radio connection alive 24/7 when no songs are queued."""
+        silence = self._get_silence_chunk()
+        chunk_size = max(len(silence) // 4, 417)
+        slices = [silence[i:i + chunk_size] for i in range(0, len(silence), chunk_size)]
 
-    async def _stream_idle_silence(self):
-        """Keep the Highrise radio station connected 24/7 with silence while waiting for requested songs."""
-        if not self._silence_chunk:
-            self._silence_chunk = _generate_silence_chunk()
-
-        # Stream half-second slices of silence every 0.5s to maintain steady 128kbps flow
-        chunk_size = max(len(self._silence_chunk) // 2, 417)
-        part1 = self._silence_chunk[:chunk_size]
-        part2 = self._silence_chunk[chunk_size:]
-
-        while not music_manager.current:
-            self.broadcast(part1)
-            await asyncio.sleep(0.5)
-            if music_manager.current:
-                break
-            self.broadcast(part2)
-            await asyncio.sleep(0.5)
+        for s in slices:
+            self.broadcast(s)
+            try:
+                await asyncio.wait_for(music_manager._new_track_event.wait(), timeout=0.25)
+                music_manager._new_track_event.clear()
+                break  # New track queued! Break immediately to play it
+            except asyncio.TimeoutError:
+                pass
 
 
 # Global singleton broadcaster instance

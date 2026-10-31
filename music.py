@@ -164,7 +164,7 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
 
 
 class MusicManager:
-    """Manages the room music queue and coordinates playback on the room's custom radio."""
+    """Manages the room music queue for the 24/7 custom live radio."""
 
     def __init__(self):
         self.queue: list[Track] = []
@@ -172,31 +172,19 @@ class MusicManager:
         self.started_at: float = 0.0
         self.bot = None
 
-        self._skip_event = asyncio.Event()
         self._new_track_event = asyncio.Event()
-        self._track_finished_event = asyncio.Event()
-        self._runner_task: asyncio.Task | None = None
         self._download_tasks: dict[str, asyncio.Task] = {}
 
     def start(self, bot_instance=None):
-        """Start the background queue runner and radio broadcast engine."""
+        """Start the 24/7 radio broadcast engine."""
         if bot_instance:
             self.bot = bot_instance
-        if not self._runner_task or self._runner_task.done():
-            self._runner_task = asyncio.create_task(self._queue_runner())
-            logger.info("Music queue runner initialized.")
-
-        # Initialize global audio broadcaster
         try:
             from broadcaster import broadcaster
             broadcaster.start(self.bot)
+            logger.info("24/7 Live Radio engine started.")
         except Exception as e:
             logger.error(f"Failed to start audio broadcaster: {e}")
-
-    def notify_track_finished(self, track: Track):
-        """Called by broadcaster when audio stream reaches natural completion."""
-        if self.current == track:
-            self._track_finished_event.set()
 
     async def ensure_track_audio_file(self, track: Track | None) -> str | None:
         """Download or retrieve local cached MP3 audio file for a track (deduplicated)."""
@@ -224,7 +212,7 @@ class MusicManager:
         self.queue.append(track)
         self._new_track_event.set()
 
-        # Start downloading in background immediately so it's ready when popped
+        # Start downloading in background immediately so it is ready when popped
         asyncio.create_task(self.ensure_track_audio_file(track))
 
         pos = len(self.queue)
@@ -236,12 +224,9 @@ class MusicManager:
         return True, msg, track
 
     def skip(self) -> tuple[bool, str]:
-        """Skip currently playing track."""
-        if not self.current:
-            return False, "No music is currently playing on the queue."
-        skipped_title = self.current.title
-        self._skip_event.set()
-        return True, f"⏭️ Skipped: \"{skipped_title}\""
+        """Skip currently playing track immediately."""
+        from broadcaster import broadcaster
+        return broadcaster.skip_current()
 
     def get_state(self) -> dict:
         """Get synchronized player state for frontend."""
@@ -259,66 +244,6 @@ class MusicManager:
             "queue": [t.to_dict() for t in self.queue],
             "queue_count": len(self.queue),
         }
-
-    async def _wait_for_skip_or_finish(self):
-        """Wait for either a manual skip or natural track completion."""
-        skip_task = asyncio.create_task(self._skip_event.wait())
-        finish_task = asyncio.create_task(self._track_finished_event.wait())
-        done, pending = await asyncio.wait(
-            [skip_task, finish_task],
-            return_when=asyncio.FIRST_COMPLETED
-        )
-        for t in pending:
-            t.cancel()
-
-    async def _queue_runner(self):
-        """Continuously advances tracks from queue."""
-        while True:
-            try:
-                if not self.queue:
-                    self.current = None
-                    self.started_at = 0.0
-                    self._new_track_event.clear()
-                    await self._new_track_event.wait()
-                    continue
-
-                self.current = self.queue.pop(0)
-                self.started_at = time.time()
-                logger.info(f"[Music] Now Playing: {self.current.title} (Requested by @{self.current.requester})")
-
-                # Announce in Highrise room
-                if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
-                    try:
-                        base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
-                        announcement = (
-                            f"🎶 Now Playing: \"{self.current.title}\" [{self.current.duration_str}]\n"
-                            f"👤 Requested by: @{self.current.requester}\n"
-                            f"📻 Room Radio: {base_url}/radio.mp3"
-                        )
-                        await self.bot.highrise.chat(announcement)
-                    except Exception as e:
-                        logger.error(f"Error announcing new track in room chat: {e}")
-
-                # Wait for manual skip, natural completion, or safety duration timeout
-                self._skip_event.clear()
-                self._track_finished_event.clear()
-                duration = max(self.current.duration_sec, 5)
-
-                try:
-                    await asyncio.wait_for(
-                        self._wait_for_skip_or_finish(),
-                        timeout=duration + 10
-                    )
-                except asyncio.TimeoutError:
-                    pass  # Duration reached naturally
-                finally:
-                    self.current = None
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in queue runner: {e}", exc_info=True)
-                await asyncio.sleep(2)
 
 
 # Global singleton music manager

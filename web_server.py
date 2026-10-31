@@ -267,8 +267,8 @@ PLAYER_HTML = """<!DOCTYPE html>
       <span id="time-total">0:00</span>
     </div>
 
-    <button class="btn-sync" id="btn-audio-control" onclick="toggleAudio()">
-      <span id="btn-icon">🔊</span> <span id="btn-text">Click to Listen Live</span>
+    <button class="btn-sync" id="btn-audio-control" onclick="toggleRadio()">
+      <span id="btn-icon">▶️</span> <span id="btn-text">Listen Live (Browser)</span>
     </button>
   </div>
 
@@ -282,53 +282,32 @@ PLAYER_HTML = """<!DOCTYPE html>
   </div>
 
   <div class="instructions">
+    📻 <b>24/7 Autonomous Radio:</b> The radio station runs 24/7 on the cloud and plays directly inside your Highrise room without needing any browser or PC running.<br>
     💡 In-room commands: <b>/play &lt;song&gt;</b> &bull; <b>/skip</b> &bull; <b>/queue</b> &bull; <b>/np</b>
   </div>
 
-  <div id="youtube-player-container">
-    <div id="yt-player"></div>
-  </div>
+  <audio id="live-audio" src="/radio.mp3" preload="none"></audio>
 
-  <!-- YouTube IFrame Player API -->
-  <script src="https://www.youtube.com/iframe_api"></script>
   <script>
-    let player = null;
-    let isApiReady = false;
-    let currentVideoId = null;
-    let isAudioActive = false;
-    let totalDuration = 180;
     let currentPosition = 0;
+    let totalDuration = 180;
+    let currentTrackId = null;
 
-    function onYouTubeIframeAPIReady() {
-      isApiReady = true;
-      player = new YT.Player('yt-player', {
-        height: '180',
-        width: '320',
-        playerVars: {
-          'autoplay': 1,
-          'controls': 0,
-          'disablekb': 1,
-          'fs': 0,
-          'rel': 0,
-          'playsinline': 1
-        },
-        events: {
-          'onReady': onPlayerReady,
-          'onStateChange': onPlayerStateChange
-        }
-      });
-    }
-
-    function onPlayerReady(event) {
-      console.log("YouTube player ready.");
-      fetchState();
-      setInterval(fetchState, 2500);
-      setInterval(updateProgressTick, 1000);
-    }
-
-    function onPlayerStateChange(event) {
-      if (event.data === YT.PlayerState.ENDED) {
-        fetchState();
+    function toggleRadio() {
+      const audio = document.getElementById('live-audio');
+      if (audio.paused) {
+        audio.play().then(() => {
+          document.getElementById('btn-icon').innerText = '🔊';
+          document.getElementById('btn-text').innerText = 'Playing Stream (Local)';
+          document.getElementById('btn-audio-control').style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        }).catch(err => {
+          console.error("Audio play error:", err);
+        });
+      } else {
+        audio.pause();
+        document.getElementById('btn-icon').innerText = '▶️';
+        document.getElementById('btn-text').innerText = 'Listen Live (Browser)';
+        document.getElementById('btn-audio-control').style.background = 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)';
       }
     }
 
@@ -337,16 +316,6 @@ PLAYER_HTML = """<!DOCTYPE html>
       const m = Math.floor(secs / 60);
       const s = secs % 60;
       return `${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-
-    function toggleAudio() {
-      if (!player) return;
-      isAudioActive = true;
-      player.unMute();
-      player.playVideo();
-      document.getElementById('btn-icon').innerText = '🎵';
-      document.getElementById('btn-text').innerText = 'Listening In Sync';
-      document.getElementById('btn-audio-control').style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
     }
 
     async function fetchState() {
@@ -362,51 +331,30 @@ PLAYER_HTML = """<!DOCTYPE html>
     function renderState(state) {
       const now = state.now_playing;
       if (!now) {
-        document.getElementById('track-title').innerText = "No Music Playing";
+        document.getElementById('track-title').innerText = "Radio Active - Queue Empty";
         document.getElementById('track-requester').innerText = "Type /play <song> in Highrise chat!";
         document.getElementById('track-art').src = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500";
         document.getElementById('progress-bar').style.width = '0%';
         document.getElementById('time-current').innerText = "0:00";
         document.getElementById('time-total').innerText = "0:00";
-        if (player && player.stopVideo) player.stopVideo();
-        currentVideoId = null;
+        currentTrackId = null;
         renderQueue(state.queue);
         return;
       }
 
+      currentTrackId = now.id;
       document.getElementById('track-title').innerText = now.title;
       document.getElementById('track-requester').innerText = "👤 Requested by @" + now.requester;
       document.getElementById('track-art').src = now.thumbnail;
       totalDuration = now.duration_sec || 180;
       currentPosition = state.position_sec || 0;
       document.getElementById('time-total').innerText = now.duration_str;
-
-      // Handle video playback and synchronization
-      if (player && player.loadVideoById) {
-        if (currentVideoId !== now.id) {
-          currentVideoId = now.id;
-          player.loadVideoById({
-            videoId: now.id,
-            startSeconds: currentPosition
-          });
-          if (isAudioActive) {
-            player.unMute();
-            player.playVideo();
-          }
-        } else {
-          // Check if sync drift is > 3 seconds
-          const localTime = player.getCurrentTime ? player.getCurrentTime() : currentPosition;
-          if (Math.abs(localTime - currentPosition) > 3) {
-            player.seekTo(currentPosition, true);
-          }
-        }
-      }
-
+      updateProgressTick();
       renderQueue(state.queue);
     }
 
     function updateProgressTick() {
-      if (!currentVideoId) return;
+      if (!currentTrackId) return;
       currentPosition += 1;
       const pct = Math.min(100, (currentPosition / totalDuration) * 100);
       document.getElementById('progress-bar').style.width = pct + '%';
@@ -436,6 +384,10 @@ PLAYER_HTML = """<!DOCTYPE html>
       });
       listEl.innerHTML = html;
     }
+
+    fetchState();
+    setInterval(fetchState, 2500);
+    setInterval(updateProgressTick, 1000);
   </script>
 </body>
 </html>
