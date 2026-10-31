@@ -458,54 +458,54 @@ async def handle_audio_current(request: web.Request) -> web.Response:
 
 
 async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
-    """Continuous live MP3 radio station stream for Highrise in-room Custom Radio Station."""
-    response = web.StreamResponse(
-        status=200,
-        reason="OK",
-        headers={
-            "Content-Type": "audio/mpeg",
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Connection": "keep-alive",
-            "icy-name": "Highrise RayDJBot Radio",
-            "icy-genre": "Various",
-            "icy-br": "128",
-        },
-    )
-    await response.prepare(request)
+    """Stream live audio bytes for browser audio players and Highrise custom radio."""
+    if not music_manager.current:
+        return web.Response(
+            text="No music is currently playing! Request a song in your Highrise room using /play <song> first.",
+            status=404,
+            content_type="text/plain",
+        )
+
+    stream_url = await music_manager.get_current_stream_url()
+    if not stream_url:
+        return web.Response(text="Failed to extract audio stream for current track.", status=502)
+
+    # Forward client Range header if requested (essential for browser audio seeking/buffering)
+    range_header = request.headers.get("Range")
+    upstream_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+    if range_header:
+        upstream_headers["Range"] = range_header
 
     async with aiohttp.ClientSession() as session:
-        while True:
-            if not music_manager.current:
-                try:
-                    await response.write(b"\x00" * 4096)
-                except (ConnectionResetError, asyncio.CancelledError):
-                    break
-                await asyncio.sleep(2)
-                continue
+        async with session.get(stream_url, headers=upstream_headers) as upstream:
+            content_type = upstream.headers.get("Content-Type", "audio/mp4")
+            resp_headers = {
+                "Content-Type": content_type,
+                "Accept-Ranges": "bytes",
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "no-cache",
+            }
+            if "Content-Length" in upstream.headers:
+                resp_headers["Content-Length"] = upstream.headers["Content-Length"]
+            if "Content-Range" in upstream.headers:
+                resp_headers["Content-Range"] = upstream.headers["Content-Range"]
 
-            stream_url = await music_manager.get_current_stream_url()
-            if not stream_url:
-                await asyncio.sleep(2)
-                continue
+            response = web.StreamResponse(status=upstream.status, headers=resp_headers)
+            await response.prepare(request)
 
-            current_id = music_manager.current.id
             try:
-                async with session.get(stream_url) as upstream:
-                    async for chunk in upstream.content.iter_chunked(16384):
-                        if not music_manager.current or music_manager.current.id != current_id:
-                            break
-                        try:
-                            await response.write(chunk)
-                        except (ConnectionResetError, asyncio.CancelledError):
-                            return response
+                async for chunk in upstream.content.iter_chunked(16384):
+                    await response.write(chunk)
             except (ConnectionResetError, asyncio.CancelledError):
-                break
-            except Exception as e:
-                logger.debug(f"Radio stream error: {e}")
-                await asyncio.sleep(1)
+                pass
 
-    return response
+            return response
 
 
 def create_app() -> web.Application:
