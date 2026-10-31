@@ -70,12 +70,71 @@ def parse_duration_str(dur_str: str) -> int:
     return 180  # Default fallback 3 minutes
 
 
+def extract_direct_audio_url_sync(title: str, video_id: str | None = None) -> tuple[str | None, dict]:
+    """Extract playable audio stream URL from YouTube with SoundCloud fallback."""
+    import os
+    try:
+        import yt_dlp
+    except ImportError:
+        logger.error("yt_dlp not installed")
+        return None, {}
+
+    # 1. Try YouTube extraction first
+    if video_id:
+        try:
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "noplaylist": True,
+                "quiet": True,
+                "no_warnings": True,
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "ios", "web"]
+                    }
+                },
+            }
+            if os.path.exists("cookies.txt"):
+                ydl_opts["cookiefile"] = "cookies.txt"
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+                if "entries" in info:
+                    info = info["entries"][0]
+                url = info.get("url")
+                if url:
+                    headers = info.get("http_headers", {})
+                    return url, headers
+        except Exception as e:
+            logger.warning(f"YouTube stream extract failed for '{title}': {e}. Trying SoundCloud fallback...")
+
+    # 2. Resilient fallback to SoundCloud (immune to YouTube datacenter blocks)
+    try:
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            clean_title = re.sub(r"[^\w\s-]", "", title).strip()
+            info = ydl.extract_info(f"scsearch1:{clean_title}", download=False)
+            if "entries" in info and info["entries"]:
+                info = info["entries"][0]
+                url = info.get("url")
+                if url:
+                    logger.info(f"Resolved stream from SoundCloud: {info.get('title')}")
+                    return url, info.get("http_headers", {})
+    except Exception as e:
+        logger.error(f"SoundCloud fallback also failed for '{title}': {e}")
+
+    return None, {}
+
+
 def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | None:
     """Search YouTube for a query or video ID."""
     query = query.strip()
     video_id = None
 
-    # Check if query is a direct YouTube URL
     url_match = re.search(r"(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})", query)
     if url_match:
         video_id = url_match.group(1)
@@ -102,7 +161,6 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
         logger.error(f"Network error while querying YouTube: {e}")
         return None
 
-    # Search results page extraction
     match = re.search(r"var ytInitialData = ({.*?});</script>", html)
     if match:
         try:
@@ -130,7 +188,6 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
         except Exception as e:
             logger.debug(f"Error parsing search results json: {e}")
 
-    # Fallback if searching for a single video watch page
     title_match = re.search(r"<title>(.*?)(?: - YouTube)?</title>", html)
     found_title = title_match.group(1) if title_match else query
     if video_id:
@@ -168,7 +225,7 @@ class MusicManager:
             logger.info("Music queue runner initialized.")
 
     def set_station(self, key: str) -> tuple[bool, str]:
-        """Change the active 24/7 radio station stream."""
+        """Change the active background 24/7 radio station stream."""
         k = key.lower().strip()
         if k in RADIO_STATIONS:
             self.current_station_key = k
@@ -179,11 +236,23 @@ class MusicManager:
         return False, f"Unknown station '{key}'. Available stations: {available}"
 
     def get_current_station_url(self) -> str:
-        """Get the URL of the currently active 24/7 radio station."""
+        """Get the URL of the currently active 24/7 background radio station."""
         return RADIO_STATIONS.get(self.current_station_key, RADIO_STATIONS["dance"])["url"]
 
+    async def get_current_stream_url(self) -> tuple[str | None, dict]:
+        """Get direct playable audio stream URL and headers for the currently playing requested track."""
+        if not self.current:
+            return None, {}
+        if not self.current.stream_url:
+            url, headers = await asyncio.to_thread(
+                extract_direct_audio_url_sync, self.current.title, self.current.id
+            )
+            self.current.stream_url = url
+            self.current.http_headers = headers
+        return self.current.stream_url, self.current.http_headers or {}
+
     async def search_and_queue(self, query: str, requester: str) -> tuple[bool, str, Track | None]:
-        """Search YouTube asynchronously and enqueue for Web Jukebox."""
+        """Search YouTube asynchronously and enqueue."""
         loop = asyncio.get_running_loop()
         track = await loop.run_in_executor(None, search_youtube_sync, query, requester)
         if not track:
@@ -194,16 +263,16 @@ class MusicManager:
 
         pos = len(self.queue)
         if self.current is None and pos == 1:
-            msg = f"🎶 Queued now: \"{track.title}\" [{track.duration_str}]"
+            msg = f"🎶 Playing now: \"{track.title}\" [{track.duration_str}]"
         else:
             current_playing_text = f" (Playing: \"{self.current.title}\")" if self.current else ""
             msg = f"➕ Added to queue (#{pos}): \"{track.title}\" [{track.duration_str}]{current_playing_text}"
         return True, msg, track
 
     def skip(self) -> tuple[bool, str]:
-        """Skip currently playing track on Web Jukebox."""
+        """Skip currently playing track."""
         if not self.current:
-            return False, "No music is currently playing on the jukebox."
+            return False, "No music is currently playing on the queue."
         skipped_title = self.current.title
         self._skip_event.set()
         return True, f"⏭️ Skipped: \"{skipped_title}\""
@@ -231,7 +300,7 @@ class MusicManager:
         }
 
     async def _queue_runner(self):
-        """Continuously advances tracks from queue for Web Jukebox."""
+        """Continuously advances tracks from queue."""
         while True:
             try:
                 if not self.queue:
@@ -245,6 +314,9 @@ class MusicManager:
                 self.started_at = time.time()
                 logger.info(f"[Music] Now Playing: {self.current.title} (Requested by @{self.current.requester})")
 
+                # Pre-fetch stream URL in background
+                asyncio.create_task(self.get_current_stream_url())
+
                 # Announce in Highrise room
                 if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
                     try:
@@ -252,7 +324,7 @@ class MusicManager:
                         announcement = (
                             f"🎶 Now Playing: \"{self.current.title}\" [{self.current.duration_str}]\n"
                             f"👤 Requested by: @{self.current.requester}\n"
-                            f"📻 Web Jukebox: {base_url}/player"
+                            f"📻 In-Room Radio: {base_url}/radio.mp3"
                         )
                         await self.bot.highrise.chat(announcement)
                     except Exception as e:
