@@ -114,7 +114,7 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
 
 
 def download_track_audio_sync(title: str, video_id: str) -> str | None:
-    """Download audio file locally using yt-dlp with YouTube and SoundCloud fallback."""
+    """Download audio file locally using yt-dlp directly from YouTube (mobile client)."""
     import yt_dlp
     import imageio_ffmpeg
 
@@ -126,40 +126,43 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
         return out_file
 
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
-        "quiet": True,
-        "no_warnings": True,
-        "ffmpeg_location": ffmpeg_exe,
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "128",
-        }],
-    }
 
-    # 1. Try YouTube first
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
-            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                logger.info(f"Downloaded audio from YouTube for '{title}'")
-                return out_file
-    except Exception as e:
-        logger.warning(f"YouTube download failed for '{title}': {e}. Trying SoundCloud fallback...")
+    # Mobile clients bypass YouTube datacenter IP rate limits, bot challenges, and SABR restrictions
+    client_candidates = [
+        ["android", "ios"],
+        ["ios", "mweb"],
+        ["web", "mweb"],
+    ]
 
-    # 2. Try SoundCloud fallback
-    try:
-        clean_title = re.sub(r"[^\w\s-]", "", title).strip()
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([f"scsearch1:{clean_title}"])
-            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                logger.info(f"Downloaded audio from SoundCloud fallback for '{title}'")
-                return out_file
-    except Exception as e:
-        logger.error(f"SoundCloud fallback download failed for '{title}': {e}")
+    for client_list in client_candidates:
+        ydl_opts = {
+            "format": "140/251/18/bestaudio/best",
+            "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
+            "quiet": True,
+            "no_warnings": True,
+            "ffmpeg_location": ffmpeg_exe,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": client_list
+                }
+            },
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "128",
+            }],
+        }
 
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+                if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                    logger.info(f"Downloaded audio from YouTube for '{title}' ({video_id}) via {client_list}")
+                    return out_file
+        except Exception as e:
+            logger.warning(f"YouTube download via {client_list} failed for '{title}': {e}")
+
+    logger.error(f"Failed to download YouTube audio for '{title}' ({video_id}) across all client options.")
     return None
 
 

@@ -236,14 +236,6 @@ PLAYER_HTML = """<!DOCTYPE html>
       line-height: 1.5;
       text-align: center;
     }
-    #youtube-player-container {
-      position: absolute;
-      top: -9999px;
-      left: -9999px;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-    }
   </style>
 </head>
 <body>
@@ -296,15 +288,18 @@ PLAYER_HTML = """<!DOCTYPE html>
     function toggleRadio() {
       const audio = document.getElementById('live-audio');
       if (audio.paused) {
+        audio.src = '/radio.mp3?t=' + Date.now();
+        audio.load();
         audio.play().then(() => {
           document.getElementById('btn-icon').innerText = '🔊';
-          document.getElementById('btn-text').innerText = 'Playing Stream (Local)';
+          document.getElementById('btn-text').innerText = 'Playing Live Radio';
           document.getElementById('btn-audio-control').style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
         }).catch(err => {
           console.error("Audio play error:", err);
         });
       } else {
         audio.pause();
+        audio.src = '';
         document.getElementById('btn-icon').innerText = '▶️';
         document.getElementById('btn-text').innerText = 'Listen Live (Browser)';
         document.getElementById('btn-audio-control').style.background = 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)';
