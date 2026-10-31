@@ -2,6 +2,14 @@ import asyncio
 import logging
 import sys
 import os
+
+# Ensure UTF-8 output encoding across Windows and Linux
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from highrise.__main__ import bot_runner
 from bot import HighriseBot
 from web_server import start_web_server

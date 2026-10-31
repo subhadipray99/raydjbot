@@ -43,5 +43,5 @@ async def start_web_server(port: int) -> web.AppRunner:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    logger.info(f"🌐 Keep-alive Web Server listening on http://0.0.0.0:{port}")
+    logger.info(f"[Web] Keep-alive Web Server listening on http://0.0.0.0:{port}")
     return runner
