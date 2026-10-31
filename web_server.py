@@ -458,7 +458,7 @@ async def handle_audio_current(request: web.Request) -> web.Response:
 
 
 async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
-    """Stream audio for Highrise in-room Custom Radio: requested songs take priority, falling back to 24/7 radio."""
+    """Stream continuous 24/7 internet radio for Highrise in-room Custom Radio Station."""
     response = web.StreamResponse(
         status=200,
         reason="OK",
@@ -473,48 +473,19 @@ async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
     )
     await response.prepare(request)
 
+    station_url = music_manager.get_current_station_url()
     async with aiohttp.ClientSession() as session:
-        while True:
-            # 1. PRIORITY: If a user has requested a song, stream the requested song!
-            if music_manager.current:
-                current_id = music_manager.current.id
-                stream_url, upstream_headers = await music_manager.get_current_stream_url()
-                if stream_url:
+        try:
+            async with session.get(station_url) as upstream:
+                async for chunk in upstream.content.iter_chunked(16384):
                     try:
-                        async with session.get(stream_url, headers=upstream_headers) as upstream:
-                            async for chunk in upstream.content.iter_chunked(16384):
-                                # If song was skipped or changed
-                                if not music_manager.current or music_manager.current.id != current_id:
-                                    break
-                                try:
-                                    await response.write(chunk)
-                                except (ConnectionResetError, asyncio.CancelledError):
-                                    return response
-                            continue
+                        await response.write(chunk)
                     except (ConnectionResetError, asyncio.CancelledError):
                         return response
-                    except Exception as e:
-                        logger.error(f"Error streaming requested song: {e}")
-                        await asyncio.sleep(1)
-
-            # 2. FALLBACK: When no song is requested, stream background radio
-            station_url = music_manager.get_current_station_url()
-            current_key = music_manager.current_station_key
-            try:
-                async with session.get(station_url) as upstream:
-                    async for chunk in upstream.content.iter_chunked(16384):
-                        # As soon as a user queues a song or changes station, switch immediately!
-                        if music_manager.current or music_manager.current_station_key != current_key:
-                            break
-                        try:
-                            await response.write(chunk)
-                        except (ConnectionResetError, asyncio.CancelledError):
-                            return response
-            except (ConnectionResetError, asyncio.CancelledError):
-                return response
-            except Exception as e:
-                logger.debug(f"Background radio relay error: {e}")
-                await asyncio.sleep(2)
+        except (ConnectionResetError, asyncio.CancelledError):
+            pass
+        except Exception as e:
+            logger.debug(f"Radio stream error: {e}")
 
     return response
 
