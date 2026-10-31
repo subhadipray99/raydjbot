@@ -149,6 +149,7 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
             "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
+            "socket_timeout": 5,
             "ffmpeg_location": ffmpeg_exe,
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
@@ -159,39 +160,12 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
         with yt_dlp.YoutubeDL(ydl_opts_yt) as ydl:
             ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
             if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                logger.info(f"Downloaded audio from YouTube for '{title}' ({video_id}) via default client")
+                logger.info(f"Downloaded audio from YouTube for '{title}' ({video_id})")
                 return out_file
     except Exception as e:
-        logger.warning(f"YouTube default download failed for '{title}': {e}")
+        logger.warning(f"YouTube download failed for '{title}': {e}")
 
-    # Tier 2: YouTube with web_embedded/tv_samsung client
-    try:
-        ydl_opts_embed = {
-            "format": "18/140/bestaudio/best",
-            "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
-            "quiet": True,
-            "no_warnings": True,
-            "ffmpeg_location": ffmpeg_exe,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["web_embedded", "tv_samsung"]
-                }
-            },
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "128",
-            }],
-        }
-        with yt_dlp.YoutubeDL(ydl_opts_embed) as ydl:
-            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
-            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                logger.info(f"Downloaded audio from YouTube for '{title}' ({video_id}) via embedded client")
-                return out_file
-    except Exception as e:
-        logger.warning(f"YouTube embedded download failed for '{title}': {e}")
-
-    # Tier 3: SoundCloud search fallback (bypasses YouTube datacenter bot challenges completely!)
+    # Tier 2: SoundCloud search fallback (bypasses YouTube datacenter bot challenges completely!)
     clean_query = clean_search_query(title)
     logger.info(f"Attempting resilient SoundCloud search fallback for '{clean_query}'...")
     try:
