@@ -71,7 +71,7 @@ def parse_duration_str(dur_str: str) -> int:
 
 
 def extract_direct_audio_url_sync(title: str, video_id: str | None = None) -> tuple[str | None, dict]:
-    """Extract playable audio stream URL from YouTube with SoundCloud fallback."""
+    """Extract playable audio stream URL from YouTube with resilient SoundCloud fallback."""
     import os
     try:
         import yt_dlp
@@ -89,7 +89,7 @@ def extract_direct_audio_url_sync(title: str, video_id: str | None = None) -> tu
                 "no_warnings": True,
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "web"]
+                        "player_client": ["ios", "android", "web"]
                     }
                 },
             }
@@ -98,17 +98,28 @@ def extract_direct_audio_url_sync(title: str, video_id: str | None = None) -> tu
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-                if "entries" in info:
+                if "entries" in info and info["entries"]:
                     info = info["entries"][0]
+
                 url = info.get("url")
+                if not url:
+                    formats = [
+                        f for f in info.get("formats", [])
+                        if f.get("url") and f.get("acodec") and f.get("acodec") != "none"
+                    ]
+                    if formats:
+                        url = formats[-1]["url"]
+
                 if url:
                     headers = info.get("http_headers", {})
+                    logger.info(f"Resolved YouTube audio stream for: {title}")
                     return url, headers
         except Exception as e:
             logger.warning(f"YouTube stream extract failed for '{title}': {e}. Trying SoundCloud fallback...")
 
-    # 2. Resilient fallback to SoundCloud (immune to YouTube datacenter blocks)
+    # 2. Resilient fallback to SoundCloud (immune to YouTube datacenter IP challenges)
     try:
+        clean_title = re.sub(r"[^\w\s-]", "", title).strip()
         ydl_opts = {
             "format": "bestaudio/best",
             "noplaylist": True,
@@ -116,14 +127,18 @@ def extract_direct_audio_url_sync(title: str, video_id: str | None = None) -> tu
             "no_warnings": True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            clean_title = re.sub(r"[^\w\s-]", "", title).strip()
             info = ydl.extract_info(f"scsearch1:{clean_title}", download=False)
             if "entries" in info and info["entries"]:
-                info = info["entries"][0]
-                url = info.get("url")
+                entry = info["entries"][0]
+                url = entry.get("url")
+                if not url:
+                    formats = [f for f in entry.get("formats", []) if f.get("url")]
+                    if formats:
+                        url = formats[-1]["url"]
+
                 if url:
-                    logger.info(f"Resolved stream from SoundCloud: {info.get('title')}")
-                    return url, info.get("http_headers", {})
+                    logger.info(f"Resolved SoundCloud stream for '{title}': {entry.get('title')}")
+                    return url, entry.get("http_headers", {})
     except Exception as e:
         logger.error(f"SoundCloud fallback also failed for '{title}': {e}")
 
@@ -214,21 +229,36 @@ class MusicManager:
         self.current_station_key: str = "dance"
         self._skip_event = asyncio.Event()
         self._new_track_event = asyncio.Event()
+        self._station_changed_event = asyncio.Event()
+        self._track_finished_event = asyncio.Event()
         self._runner_task: asyncio.Task | None = None
 
     def start(self, bot_instance=None):
-        """Start the background queue runner."""
+        """Start the background queue runner and radio broadcast engine."""
         if bot_instance:
             self.bot = bot_instance
         if not self._runner_task or self._runner_task.done():
             self._runner_task = asyncio.create_task(self._queue_runner())
             logger.info("Music queue runner initialized.")
 
+        # Initialize global audio broadcaster
+        try:
+            from broadcaster import broadcaster
+            broadcaster.start()
+        except Exception as e:
+            logger.error(f"Failed to start audio broadcaster: {e}")
+
+    def notify_track_finished(self, track: Track):
+        """Called by broadcaster when audio stream reaches natural completion."""
+        if self.current == track:
+            self._track_finished_event.set()
+
     def set_station(self, key: str) -> tuple[bool, str]:
         """Change the active background 24/7 radio station stream."""
         k = key.lower().strip()
         if k in RADIO_STATIONS:
             self.current_station_key = k
+            self._station_changed_event.set()
             station_name = RADIO_STATIONS[k]["name"]
             logger.info(f"Radio station changed to: {station_name}")
             return True, f"📻 Highrise Room Radio switched to: {station_name}"
@@ -239,17 +269,21 @@ class MusicManager:
         """Get the URL of the currently active 24/7 background radio station."""
         return RADIO_STATIONS.get(self.current_station_key, RADIO_STATIONS["dance"])["url"]
 
+    async def get_stream_url_for_track(self, track: Track | None) -> tuple[str | None, dict]:
+        """Get direct playable audio stream URL and headers for a specific track safely."""
+        if not track:
+            return None, {}
+        if not track.stream_url:
+            url, headers = await asyncio.to_thread(
+                extract_direct_audio_url_sync, track.title, track.id
+            )
+            track.stream_url = url
+            track.http_headers = headers
+        return track.stream_url, track.http_headers or {}
+
     async def get_current_stream_url(self) -> tuple[str | None, dict]:
         """Get direct playable audio stream URL and headers for the currently playing requested track."""
-        if not self.current:
-            return None, {}
-        if not self.current.stream_url:
-            url, headers = await asyncio.to_thread(
-                extract_direct_audio_url_sync, self.current.title, self.current.id
-            )
-            self.current.stream_url = url
-            self.current.http_headers = headers
-        return self.current.stream_url, self.current.http_headers or {}
+        return await self.get_stream_url_for_track(self.current)
 
     async def search_and_queue(self, query: str, requester: str) -> tuple[bool, str, Track | None]:
         """Search YouTube asynchronously and enqueue."""
@@ -299,6 +333,17 @@ class MusicManager:
             "queue_count": len(self.queue),
         }
 
+    async def _wait_for_skip_or_finish(self):
+        """Wait for either a manual skip or natural track completion."""
+        skip_task = asyncio.create_task(self._skip_event.wait())
+        finish_task = asyncio.create_task(self._track_finished_event.wait())
+        done, pending = await asyncio.wait(
+            [skip_task, finish_task],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        for t in pending:
+            t.cancel()
+
     async def _queue_runner(self):
         """Continuously advances tracks from queue."""
         while True:
@@ -330,13 +375,20 @@ class MusicManager:
                     except Exception as e:
                         logger.error(f"Error announcing new track in room chat: {e}")
 
-                # Wait for track duration or skip event
+                # Wait for manual skip, natural completion, or safety duration timeout
                 self._skip_event.clear()
+                self._track_finished_event.clear()
                 duration = max(self.current.duration_sec, 5)
+
                 try:
-                    await asyncio.wait_for(self._skip_event.wait(), timeout=duration)
+                    await asyncio.wait_for(
+                        self._wait_for_skip_or_finish(),
+                        timeout=duration + 10
+                    )
                 except asyncio.TimeoutError:
-                    pass  # Song duration reached naturally
+                    pass  # Duration reached naturally
+                finally:
+                    self.current = None
 
             except asyncio.CancelledError:
                 break

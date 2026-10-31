@@ -5,6 +5,7 @@ import aiohttp
 from aiohttp import web
 import config
 from music import music_manager
+from broadcaster import broadcaster
 
 logger = logging.getLogger("WebServer")
 start_time = time.time()
@@ -458,7 +459,7 @@ async def handle_audio_current(request: web.Request) -> web.Response:
 
 
 async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
-    """Stream continuous 24/7 internet radio for Highrise in-room Custom Radio Station."""
+    """Stream continuous live audio (requested tracks + 24/7 radio fallback) for Highrise Custom Radio."""
     response = web.StreamResponse(
         status=200,
         reason="OK",
@@ -467,25 +468,22 @@ async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
-            "icy-name": "Highrise RayDJBot Radio",
-            "icy-genre": "Pop / Dance / Lofi",
+            "icy-name": "Highrise RayDJBot Live Radio",
+            "icy-genre": "Pop / Dance / Lofi / Requested Tracks",
         },
     )
     await response.prepare(request)
-
-    station_url = music_manager.get_current_station_url()
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(station_url) as upstream:
-                async for chunk in upstream.content.iter_chunked(16384):
-                    try:
-                        await response.write(chunk)
-                    except (ConnectionResetError, asyncio.CancelledError):
-                        return response
-        except (ConnectionResetError, asyncio.CancelledError):
-            pass
-        except Exception as e:
-            logger.debug(f"Radio stream error: {e}")
+    q = broadcaster.subscribe()
+    try:
+        while True:
+            chunk = await q.get()
+            await response.write(chunk)
+    except (ConnectionResetError, asyncio.CancelledError):
+        pass
+    except Exception as e:
+        logger.debug(f"Client disconnected from radio stream: {e}")
+    finally:
+        broadcaster.unsubscribe(q)
 
     return response
 
@@ -505,6 +503,7 @@ def create_app() -> web.Application:
 
 
 async def start_web_server(port: int) -> web.AppRunner:
+    broadcaster.start()
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
