@@ -376,7 +376,11 @@ PLAYER_HTML = """<!DOCTYPE html>
 
       currentTrackId = now.id;
       document.getElementById('track-title').innerText = now.title;
-      document.getElementById('track-requester').innerText = "👤 Requested by @" + now.requester;
+      if (now.is_autoplay) {
+        document.getElementById('track-requester').innerHTML = '<span style="color:#f59e0b;font-weight:600;">📻 Radio AutoDJ</span> &bull; <span style="color:#9ca3af;">Type /play in chat to jump ahead!</span>';
+      } else {
+        document.getElementById('track-requester').innerText = "👤 Requested by @" + now.requester;
+      }
       document.getElementById('track-art').src = now.thumbnail;
       totalDuration = now.duration_sec || 180;
       currentPosition = state.position_sec || 0;
@@ -391,7 +395,7 @@ PLAYER_HTML = """<!DOCTYPE html>
         document.getElementById('progress-bar').style.width = pct + '%';
         document.getElementById('time-current').innerText = formatTime(currentPosition);
       }
-      renderQueue(state.queue);
+      renderQueue(state.queue, state.autoplay_enabled);
     }
 
     function updateProgressTick() {
@@ -402,13 +406,14 @@ PLAYER_HTML = """<!DOCTYPE html>
       document.getElementById('time-current').innerText = formatTime(currentPosition);
     }
 
-    function renderQueue(queue) {
+    function renderQueue(queue, autoplayEnabled) {
       const listEl = document.getElementById('queue-list');
-      document.getElementById('queue-header').innerText = `Upcoming Queue (${queue.length})`;
+      document.getElementById('queue-header').innerText = `Upcoming Queue (${queue ? queue.length : 0})`;
       if (!queue || queue.length === 0) {
-        listEl.innerHTML = `<p style="font-size: 12px; color: #6b7280; text-align: center; padding: 12px 0;">
-          The queue is empty. Request songs in room chat using <b>/play &lt;song&gt;</b> or <b>/p &lt;song&gt;</b>!
-        </p>`;
+        const emptyText = autoplayEnabled
+          ? 'Queue empty &bull; 📻 Station AutoDJ is active! Request a song using <b>/play &lt;song&gt;</b> to play next!'
+          : 'The queue is empty. Request songs in room chat using <b>/play &lt;song&gt;</b> or <b>/p &lt;song&gt;</b>!';
+        listEl.innerHTML = `<p style="font-size: 12px; color: #9ca3af; text-align: center; padding: 12px 0;">${emptyText}</p>`;
         return;
       }
       let html = '';

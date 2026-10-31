@@ -13,3 +13,8 @@ WELCOME_MESSAGE = os.getenv(
     "WELCOME_MESSAGE",
     "Welcome to the room, @{username}! Type !help for commands."
 )
+
+# 24/7 Autoplay Radio settings
+AUTOPLAY_ENABLED = os.getenv("AUTOPLAY_ENABLED", "true").lower() in ("true", "1", "yes")
+AUTOPLAY_INSTANT_TAKEOVER = os.getenv("AUTOPLAY_INSTANT_TAKEOVER", "true").lower() in ("true", "1", "yes")
+AUTOPLAY_CHAT_ANNOUNCEMENTS = os.getenv("AUTOPLAY_CHAT_ANNOUNCEMENTS", "true").lower() in ("true", "1", "yes")

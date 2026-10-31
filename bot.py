@@ -186,21 +186,40 @@ class HighriseBot(BaseBot):
             lines = []
 
             if current:
-                lines.append(f"🎧 Now Playing: \"{current['title']}\" [{current['duration_str']}] (Requested by @{current['requester']})")
+                req_tag = " (📻 Radio AutoDJ)" if current.get("is_autoplay") else f" (Requested by @{current['requester']})"
+                lines.append(f"🎧 Now Playing: \"{current['title']}\" [{current['duration_str']}]{req_tag}")
             else:
                 lines.append("🎧 Nothing currently playing.")
 
             if queue:
-                lines.append(f"📋 Upcoming Queue ({len(queue)} songs):")
+                lines.append(f"📋 Upcoming User Queue ({len(queue)} songs):")
                 for idx, t in enumerate(queue[:4], start=1):
                     lines.append(f"  {idx}. \"{t['title']}\" [{t['duration_str']}] (@{t['requester']})")
                 if len(queue) > 4:
                     lines.append(f"  ... and {len(queue) - 4} more tracks.")
             else:
-                lines.append("Queue is empty. Use /play <song> to queue music!")
+                if music_manager.autoplay_enabled:
+                    lines.append("User queue is empty. 📻 Radio AutoDJ is playing station hits.\nType /play <song> to queue your request with top priority!")
+                else:
+                    lines.append("Queue is empty. Use /play <song> to queue music!")
 
             lines.append(f"📻 Live Jukebox: {player_link}")
             await reply("\n".join(lines))
+
+        elif cmd in ("autoplay", "ap"):
+            action = args[0].lower() if args else ""
+            if action in ("on", "enable", "start"):
+                music_manager.autoplay_enabled = True
+                music_manager._queue_updated_event.set()
+                await reply("📻 24/7 Radio Autoplay is now ENABLED! Songs will keep playing automatically when user queue is empty.")
+            elif action in ("off", "disable", "stop"):
+                music_manager.autoplay_enabled = False
+                if music_manager.current and music_manager.current.is_autoplay:
+                    music_manager.skip()
+                await reply("📻 24/7 Radio Autoplay is now DISABLED. Station will stream idle silence when queue is empty.")
+            else:
+                status = "ENABLED" if music_manager.autoplay_enabled else "DISABLED"
+                await reply(f"📻 24/7 Radio Autoplay is currently {status}.\nUse /autoplay on or /autoplay off to toggle.")
 
         elif cmd in ("np", "nowplaying"):
             state = music_manager.get_state()
@@ -209,9 +228,10 @@ class HighriseBot(BaseBot):
                 pos = int(state.get("position_sec", 0))
                 m, s = divmod(pos, 60)
                 pos_str = f"{m}:{s:02d}"
+                req_info = "📻 Radio AutoDJ" if current.get("is_autoplay") else f"@{current['requester']}"
                 await reply(
                     f"🎶 Now: \"{current['title']}\" [{pos_str} / {current['duration_str']}]\n"
-                    f"👤 Requested by: @{current['requester']}\n"
+                    f"👤 Requested by: {req_info}\n"
                     f"📻 Live Jukebox: {player_link}"
                 )
             else:
@@ -224,9 +244,10 @@ class HighriseBot(BaseBot):
         elif cmd in ("help", "commands"):
             help_text = (
                 f"🤖 RayDJBot Room Radio Commands:\n"
-                f"/play <song> (or /p) - Request a song to play in the room\n"
+                f"/play <song> (or /p) - Request a song (takes top priority!)\n"
                 f"/skip (or /s) - Skip to next song in queue\n"
                 f"/queue (or /q) - View upcoming songs in queue\n"
+                f"/autoplay on|off - Toggle 24/7 radio background autoplay\n"
                 f"/np - Check currently playing song\n"
                 f"/player - Get live player link\n"
                 f"!come - Bot walks to your location\n"

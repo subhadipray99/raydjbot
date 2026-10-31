@@ -141,11 +141,12 @@ class RadioBroadcaster:
         logger.info("24/7 Live Radio Station loop running.")
         while True:
             try:
-                # 1. If no track currently playing, check if there is one in the queue
-                if not music_manager.current and music_manager.queue:
-                    music_manager.current = music_manager.queue.pop(0)
-                    music_manager._queue_updated_event.set()
-                    self._skip_flag = False
+                # 1. If no track currently playing, check for next track (user queue first, or autoplay)
+                if not music_manager.current:
+                    next_track = await music_manager.pop_next_track()
+                    if next_track:
+                        music_manager.current = next_track
+                        self._skip_flag = False
 
                 track = music_manager.current
                 if track:
@@ -157,7 +158,7 @@ class RadioBroadcaster:
                     music_manager._queue_updated_event.set()
                     self._skip_flag = False
                 else:
-                    # Queue is empty: stream silence keeping the station alive 24/7
+                    # Queue is empty and autoplay disabled: stream silence keeping the station alive 24/7
                     await self._stream_idle_silence_tick()
 
             except asyncio.CancelledError:
@@ -171,12 +172,20 @@ class RadioBroadcaster:
         if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
             try:
                 base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
-                announcement = (
-                    f"🎶 Now Playing: \"{track.title}\" [{track.duration_str}]\n"
-                    f"👤 Requested by: @{track.requester}\n"
-                    f"📻 Room Radio: {base_url}/radio.mp3"
-                )
-                await self.bot.highrise.chat(announcement)
+                if track.is_autoplay:
+                    if config.AUTOPLAY_CHAT_ANNOUNCEMENTS:
+                        announcement = (
+                            f"📻 Radio AutoDJ: \"{track.title}\" [{track.duration_str}]\n"
+                            f"💡 Type /play <song> to queue your request next!"
+                        )
+                        await self.bot.highrise.chat(announcement)
+                else:
+                    announcement = (
+                        f"🎶 Now Playing: \"{track.title}\" [{track.duration_str}]\n"
+                        f"👤 Requested by: @{track.requester}\n"
+                        f"📻 Room Radio: {base_url}/radio.mp3"
+                    )
+                    await self.bot.highrise.chat(announcement)
             except Exception as e:
                 logger.error(f"Error announcing track in room chat: {e}")
 

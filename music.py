@@ -22,6 +22,7 @@ class Track:
     thumbnail: str
     url: str
     query: str = ""
+    is_autoplay: bool = False
 
     def to_dict(self):
         return asdict(self)
@@ -349,6 +350,30 @@ def download_track_audio_sync(
     return None
 
 
+DEFAULT_AUTOPLAY_PLAYLIST = [
+    "Arijit Singh Kesariya",
+    "Ed Sheeran Shape of You",
+    "The Weeknd Starboy",
+    "Arijit Singh Apna Bana Le",
+    "Alan Walker Faded",
+    "Arijit Singh Tum Hi Ho",
+    "Dua Lipa Levitating",
+    "Sanam Re Arijit Singh",
+    "The Weeknd Blinding Lights",
+    "Raataan Lambiyan Jubin Nautiyal",
+    "Coldplay Hymn for the Weekend",
+    "Pritam Shayad Arijit Singh",
+    "Post Malone Circles",
+    "Mon Bojhe Naa Arijit Singh",
+    "Imagine Dragons Believer",
+    "Kabira Yeh Jawaani Hai Deewani",
+    "Charlie Puth Attention",
+    "Channa Mereya Arijit Singh",
+    "OneRepublic Counting Stars",
+    "Gehra Hua Arijit Singh",
+]
+
+
 class MusicManager:
     """Manages the room music queue for the 24/7 custom live radio."""
 
@@ -357,6 +382,11 @@ class MusicManager:
         self.current: Track | None = None
         self.started_at: float = 0.0
         self.bot = None
+
+        self.autoplay_enabled: bool = config.AUTOPLAY_ENABLED
+        self.autoplay_instant_takeover: bool = config.AUTOPLAY_INSTANT_TAKEOVER
+        self.autoplay_index: int = 0
+        self.autoplay_cache_queue: list[Track] = []
 
         self._new_track_event = asyncio.Event()
         self._queue_updated_event = asyncio.Event()
@@ -396,6 +426,8 @@ class MusicManager:
                 active_ids.add(f"{self.current.id}.mp3")
             for t in self.queue:
                 active_ids.add(f"{t.id}.mp3")
+            for t in self.autoplay_cache_queue:
+                active_ids.add(f"{t.id}.mp3")
 
             files = []
             for f in os.listdir(cache_dir):
@@ -418,17 +450,34 @@ class MusicManager:
             logger.debug(f"Cache cleanup error: {e}")
 
     async def _prefetch_worker(self):
-        """Continuously pre-downloads top 3 songs in queue to disk so playback transitions instantly."""
+        """Continuously pre-downloads top 3 songs in queue (and upcoming autoplay track) to disk."""
         while True:
             try:
-                # Inspect top 3 queued tracks
+                # 1. Prefetch top 3 human-requested tracks in queue
                 top_tracks = list(self.queue[:3])
                 for t in top_tracks:
                     if self.is_track_cached(t):
                         continue
-                    logger.info(f"Pre-buffering queued track: '{t.title}' ({t.id})...")
+                    logger.info(f"Pre-buffering user queue track: '{t.title}' ({t.id})...")
                     await self.ensure_track_audio_file(t)
                     await asyncio.sleep(0.5)
+
+                # 2. If user queue has 0-1 tracks and autoplay is enabled, pre-buffer upcoming autoplay song
+                if len(self.queue) <= 1 and self.autoplay_enabled:
+                    if not self.autoplay_cache_queue:
+                        loop = asyncio.get_running_loop()
+                        ap_query = DEFAULT_AUTOPLAY_PLAYLIST[self.autoplay_index % len(DEFAULT_AUTOPLAY_PLAYLIST)]
+                        self.autoplay_index += 1
+                        ap_track = await loop.run_in_executor(None, search_youtube_sync, ap_query, "RayDJ Radio")
+                        if ap_track:
+                            ap_track.is_autoplay = True
+                            self.autoplay_cache_queue.append(ap_track)
+
+                    for at in list(self.autoplay_cache_queue[:1]):
+                        if not self.is_track_cached(at):
+                            logger.info(f"Pre-buffering autoplay track: '{at.title}' ({at.id})...")
+                            await self.ensure_track_audio_file(at)
+                            await asyncio.sleep(0.5)
 
                 self._clean_old_cache(keep_limit=25)
 
@@ -442,6 +491,37 @@ class MusicManager:
             except Exception as e:
                 logger.error(f"Error in queue prefetch worker: {e}")
                 await asyncio.sleep(3.0)
+
+    async def get_next_autoplay_track(self) -> Track | None:
+        """Get or resolve next track from autoplay station rotation."""
+        if self.autoplay_cache_queue:
+            track = self.autoplay_cache_queue.pop(0)
+            self._queue_updated_event.set()
+            return track
+
+        loop = asyncio.get_running_loop()
+        query = DEFAULT_AUTOPLAY_PLAYLIST[self.autoplay_index % len(DEFAULT_AUTOPLAY_PLAYLIST)]
+        self.autoplay_index += 1
+
+        track = await loop.run_in_executor(None, search_youtube_sync, query, "RayDJ Radio")
+        if track:
+            track.is_autoplay = True
+            return track
+        return None
+
+    async def pop_next_track(self) -> Track | None:
+        """Pop next track to play: User queue always takes top priority."""
+        # 1. User requests always take top priority
+        if self.queue:
+            track = self.queue.pop(0)
+            self._queue_updated_event.set()
+            return track
+
+        # 2. If user queue is empty and autoplay is enabled, pick next autoplay track
+        if self.autoplay_enabled:
+            return await self.get_next_autoplay_track()
+
+        return None
 
     async def ensure_track_audio_file(self, track: Track | None) -> str | None:
         """Download or retrieve local cached MP3 audio file for a track (deduplicated)."""
@@ -480,13 +560,19 @@ class MusicManager:
         self._new_track_event.set()
         self._queue_updated_event.set()
 
-        # If nothing is currently playing and this is the only track, start downloading immediately
-        if self.current is None and len(self.queue) == 1:
+        # If an autoplay track is currently playing and instant takeover is enabled, interrupt immediately
+        from broadcaster import broadcaster
+        if self.current and self.current.is_autoplay and self.autoplay_instant_takeover:
+            logger.info(f"User requested '{track.title}': taking over autoplay track immediately.")
+            broadcaster.skip_current()
+        elif self.current is None and len(self.queue) == 1:
             asyncio.create_task(self.ensure_track_audio_file(track))
 
         pos = len(self.queue)
         if self.current is None and pos == 1:
             msg = f"🎶 Playing now: \"{track.title}\" [{track.duration_str}]"
+        elif self.current and self.current.is_autoplay and self.autoplay_instant_takeover:
+            msg = f"⚡ Priority request! Playing now: \"{track.title}\" [{track.duration_str}]"
         else:
             current_playing_text = f" (Playing: \"{self.current.title}\")" if self.current else ""
             msg = f"➕ Added to queue (#{pos}): \"{track.title}\" [{track.duration_str}]{current_playing_text}"
@@ -514,6 +600,8 @@ class MusicManager:
         return {
             "is_playing": self.current is not None and self.started_at > 0,
             "is_loading": self.current is not None and self.started_at == 0,
+            "is_autoplay": bool(self.current.is_autoplay) if self.current else False,
+            "autoplay_enabled": self.autoplay_enabled,
             "position_sec": round(position, 2),
             "now_playing": self.current.to_dict() if self.current else None,
             "radio_stream_url": f"{base_url}/radio.mp3",
