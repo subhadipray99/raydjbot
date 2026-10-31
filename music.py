@@ -10,34 +10,6 @@ import config
 
 logger = logging.getLogger("MusicManager")
 
-# Curated 24/7 internet radio stations that stream crystal-clear audio into Highrise rooms
-RADIO_STATIONS = {
-    "dance": {
-        "name": "Dance Wave (EDM / Club / Electronic)",
-        "url": "https://dancewave.online/dance.mp3",
-    },
-    "lofi": {
-        "name": "SomaFM Lofi Hip-Hop (Beats to Relax)",
-        "url": "https://ice1.somafm.com/lofi-128-mp3",
-    },
-    "pop": {
-        "name": "Antenne Bayern (Top 40 / Pop Hits)",
-        "url": "https://mp3channels.webradio.antenne.de/antenne-bayern.mp3",
-    },
-    "chill": {
-        "name": "SomaFM Groove Salad (Ambient / Lounge)",
-        "url": "https://ice2.somafm.com/groovesalad-128-mp3",
-    },
-    "hiphop": {
-        "name": "Hot 108 Jamz (Hip-Hop & R&B)",
-        "url": "https://s2.viastreaming.net:7200/;",
-    },
-    "ibiza": {
-        "name": "Ibiza Global Radio (Deep House & Techno)",
-        "url": "https://ibizaglobalradio.streaming-pro.com:8000/ibizaglobalradio.mp3",
-    },
-}
-
 
 @dataclass
 class Track:
@@ -220,16 +192,16 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
 
 
 class MusicManager:
+    """Manages the room music queue and coordinates playback on the room's custom radio."""
+
     def __init__(self):
         self.queue: list[Track] = []
         self.current: Track | None = None
         self.started_at: float = 0.0
         self.bot = None
 
-        self.current_station_key: str = "dance"
         self._skip_event = asyncio.Event()
         self._new_track_event = asyncio.Event()
-        self._station_changed_event = asyncio.Event()
         self._track_finished_event = asyncio.Event()
         self._runner_task: asyncio.Task | None = None
 
@@ -252,22 +224,6 @@ class MusicManager:
         """Called by broadcaster when audio stream reaches natural completion."""
         if self.current == track:
             self._track_finished_event.set()
-
-    def set_station(self, key: str) -> tuple[bool, str]:
-        """Change the active background 24/7 radio station stream."""
-        k = key.lower().strip()
-        if k in RADIO_STATIONS:
-            self.current_station_key = k
-            self._station_changed_event.set()
-            station_name = RADIO_STATIONS[k]["name"]
-            logger.info(f"Radio station changed to: {station_name}")
-            return True, f"📻 Highrise Room Radio switched to: {station_name}"
-        available = ", ".join(RADIO_STATIONS.keys())
-        return False, f"Unknown station '{key}'. Available stations: {available}"
-
-    def get_current_station_url(self) -> str:
-        """Get the URL of the currently active 24/7 background radio station."""
-        return RADIO_STATIONS.get(self.current_station_key, RADIO_STATIONS["dance"])["url"]
 
     async def get_stream_url_for_track(self, track: Track | None) -> tuple[str | None, dict]:
         """Get direct playable audio stream URL and headers for a specific track safely."""
@@ -318,17 +274,12 @@ class MusicManager:
             position = max(0.0, time.time() - self.started_at)
 
         base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
-        station_info = RADIO_STATIONS.get(self.current_station_key, RADIO_STATIONS["dance"])
 
         return {
             "is_playing": self.current is not None,
             "position_sec": round(position, 2),
             "now_playing": self.current.to_dict() if self.current else None,
-            "current_station": {
-                "key": self.current_station_key,
-                "name": station_info["name"],
-                "stream_url": f"{base_url}/radio.mp3",
-            },
+            "radio_stream_url": f"{base_url}/radio.mp3",
             "queue": [t.to_dict() for t in self.queue],
             "queue_count": len(self.queue),
         }
@@ -360,7 +311,7 @@ class MusicManager:
                 logger.info(f"[Music] Now Playing: {self.current.title} (Requested by @{self.current.requester})")
 
                 # Pre-fetch stream URL in background
-                asyncio.create_task(self.get_current_stream_url())
+                asyncio.create_task(self.get_stream_url_for_track(self.current))
 
                 # Announce in Highrise room
                 if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
@@ -369,7 +320,7 @@ class MusicManager:
                         announcement = (
                             f"🎶 Now Playing: \"{self.current.title}\" [{self.current.duration_str}]\n"
                             f"👤 Requested by: @{self.current.requester}\n"
-                            f"📻 In-Room Radio: {base_url}/radio.mp3"
+                            f"📻 Room Radio: {base_url}/radio.mp3"
                         )
                         await self.bot.highrise.chat(announcement)
                     except Exception as e:

@@ -218,38 +218,17 @@ class HighriseBot(BaseBot):
                 await reply("No music is currently playing. Use /play <song> to start!")
 
         elif cmd in ("player", "radio", "jukebox"):
-            await reply(f"📻 Listen to live room music here: {player_link}\n24/7 In-Room Radio: {base_url}/radio.mp3")
-
-        elif cmd in ("station", "setstation"):
-            from music import RADIO_STATIONS
-            if not args:
-                avail = ", ".join(RADIO_STATIONS.keys())
-                await reply(f"Usage: /station <name>. Available: {avail}")
-                return
-            station_key = args[0].lower().lstrip("/")
-            success, msg = music_manager.set_station(station_key)
-            await reply(msg)
-
-        elif cmd in ("stations", "radios"):
-            from music import RADIO_STATIONS
-            lines = ["📻 Available 24/7 Room Radio Stations:"]
-            for k, info in RADIO_STATIONS.items():
-                active = " (Active)" if k == music_manager.current_station_key else ""
-                lines.append(f"• /station {k} - {info['name']}{active}")
-            lines.append(f"Set your Highrise Custom Radio URL to: {base_url}/radio.mp3")
-            await reply("\n".join(lines))
+            await reply(f"📻 Custom Room Radio: {base_url}/radio.mp3\n🎧 Web Player: {player_link}")
 
         # ---------------- ROOM & BOT COMMANDS ----------------
         elif cmd in ("help", "commands"):
             help_text = (
-                f"🤖 RayDJBot Commands:\n"
-                f"/station <name> - Switch in-room 24/7 radio (dance, lofi, pop, chill, hiphop, ibiza)\n"
-                f"/stations - List all available 24/7 radio stations\n"
-                f"/play <song> (or /p) - Search & queue YouTube song\n"
-                f"/skip (or /s) - Skip to next song\n"
-                f"/queue (or /q) - View upcoming songs\n"
+                f"🤖 RayDJBot Room Radio Commands:\n"
+                f"/play <song> (or /p) - Request a song to play in the room\n"
+                f"/skip (or /s) - Skip to next song in queue\n"
+                f"/queue (or /q) - View upcoming songs in queue\n"
                 f"/np - Check currently playing song\n"
-                f"/player - Get synchronized live player link\n"
+                f"/player - Get live player link\n"
                 f"!come - Bot walks to your location\n"
                 f"!emote <name> - Play emote\n"
                 f"!emotes - List popular emotes\n"
