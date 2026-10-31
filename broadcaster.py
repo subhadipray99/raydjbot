@@ -10,47 +10,73 @@ import config
 logger = logging.getLogger("Broadcaster")
 
 
-def _generate_silence_chunk() -> bytes:
-    """Generate 1 second of silent 44.1kHz 128kbps stereo MP3 frames."""
+def _generate_pure_silence() -> tuple[list[bytes], bytes]:
+    """Generate pure, frame-aligned 44.1kHz 128kbps stereo silent MP3 frames with NO ID3 tags."""
     try:
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
         cmd = [
             ffmpeg_exe,
             "-f", "lavfi",
             "-i", "anullsrc=r=44100:cl=stereo",
-            "-t", "1",
+            "-t", "4",
             "-ar", "44100",
             "-ac", "2",
             "-b:a", "128k",
+            "-write_xing", "0",
+            "-id3v2_version", "0",
             "-f", "mp3",
             "pipe:1"
         ]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         out, _ = proc.communicate(timeout=5)
-        if out and len(out) > 1000:
-            return out
+        if out and len(out) > 10000:
+            # Locate all MP3 frame syncwords (0xFF, 0xFB)
+            syncs = [i for i in range(len(out) - 1) if out[i] == 0xff and (out[i + 1] & 0xfe) == 0xfa]
+            if len(syncs) >= 16:
+                # Group into 4 frame-aligned slices (approx 0.25s each) from the first second
+                step = len(syncs) // 16
+                slices = []
+                for s_idx in range(4):
+                    start = syncs[s_idx * step]
+                    end = syncs[(s_idx + 1) * step]
+                    slices.append(out[start:end])
+                burst = out[:syncs[min(len(syncs) - 1, 160)]] if len(syncs) > 160 else out
+                return slices, burst
     except Exception as e:
-        logger.debug(f"Error generating silence with ffmpeg: {e}")
-    # Fallback minimal MP3 silence frame (417 bytes)
-    return b"\xff\xfb\x90d" + b"\x00" * 413
+        logger.debug(f"Error generating pure silence with ffmpeg: {e}")
+
+    # Fallback minimal 417-byte silent frame (MPEG-1 Layer 3, 128kbps, 44.1kHz stereo)
+    minimal_frame = b"\xff\xfb\x90d" + b"\x00" * 413
+    return [minimal_frame * 10] * 4, minimal_frame * 160
 
 
 class RadioBroadcaster:
     """24/7 Autonomous Live Radio Station engine for Highrise room.
     Continuously feeds audio to connected clients. Streams queued songs without gaps
-    and maintains live connection with silence when idle."""
+    and maintains live connection with frame-aligned silence and a burst buffer when idle."""
 
     def __init__(self):
         self._subscribers: set[asyncio.Queue] = set()
         self._runner_task: asyncio.Task | None = None
         self._active_proc: asyncio.subprocess.Process | None = None
         self._skip_flag: bool = False
-        self._silence_chunk: bytes | None = None
+        self._silence_slices: list[bytes] = []
+        self._burst_buffer = bytearray()
         self.bot = None
+
+        self._init_silence()
+
+    def _init_silence(self):
+        slices, burst = _generate_pure_silence()
+        self._silence_slices = slices
+        self._burst_buffer = bytearray(burst)
 
     def subscribe(self) -> asyncio.Queue:
         """Register a new HTTP listener (Highrise in-room radio player or browser)."""
-        q = asyncio.Queue(maxsize=50)
+        q = asyncio.Queue(maxsize=100)
+        # Pre-buffer: Send recent audio burst immediately so listener decodes without buffering delay
+        if self._burst_buffer:
+            q.put_nowait(bytes(self._burst_buffer))
         self._subscribers.add(q)
         logger.info(f"Listener connected to /radio.mp3. Active listeners: {len(self._subscribers)}")
         return q
@@ -61,7 +87,19 @@ class RadioBroadcaster:
         logger.info(f"Listener disconnected from /radio.mp3. Active listeners: {len(self._subscribers)}")
 
     def broadcast(self, chunk: bytes):
-        """Send an MP3 chunk to all connected listeners."""
+        """Send an MP3 chunk to all connected listeners and maintain the burst buffer."""
+        if not chunk:
+            return
+        # Append to burst buffer (keep last 64 KB of live audio, aligned to MP3 frame sync)
+        self._burst_buffer.extend(chunk)
+        if len(self._burst_buffer) > 65536:
+            cutoff = len(self._burst_buffer) - 65536
+            idx = self._burst_buffer.find(b"\xff\xfb", cutoff)
+            if idx != -1:
+                self._burst_buffer = self._burst_buffer[idx:]
+            else:
+                self._burst_buffer = self._burst_buffer[-65536:]
+
         if not self._subscribers:
             return
         for q in list(self._subscribers):
@@ -97,11 +135,6 @@ class RadioBroadcaster:
             self._runner_task = asyncio.create_task(self._run())
             logger.info("24/7 Live Radio Station engine initialized.")
 
-    def _get_silence_chunk(self) -> bytes:
-        if not self._silence_chunk:
-            self._silence_chunk = _generate_silence_chunk()
-        return self._silence_chunk
-
     async def _run(self):
         """Main autonomous radio station loop."""
         logger.info("24/7 Live Radio Station loop running.")
@@ -110,9 +143,7 @@ class RadioBroadcaster:
                 # 1. If no track currently playing, check if there is one in the queue
                 if not music_manager.current and music_manager.queue:
                     music_manager.current = music_manager.queue.pop(0)
-                    music_manager.started_at = time.time()
                     self._skip_flag = False
-                    await self._announce_now_playing(music_manager.current)
 
                 track = music_manager.current
                 if track:
@@ -147,10 +178,9 @@ class RadioBroadcaster:
                 logger.error(f"Error announcing track in room chat: {e}")
 
     async def _ensure_audio_file_while_streaming(self, track: Track) -> str | None:
-        """Download or retrieve audio file while continuously streaming silence so the connection never starves."""
-        silence = self._get_silence_chunk()
-        chunk_size = max(len(silence) // 4, 417)
-        slices = [silence[i:i + chunk_size] for i in range(0, len(silence), chunk_size)]
+        """Download audio file while continuously streaming silence so the connection never starves."""
+        if not self._silence_slices:
+            self._init_silence()
 
         download_task = asyncio.create_task(music_manager.ensure_track_audio_file(track))
         slice_idx = 0
@@ -159,8 +189,8 @@ class RadioBroadcaster:
             if self._skip_flag:
                 download_task.cancel()
                 return None
-            # Broadcast silence slice so Highrise never times out
-            self.broadcast(slices[slice_idx % len(slices)])
+            # Broadcast frame-aligned silence slice so Highrise never times out
+            self.broadcast(self._silence_slices[slice_idx % len(self._silence_slices)])
             slice_idx += 1
             await asyncio.sleep(0.25)
 
@@ -187,14 +217,16 @@ class RadioBroadcaster:
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
         cmd = [
             ffmpeg_exe,
-            "-re",               # Read local file at native 1x real-time rate
-            "-i", file_path,     # Local audio file
-            "-vn",               # Disable video
-            "-ar", "44100",      # 44.1 kHz
-            "-ac", "2",          # Stereo
-            "-b:a", "128k",      # 128 kbps constant bitrate
-            "-f", "mp3",         # MP3 container
-            "pipe:1"             # Pipe to stdout
+            "-re",                 # Read local file at native 1x real-time rate
+            "-i", file_path,       # Local audio file
+            "-vn",                 # Disable video
+            "-ar", "44100",        # 44.1 kHz
+            "-ac", "2",            # Stereo
+            "-b:a", "128k",        # 128 kbps constant bitrate
+            "-write_xing", "0",    # No Xing header in continuous stream
+            "-id3v2_version", "0", # No ID3v2 in stream body
+            "-f", "mp3",           # MP3 container
+            "pipe:1"               # Pipe to stdout
         ]
 
         proc = None
@@ -205,6 +237,9 @@ class RadioBroadcaster:
                 stderr=asyncio.subprocess.DEVNULL
             )
             self._active_proc = proc
+            # Audio has actively started broadcasting now!
+            music_manager.started_at = time.time()
+            await self._announce_now_playing(track)
             logger.info(f"Broadcasting requested song: \"{track.title}\" [{track.duration_str}]")
 
             while True:
@@ -240,11 +275,10 @@ class RadioBroadcaster:
 
     async def _stream_idle_silence_tick(self):
         """Stream silence keeping the radio connection alive 24/7 when no songs are queued."""
-        silence = self._get_silence_chunk()
-        chunk_size = max(len(silence) // 4, 417)
-        slices = [silence[i:i + chunk_size] for i in range(0, len(silence), chunk_size)]
+        if not self._silence_slices:
+            self._init_silence()
 
-        for s in slices:
+        for s in self._silence_slices:
             self.broadcast(s)
             try:
                 await asyncio.wait_for(music_manager._new_track_event.wait(), timeout=0.25)

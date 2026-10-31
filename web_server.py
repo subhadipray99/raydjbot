@@ -259,9 +259,16 @@ PLAYER_HTML = """<!DOCTYPE html>
       <span id="time-total">0:00</span>
     </div>
 
-    <button class="btn-sync" id="btn-audio-control" onclick="toggleRadio()">
-      <span id="btn-icon">▶️</span> <span id="btn-text">Listen Live (Browser)</span>
-    </button>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%;">
+      <button class="btn-sync" id="btn-audio-control" onclick="toggleRadio()">
+        <span id="btn-icon">🔊</span> <span id="btn-text">Listen Live (Browser)</span>
+      </button>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #9ca3af;">
+        <span>🔈</span>
+        <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="0.8" oninput="setVolume(this.value)" style="accent-color: #ec4899; cursor: pointer; width: 120px;">
+        <span>🔊</span>
+      </div>
+    </div>
   </div>
 
   <div class="queue-card">
@@ -285,14 +292,19 @@ PLAYER_HTML = """<!DOCTYPE html>
     let totalDuration = 180;
     let currentTrackId = null;
 
+    function setVolume(val) {
+      const audio = document.getElementById('live-audio');
+      audio.volume = parseFloat(val);
+    }
+
     function toggleRadio() {
       const audio = document.getElementById('live-audio');
       if (audio.paused) {
         audio.src = '/radio.mp3?t=' + Date.now();
         audio.load();
         audio.play().then(() => {
-          document.getElementById('btn-icon').innerText = '🔊';
-          document.getElementById('btn-text').innerText = 'Playing Live Radio';
+          document.getElementById('btn-icon').innerText = '⏸️';
+          document.getElementById('btn-text').innerText = 'Playing Live (In Sync)';
           document.getElementById('btn-audio-control').style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
         }).catch(err => {
           console.error("Audio play error:", err);
@@ -300,7 +312,7 @@ PLAYER_HTML = """<!DOCTYPE html>
       } else {
         audio.pause();
         audio.src = '';
-        document.getElementById('btn-icon').innerText = '▶️';
+        document.getElementById('btn-icon').innerText = '🔊';
         document.getElementById('btn-text').innerText = 'Listen Live (Browser)';
         document.getElementById('btn-audio-control').style.background = 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)';
       }
@@ -391,7 +403,15 @@ PLAYER_HTML = """<!DOCTYPE html>
 
 async def handle_player_page(request: web.Request) -> web.Response:
     """Serve the synchronized live jukebox player page."""
-    return web.Response(text=PLAYER_HTML, content_type="text/html")
+    return web.Response(
+        text=PLAYER_HTML,
+        content_type="text/html",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 async def handle_audio_current(request: web.Request) -> web.Response:
@@ -407,12 +427,16 @@ async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
         headers={
             "Content-Type": "audio/mpeg",
             "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Cache-Control": "no-cache, no-store, no-transform, must-revalidate",
             "Connection": "keep-alive",
             "Pragma": "no-cache",
+            "Expires": "0",
+            "Accept-Ranges": "none",
             "icy-name": "Highrise Custom Room Radio",
             "icy-genre": "User Requested Music",
             "icy-br": "128",
+            "icy-pub": "1",
+            "ice-audio-info": "ice-samplerate=44100;ice-bitrate=128;ice-channels=2",
         },
     )
     await response.prepare(request)
