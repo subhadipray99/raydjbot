@@ -143,6 +143,16 @@ def rank_soundcloud_candidates(entries: list, search_term: str, target_dur: int 
     q_words = [w for w in raw_q_words if w not in stop_words] or raw_q_words
     q_set = set(q_words)
 
+    # Detect if user specifically asked for a remix, mashup, lofi, or cover
+    user_wants_remix = any(
+        re.search(r"\b" + re.escape(w) + r"\b", search_term.lower())
+        for w in ["remix", "mashup", "lofi", "slowed", "reverb", "mix", "cover", "acoustic", "version", "dj"]
+    )
+    remix_indicators = [
+        "remix", "mashup", "lofi", "lo-fi", "slowed", "reverb", "mix", "cover",
+        "dj", "re-mix", "acoustic", "version", "tribute", "edit", "flip", "bollytech"
+    ]
+
     valid = []
     fallback = []
     for rank, e in enumerate(entries):
@@ -161,7 +171,10 @@ def rank_soundcloud_candidates(entries: list, search_term: str, target_dur: int 
         if target_dur > 0 and target_dur < 450 and dur > 900:
             continue
 
-        fallback.append(e)
+        is_unwanted_remix = (not user_wants_remix) and any(
+            re.search(r"\b" + re.escape(w) + r"\b", title.lower())
+            for w in remix_indicators
+        )
 
         c_words = set(re.findall(r"\w+", title.lower()))
         matched = q_set.intersection(c_words)
@@ -179,18 +192,45 @@ def rank_soundcloud_candidates(entries: list, search_term: str, target_dur: int 
         # 2. Duration close to YouTube video duration (dur_diff > 45, dur_diff)
         # 3. Natural SoundCloud search rank (preserves engine relevance)
         score = (-round(overlap, 2), dur_diff > 45, dur_diff, rank)
-        valid.append((score, e))
+        
+        if not is_unwanted_remix:
+            valid.append((score, e))
+        else:
+            fallback.append((score, e))
 
     if valid:
         valid.sort(key=lambda x: x[0])
         return [x[1] for x in valid]
-    return fallback
+    if fallback:
+        fallback.sort(key=lambda x: x[0])
+        return [x[1] for x in fallback]
+    return []
+
+
+def search_jiosaavn_sync(query: str) -> str | None:
+    """Search JioSaavn for official licensed studio tracks."""
+    import urllib.parse
+    import urllib.request
+    try:
+        encoded_query = urllib.parse.quote_plus(query.strip())
+        url = f"https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query={encoded_query}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=5) as res:
+            data = json.loads(res.read().decode("utf-8", errors="ignore"))
+            songs = data.get("songs", {}).get("data", [])
+            for song in songs:
+                song_url = song.get("url")
+                if song_url and "jiosaavn.com/song/" in song_url:
+                    return song_url
+    except Exception as e:
+        logger.debug(f"JioSaavn search lookup error: {e}")
+    return None
 
 
 def download_track_audio_sync(
     title: str, video_id: str, query: str = "", target_duration: int = 0
 ) -> str | None:
-    """Download audio locally using multi-tier resilient strategy (YouTube default -> embedded -> SoundCloud fallback)."""
+    """Download audio locally using multi-tier resilient strategy (YouTube -> JioSaavn official -> SoundCloud fallback)."""
     import yt_dlp
     import imageio_ffmpeg
 
@@ -228,14 +268,45 @@ def download_track_audio_sync(
     except Exception as e:
         logger.warning(f"YouTube download failed for '{title}': {e}")
 
-    # Tier 2: Resilient SoundCloud search fallback (bypasses YouTube datacenter bot challenges completely!)
-    # Determine the most accurate search term:
+    # Determine the cleanest search term:
     is_url = bool(re.search(r"https?://|(?:v=|\/|youtu\.be\/)[0-9A-Za-z_-]{11}", query))
     if query and not is_url:
         search_term = query.strip()
     else:
         search_term = clean_search_query(title)
 
+    # Tier 2: JioSaavn Official Licensed Studio Audio (guaranteed official track, no remix/cover, unblocked in datacenters)
+    saavn_url = search_jiosaavn_sync(search_term)
+    if not saavn_url and search_term != title:
+        saavn_url = search_jiosaavn_sync(clean_search_query(title))
+
+    if saavn_url:
+        logger.info(f"Attempting official JioSaavn download for '{search_term}' ({saavn_url})...")
+        try:
+            ydl_opts_saavn = {
+                "format": "bestaudio/best",
+                "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
+                "quiet": True,
+                "no_warnings": True,
+                "ignoreerrors": True,
+                "retries": 2,
+                "socket_timeout": 8,
+                "ffmpeg_location": ffmpeg_exe,
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "128",
+                }],
+            }
+            with yt_dlp.YoutubeDL(ydl_opts_saavn) as ydl:
+                ydl.download([saavn_url])
+                if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                    logger.info(f"Successfully downloaded official licensed audio from JioSaavn for '{search_term}' ({video_id})")
+                    return out_file
+        except Exception as saavn_err:
+            logger.warning(f"JioSaavn download failed for '{search_term}': {saavn_err}")
+
+    # Tier 3: Resilient SoundCloud search fallback (for indie tracks not on official services)
     logger.info(f"Attempting resilient SoundCloud search fallback for '{search_term}'...")
     try:
         ydl_opts_sc = {
