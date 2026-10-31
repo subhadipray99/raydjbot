@@ -1,5 +1,7 @@
 import logging
 import time
+import asyncio
+import aiohttp
 from aiohttp import web
 import config
 from music import music_manager
@@ -455,6 +457,57 @@ async def handle_audio_current(request: web.Request) -> web.Response:
     })
 
 
+async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
+    """Continuous live MP3 radio station stream for Highrise in-room Custom Radio Station."""
+    response = web.StreamResponse(
+        status=200,
+        reason="OK",
+        headers={
+            "Content-Type": "audio/mpeg",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Connection": "keep-alive",
+            "icy-name": "Highrise RayDJBot Radio",
+            "icy-genre": "Various",
+            "icy-br": "128",
+        },
+    )
+    await response.prepare(request)
+
+    async with aiohttp.ClientSession() as session:
+        while True:
+            if not music_manager.current:
+                try:
+                    await response.write(b"\x00" * 4096)
+                except (ConnectionResetError, asyncio.CancelledError):
+                    break
+                await asyncio.sleep(2)
+                continue
+
+            stream_url = await music_manager.get_current_stream_url()
+            if not stream_url:
+                await asyncio.sleep(2)
+                continue
+
+            current_id = music_manager.current.id
+            try:
+                async with session.get(stream_url) as upstream:
+                    async for chunk in upstream.content.iter_chunked(16384):
+                        if not music_manager.current or music_manager.current.id != current_id:
+                            break
+                        try:
+                            await response.write(chunk)
+                        except (ConnectionResetError, asyncio.CancelledError):
+                            return response
+            except (ConnectionResetError, asyncio.CancelledError):
+                break
+            except Exception as e:
+                logger.debug(f"Radio stream error: {e}")
+                await asyncio.sleep(1)
+
+    return response
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_root)
@@ -463,6 +516,9 @@ def create_app() -> web.Application:
     app.router.add_get("/api/player-state", handle_player_state)
     app.router.add_get("/audio/current.mp3", handle_audio_current)
     app.router.add_get("/audio/current", handle_audio_current)
+    app.router.add_get("/radio.mp3", handle_radio_stream)
+    app.router.add_get("/radio", handle_radio_stream)
+    app.router.add_get("/stream.mp3", handle_radio_stream)
     return app
 
 
