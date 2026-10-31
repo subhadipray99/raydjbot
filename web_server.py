@@ -448,18 +448,12 @@ async def handle_player_page(request: web.Request) -> web.Response:
 
 
 async def handle_audio_current(request: web.Request) -> web.Response:
-    """Direct audio stream endpoint for Highrise Studio's PlayMusic component."""
-    stream_url, _ = await music_manager.get_current_stream_url()
-    if not stream_url:
-        return web.Response(text="No active music stream", status=404)
-    raise web.HTTPFound(location=stream_url, headers={
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-    })
+    """Redirect to the continuous custom radio stream."""
+    raise web.HTTPFound(location="/radio.mp3")
 
 
 async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
-    """Stream continuous live audio (requested tracks + 24/7 radio fallback) for Highrise Custom Radio."""
+    """Stream continuous live audio for Highrise Custom Radio."""
     response = web.StreamResponse(
         status=200,
         reason="OK",
@@ -468,8 +462,10 @@ async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
-            "icy-name": "Highrise RayDJBot Live Radio",
-            "icy-genre": "Pop / Dance / Lofi / Requested Tracks",
+            "Pragma": "no-cache",
+            "icy-name": "Highrise Custom Room Radio",
+            "icy-genre": "User Requested Music",
+            "icy-br": "128",
         },
     )
     await response.prepare(request)

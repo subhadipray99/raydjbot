@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 import urllib.parse
@@ -20,13 +21,9 @@ class Track:
     requester: str
     thumbnail: str
     url: str
-    stream_url: str | None = None
-    http_headers: dict | None = None
 
     def to_dict(self):
-        d = asdict(self)
-        d.pop("http_headers", None)
-        return d
+        return asdict(self)
 
 
 def parse_duration_str(dur_str: str) -> int:
@@ -40,81 +37,6 @@ def parse_duration_str(dur_str: str) -> int:
     except ValueError:
         pass
     return 180  # Default fallback 3 minutes
-
-
-def extract_direct_audio_url_sync(title: str, video_id: str | None = None) -> tuple[str | None, dict]:
-    """Extract playable audio stream URL from YouTube with resilient SoundCloud fallback."""
-    import os
-    try:
-        import yt_dlp
-    except ImportError:
-        logger.error("yt_dlp not installed")
-        return None, {}
-
-    # 1. Try YouTube extraction first
-    if video_id:
-        try:
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "noplaylist": True,
-                "quiet": True,
-                "no_warnings": True,
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["ios", "android", "web"]
-                    }
-                },
-            }
-            if os.path.exists("cookies.txt"):
-                ydl_opts["cookiefile"] = "cookies.txt"
-
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-                if "entries" in info and info["entries"]:
-                    info = info["entries"][0]
-
-                url = info.get("url")
-                if not url:
-                    formats = [
-                        f for f in info.get("formats", [])
-                        if f.get("url") and f.get("acodec") and f.get("acodec") != "none"
-                    ]
-                    if formats:
-                        url = formats[-1]["url"]
-
-                if url:
-                    headers = info.get("http_headers", {})
-                    logger.info(f"Resolved YouTube audio stream for: {title}")
-                    return url, headers
-        except Exception as e:
-            logger.warning(f"YouTube stream extract failed for '{title}': {e}. Trying SoundCloud fallback...")
-
-    # 2. Resilient fallback to SoundCloud (immune to YouTube datacenter IP challenges)
-    try:
-        clean_title = re.sub(r"[^\w\s-]", "", title).strip()
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"scsearch1:{clean_title}", download=False)
-            if "entries" in info and info["entries"]:
-                entry = info["entries"][0]
-                url = entry.get("url")
-                if not url:
-                    formats = [f for f in entry.get("formats", []) if f.get("url")]
-                    if formats:
-                        url = formats[-1]["url"]
-
-                if url:
-                    logger.info(f"Resolved SoundCloud stream for '{title}': {entry.get('title')}")
-                    return url, entry.get("http_headers", {})
-    except Exception as e:
-        logger.error(f"SoundCloud fallback also failed for '{title}': {e}")
-
-    return None, {}
 
 
 def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | None:
@@ -191,6 +113,56 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
     return None
 
 
+def download_track_audio_sync(title: str, video_id: str) -> str | None:
+    """Download audio file locally using yt-dlp with YouTube and SoundCloud fallback."""
+    import yt_dlp
+    import imageio_ffmpeg
+
+    cache_dir = "cache"
+    os.makedirs(cache_dir, exist_ok=True)
+    out_file = os.path.join(cache_dir, f"{video_id}.mp3")
+
+    if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+        return out_file
+
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
+        "quiet": True,
+        "no_warnings": True,
+        "ffmpeg_location": ffmpeg_exe,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "128",
+        }],
+    }
+
+    # 1. Try YouTube first
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                logger.info(f"Downloaded audio from YouTube for '{title}'")
+                return out_file
+    except Exception as e:
+        logger.warning(f"YouTube download failed for '{title}': {e}. Trying SoundCloud fallback...")
+
+    # 2. Try SoundCloud fallback
+    try:
+        clean_title = re.sub(r"[^\w\s-]", "", title).strip()
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([f"scsearch1:{clean_title}"])
+            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                logger.info(f"Downloaded audio from SoundCloud fallback for '{title}'")
+                return out_file
+    except Exception as e:
+        logger.error(f"SoundCloud fallback download failed for '{title}': {e}")
+
+    return None
+
+
 class MusicManager:
     """Manages the room music queue and coordinates playback on the room's custom radio."""
 
@@ -204,6 +176,7 @@ class MusicManager:
         self._new_track_event = asyncio.Event()
         self._track_finished_event = asyncio.Event()
         self._runner_task: asyncio.Task | None = None
+        self._download_tasks: dict[str, asyncio.Task] = {}
 
     def start(self, bot_instance=None):
         """Start the background queue runner and radio broadcast engine."""
@@ -216,7 +189,7 @@ class MusicManager:
         # Initialize global audio broadcaster
         try:
             from broadcaster import broadcaster
-            broadcaster.start()
+            broadcaster.start(self.bot)
         except Exception as e:
             logger.error(f"Failed to start audio broadcaster: {e}")
 
@@ -225,21 +198,21 @@ class MusicManager:
         if self.current == track:
             self._track_finished_event.set()
 
-    async def get_stream_url_for_track(self, track: Track | None) -> tuple[str | None, dict]:
-        """Get direct playable audio stream URL and headers for a specific track safely."""
+    async def ensure_track_audio_file(self, track: Track | None) -> str | None:
+        """Download or retrieve local cached MP3 audio file for a track (deduplicated)."""
         if not track:
-            return None, {}
-        if not track.stream_url:
-            url, headers = await asyncio.to_thread(
-                extract_direct_audio_url_sync, track.title, track.id
-            )
-            track.stream_url = url
-            track.http_headers = headers
-        return track.stream_url, track.http_headers or {}
+            return None
+        if track.id in self._download_tasks:
+            return await self._download_tasks[track.id]
 
-    async def get_current_stream_url(self) -> tuple[str | None, dict]:
-        """Get direct playable audio stream URL and headers for the currently playing requested track."""
-        return await self.get_stream_url_for_track(self.current)
+        task = asyncio.create_task(
+            asyncio.to_thread(download_track_audio_sync, track.title, track.id)
+        )
+        self._download_tasks[track.id] = task
+        try:
+            return await task
+        finally:
+            self._download_tasks.pop(track.id, None)
 
     async def search_and_queue(self, query: str, requester: str) -> tuple[bool, str, Track | None]:
         """Search YouTube asynchronously and enqueue."""
@@ -250,6 +223,9 @@ class MusicManager:
 
         self.queue.append(track)
         self._new_track_event.set()
+
+        # Start downloading in background immediately so it's ready when popped
+        asyncio.create_task(self.ensure_track_audio_file(track))
 
         pos = len(self.queue)
         if self.current is None and pos == 1:
@@ -309,9 +285,6 @@ class MusicManager:
                 self.current = self.queue.pop(0)
                 self.started_at = time.time()
                 logger.info(f"[Music] Now Playing: {self.current.title} (Requested by @{self.current.requester})")
-
-                # Pre-fetch stream URL in background
-                asyncio.create_task(self.get_stream_url_for_track(self.current))
 
                 # Announce in Highrise room
                 if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:

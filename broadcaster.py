@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import subprocess
 from music import music_manager, Track
 
@@ -29,19 +30,19 @@ def _generate_silence_chunk() -> bytes:
     except Exception as e:
         logger.debug(f"Error generating silence with ffmpeg: {e}")
     # Fallback minimal MP3 silence frame (417 bytes)
-    # Sync word 0xFF 0xFB, 128kbps, 44.1kHz, padded=0, stereo
     return b"\xff\xfb\x90d" + b"\x00" * 413
 
 
 class RadioBroadcaster:
     """Central broadcast engine feeding continuous audio into Highrise room's Custom Radio Station.
-    Streams user requested songs from the queue; keeps the stream alive with silence when idle."""
+    Streams user requested songs from local cache; keeps the stream alive with silence when idle."""
 
     def __init__(self):
         self._subscribers: set[asyncio.Queue] = set()
         self._runner_task: asyncio.Task | None = None
         self._active_proc: asyncio.subprocess.Process | None = None
         self._silence_chunk: bytes | None = None
+        self.bot = None
 
     def subscribe(self) -> asyncio.Queue:
         """Register a new HTTP listener queue (e.g. Highrise room client or browser)."""
@@ -70,8 +71,10 @@ class RadioBroadcaster:
             except asyncio.QueueFull:
                 pass
 
-    def start(self):
+    def start(self, bot_instance=None):
         """Launch the persistent audio broadcast engine."""
+        if bot_instance:
+            self.bot = bot_instance
         if not self._runner_task or self._runner_task.done():
             self._runner_task = asyncio.create_task(self._run())
             logger.info("Custom radio broadcast engine initialized.")
@@ -83,11 +86,17 @@ class RadioBroadcaster:
             try:
                 track = music_manager.current
                 if track:
-                    stream_url, headers = await music_manager.get_stream_url_for_track(track)
-                    if stream_url and music_manager.current == track:
-                        await self._stream_track_ffmpeg(track, stream_url, headers)
+                    # Retrieve or wait for local cached MP3 audio file
+                    file_path = await music_manager.ensure_track_audio_file(track)
+                    if file_path and os.path.exists(file_path) and music_manager.current == track:
+                        await self._stream_local_file_ffmpeg(track, file_path)
                     elif music_manager.current == track:
-                        logger.warning(f"Could not resolve playable stream for '{track.title}'. Skipping.")
+                        logger.warning(f"Could not prepare audio file for '{track.title}'. Skipping.")
+                        if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
+                            try:
+                                await self.bot.highrise.chat(f"⚠️ Could not load audio for \"{track.title}\". Skipping.")
+                            except Exception:
+                                pass
                         music_manager.notify_track_finished(track)
                         await asyncio.sleep(1)
                 else:
@@ -100,26 +109,22 @@ class RadioBroadcaster:
                 logger.error(f"Unexpected error in broadcast loop: {e}", exc_info=True)
                 await asyncio.sleep(1)
 
-    async def _stream_track_ffmpeg(self, track: Track, stream_url: str, headers: dict):
-        """Transcode and stream requested song audio in real-time as standard MP3."""
+    async def _stream_local_file_ffmpeg(self, track: Track, file_path: str):
+        """Stream locally cached audio file in real-time as standard MP3."""
         import imageio_ffmpeg
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
-        cmd = [ffmpeg_exe]
-        if headers:
-            h_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
-            cmd.extend(["-headers", h_str])
-
-        cmd.extend([
-            "-re",               # Read input at real-time native frame rate
-            "-i", stream_url,
+        cmd = [
+            ffmpeg_exe,
+            "-re",               # Read local file at real-time native frame rate
+            "-i", file_path,     # Local audio file
             "-vn",               # Disable video
             "-ar", "44100",      # Standard 44.1 kHz audio
             "-ac", "2",          # Stereo channels
             "-b:a", "128k",      # 128 kbps constant bitrate
             "-f", "mp3",         # MP3 output format
             "pipe:1"             # Pipe to stdout
-        ])
+        ]
 
         proc = None
         try:
@@ -129,7 +134,7 @@ class RadioBroadcaster:
                 stderr=asyncio.subprocess.DEVNULL
             )
             self._active_proc = proc
-            logger.info(f"Broadcasting requested song: \"{track.title}\" [{track.duration_str}]")
+            logger.info(f"Broadcasting requested song from local audio: \"{track.title}\" [{track.duration_str}]")
 
             while True:
                 # Break immediately if skip was pressed or track changed
@@ -155,6 +160,13 @@ class RadioBroadcaster:
                 except Exception:
                     pass
             self._active_proc = None
+
+            # Clean up the file after playback finishes
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            except Exception:
+                pass
 
             # If track naturally completed and wasn't skipped, signal music_manager
             if music_manager.current == track and not music_manager._skip_event.is_set():
