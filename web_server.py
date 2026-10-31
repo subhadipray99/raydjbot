@@ -1,6 +1,8 @@
+import os
 import logging
 import time
 import asyncio
+import collections
 import aiohttp
 from aiohttp import web
 import config
@@ -9,6 +11,21 @@ from broadcaster import broadcaster
 
 logger = logging.getLogger("WebServer")
 start_time = time.time()
+
+# In-memory log buffer for live diagnostics
+recent_logs = collections.deque(maxlen=150)
+
+class MemoryLogHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            recent_logs.append(msg)
+        except Exception:
+            pass
+
+memory_handler = MemoryLogHandler()
+memory_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+logging.getLogger().addHandler(memory_handler)
 
 
 def get_uptime() -> str:
@@ -463,6 +480,30 @@ async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
     return response
 
 
+async def handle_debug_logs(request: web.Request) -> web.Response:
+    """Return recent in-memory server logs for live troubleshooting."""
+    text = "\n".join(recent_logs)
+    return web.Response(text=text or "No logs recorded yet.", content_type="text/plain")
+
+
+async def handle_debug_download(request: web.Request) -> web.Response:
+    """Trigger a test audio download and return results/diagnostics."""
+    vid = request.query.get("id", "JGwWNGJdvx8")
+    title = request.query.get("title", "Test Track")
+    from music import download_track_audio_sync
+    try:
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, download_track_audio_sync, title, vid)
+        return web.json_response({
+            "success": bool(res),
+            "file_path": res,
+            "exists": os.path.exists(res) if res else False,
+            "size": os.path.getsize(res) if res and os.path.exists(res) else 0
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_root)
@@ -474,6 +515,8 @@ def create_app() -> web.Application:
     app.router.add_get("/radio.mp3", handle_radio_stream)
     app.router.add_get("/radio", handle_radio_stream)
     app.router.add_get("/stream.mp3", handle_radio_stream)
+    app.router.add_get("/debug/logs", handle_debug_logs)
+    app.router.add_get("/debug/download", handle_debug_download)
     return app
 
 
