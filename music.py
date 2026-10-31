@@ -21,6 +21,7 @@ class Track:
     requester: str
     thumbnail: str
     url: str
+    query: str = ""
 
     def to_dict(self):
         return asdict(self)
@@ -93,6 +94,7 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
                                 requester=requester,
                                 thumbnail=thumb,
                                 url=f"https://www.youtube.com/watch?v={v_id}",
+                                query=query,
                             )
         except Exception as e:
             logger.debug(f"Error parsing search results json: {e}")
@@ -108,6 +110,7 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
             requester=requester,
             thumbnail=f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
             url=f"https://www.youtube.com/watch?v={video_id}",
+            query=query,
         )
 
     return None
@@ -117,18 +120,76 @@ def clean_search_query(title: str) -> str:
     """Clean video title to produce a high-accuracy search term for audio sources."""
     # Remove bracketed text like [Official Video], (Audio), (Lyrics), (Remix) etc.
     s = re.sub(r"\[.*?\]|\(.*?\)", "", title)
-    # Remove common video buzzwords
-    s = re.sub(r"(?i)\b(official\s+video|official\s+audio|music\s+video|lyric\s+video|lyrics|full\s+song|visualizer|audio|hd|4k)\b", "", s)
-    # If title has multiple pipe-delimited segments, keep only the first two (Song + Artist / Movie)
+    # Remove common video buzzwords and record label tags
+    s = re.sub(
+        r"(?i)\b(official\s+video|official\s+audio|music\s+video|lyric\s+video|lyrical\s+video|lyrics|full\s+song|full\s+video|visualizer|audio|hd|4k|svf|t-series|tseries|zee\s+music\s+company|sony\s+music|vevo)\b",
+        "",
+        s,
+    )
+    # If title has multiple pipe-delimited segments, the first segment is usually the primary song title
     if "|" in s:
         parts = [p.strip() for p in s.split("|") if p.strip()]
-        s = " ".join(parts[:2])
+        if parts:
+            s = parts[0]
     # Collapse whitespace
     s = re.sub(r"\s+", " ", s).strip()
     return s or title
 
 
-def download_track_audio_sync(title: str, video_id: str) -> str | None:
+def rank_soundcloud_candidates(entries: list, search_term: str, target_dur: int = 0) -> list:
+    """Filter and rank SoundCloud search candidates by word overlap, duration match, and natural relevance."""
+    stop_words = {"the", "a", "an", "of", "in", "and", "or", "ft", "feat", "to", "is", "song", "video"}
+    raw_q_words = re.findall(r"\w+", search_term.lower())
+    q_words = [w for w in raw_q_words if w not in stop_words] or raw_q_words
+    q_set = set(q_words)
+
+    valid = []
+    fallback = []
+    for rank, e in enumerate(entries):
+        if not e:
+            continue
+        title = e.get("title") or ""
+        dur = e.get("duration") or 0
+        formats = e.get("formats") or []
+
+        # Filter out 30s previews
+        if dur > 0 and dur < 45:
+            continue
+        if formats and all("preview" in str(f.get("format_id", "")).lower() for f in formats):
+            continue
+        # Filter out multi-hour loops or full movie jukeboxes if the target is a normal track
+        if target_dur > 0 and target_dur < 450 and dur > 900:
+            continue
+
+        fallback.append(e)
+
+        c_words = set(re.findall(r"\w+", title.lower()))
+        matched = q_set.intersection(c_words)
+        overlap = len(matched) / max(1, len(q_set))
+
+        # Discard if missing majority of query words
+        if len(q_set) > 1 and overlap < 0.5:
+            continue
+        if len(q_set) == 1 and overlap < 1.0:
+            continue
+
+        dur_diff = abs(dur - target_dur) if target_dur > 0 else 0
+        # Score priority:
+        # 1. Higher word overlap (-overlap)
+        # 2. Duration close to YouTube video duration (dur_diff > 45, dur_diff)
+        # 3. Natural SoundCloud search rank (preserves engine relevance)
+        score = (-round(overlap, 2), dur_diff > 45, dur_diff, rank)
+        valid.append((score, e))
+
+    if valid:
+        valid.sort(key=lambda x: x[0])
+        return [x[1] for x in valid]
+    return fallback
+
+
+def download_track_audio_sync(
+    title: str, video_id: str, query: str = "", target_duration: int = 0
+) -> str | None:
     """Download audio locally using multi-tier resilient strategy (YouTube default -> embedded -> SoundCloud fallback)."""
     import yt_dlp
     import imageio_ffmpeg
@@ -167,9 +228,15 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
     except Exception as e:
         logger.warning(f"YouTube download failed for '{title}': {e}")
 
-    # Tier 2: SoundCloud search fallback (bypasses YouTube datacenter bot challenges completely!)
-    clean_query = clean_search_query(title)
-    logger.info(f"Attempting resilient SoundCloud search fallback for '{clean_query}'...")
+    # Tier 2: Resilient SoundCloud search fallback (bypasses YouTube datacenter bot challenges completely!)
+    # Determine the most accurate search term:
+    is_url = bool(re.search(r"https?://|(?:v=|\/|youtu\.be\/)[0-9A-Za-z_-]{11}", query))
+    if query and not is_url:
+        search_term = query.strip()
+    else:
+        search_term = clean_search_query(title)
+
+    logger.info(f"Attempting resilient SoundCloud search fallback for '{search_term}'...")
     try:
         ydl_opts_sc = {
             "format": "bestaudio/best",
@@ -187,14 +254,10 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
             }],
         }
         with yt_dlp.YoutubeDL(ydl_opts_sc) as ydl:
-            info = ydl.extract_info(f"scsearch5:{clean_query}", download=False)
-            entries = [e for e in (info.get("entries") or []) if e]
-            # Prioritize full non-preview tracks (> 60s) before short previews
-            entries.sort(key=lambda x: (
-                1 if any("preview" in f.get("format_id", "") for f in x.get("formats", [])) else 0,
-                -(x.get("duration") or 0)
-            ))
-            for e in entries:
+            info = ydl.extract_info(f"scsearch8:{search_term}", download=False)
+            raw_entries = info.get("entries") or []
+            candidates = rank_soundcloud_candidates(raw_entries, search_term, target_duration)
+            for e in candidates:
                 target_url = e.get("webpage_url") or e.get("url")
                 if not target_url:
                     continue
@@ -203,13 +266,13 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
                     logger.info(f"Trying SoundCloud candidate: '{e.get('title')}' ({dur:.0f}s)")
                     ydl.download([target_url])
                     if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                        logger.info(f"Successfully downloaded audio from SoundCloud for '{clean_query}' ({video_id})")
+                        logger.info(f"Successfully downloaded audio from SoundCloud for '{search_term}' ({video_id})")
                         return out_file
                 except Exception as candidate_err:
                     logger.debug(f"Candidate '{e.get('title')}' failed: {candidate_err}. Trying next candidate...")
 
     except Exception as e:
-        logger.warning(f"SoundCloud fallback search failed for '{clean_query}': {e}")
+        logger.warning(f"SoundCloud fallback search failed for '{search_term}': {e}")
 
     logger.error(f"Failed to download audio for '{title}' ({video_id}) across all available sources.")
     return None
@@ -246,7 +309,13 @@ class MusicManager:
             return await self._download_tasks[track.id]
 
         task = asyncio.create_task(
-            asyncio.to_thread(download_track_audio_sync, track.title, track.id)
+            asyncio.to_thread(
+                download_track_audio_sync,
+                track.title,
+                track.id,
+                track.query,
+                track.duration_sec,
+            )
         )
         self._download_tasks[track.id] = task
         try:

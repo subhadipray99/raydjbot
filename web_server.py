@@ -502,10 +502,12 @@ async def handle_debug_download(request: web.Request) -> web.Response:
     """Trigger a test audio download and return results/diagnostics."""
     vid = request.query.get("id", "JGwWNGJdvx8")
     title = request.query.get("title", "Test Track")
+    query = request.query.get("q", request.query.get("query", ""))
+    target_dur = int(request.query.get("dur", 0))
     from music import download_track_audio_sync
     try:
         loop = asyncio.get_running_loop()
-        res = await loop.run_in_executor(None, download_track_audio_sync, title, vid)
+        res = await loop.run_in_executor(None, download_track_audio_sync, title, vid, query, target_dur)
         return web.json_response({
             "success": bool(res),
             "file_path": res,
