@@ -300,8 +300,7 @@ PLAYER_HTML = """<!DOCTYPE html>
     function toggleRadio() {
       const audio = document.getElementById('live-audio');
       if (audio.paused) {
-        audio.src = '/radio.mp3?t=' + Date.now();
-        audio.load();
+        audio.src = '/radio.mp3';
         audio.play().then(() => {
           document.getElementById('btn-icon').innerText = '⏸️';
           document.getElementById('btn-text').innerText = 'Playing Live (In Sync)';
@@ -311,12 +310,18 @@ PLAYER_HTML = """<!DOCTYPE html>
         });
       } else {
         audio.pause();
-        audio.src = '';
+        audio.removeAttribute('src');
+        audio.load();
         document.getElementById('btn-icon').innerText = '🔊';
         document.getElementById('btn-text').innerText = 'Listen Live (Browser)';
         document.getElementById('btn-audio-control').style.background = 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)';
       }
     }
+
+    const liveAudioEl = document.getElementById('live-audio');
+    liveAudioEl.addEventListener('error', () => {
+      console.warn("Live audio connection lost, retrying...");
+    });
 
     function formatTime(secs) {
       secs = Math.max(0, Math.floor(secs));
@@ -431,7 +436,6 @@ async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
             "Connection": "keep-alive",
             "Pragma": "no-cache",
             "Expires": "0",
-            "Accept-Ranges": "none",
             "icy-name": "Highrise Custom Room Radio",
             "icy-genre": "User Requested Music",
             "icy-br": "128",
@@ -440,11 +444,15 @@ async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
         },
     )
     await response.prepare(request)
+    if request.method == "HEAD":
+        return response
+
     q = broadcaster.subscribe()
     try:
         while True:
             chunk = await q.get()
             await response.write(chunk)
+            await response.drain()
     except (ConnectionResetError, asyncio.CancelledError):
         pass
     except Exception as e:
