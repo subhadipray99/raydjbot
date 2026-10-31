@@ -193,7 +193,7 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
 
     # Tier 3: SoundCloud search fallback (bypasses YouTube datacenter bot challenges completely!)
     clean_query = clean_search_query(title)
-    logger.info(f"Attempting SoundCloud search fallback for '{clean_query}'...")
+    logger.info(f"Attempting resilient SoundCloud search fallback for '{clean_query}'...")
     try:
         ydl_opts_sc = {
             "format": "bestaudio/best",
@@ -210,28 +210,25 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
         with yt_dlp.YoutubeDL(ydl_opts_sc) as ydl:
             info = ydl.extract_info(f"scsearch5:{clean_query}", download=False)
             entries = info.get("entries", []) if info else []
-            downloaded = False
             for e in entries:
+                target_url = e.get("webpage_url") or e.get("url")
+                if not target_url:
+                    continue
+                # Skip tracks that are shorter than 45 seconds to avoid short previews
                 dur = e.get("duration") or 0
-                if dur > 60:
-                    fmts = [f.get("format_id", "") for f in e.get("formats", []) if "preview" not in f.get("format_id", "")]
-                    if fmts:
-                        target_url = e.get("webpage_url") or e.get("url")
-                        if target_url:
-                            logger.info(f"Found SoundCloud match: '{e.get('title')}' ({dur:.0f}s)")
-                            ydl.download([target_url])
-                            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                                downloaded = True
-                                break
-            if not downloaded and entries and (entries[0].get("webpage_url") or entries[0].get("url")):
-                first_url = entries[0].get("webpage_url") or entries[0].get("url")
-                ydl.download([first_url])
+                if 0 < dur < 45:
+                    continue
+                try:
+                    logger.info(f"Trying SoundCloud candidate: '{e.get('title')}' ({dur:.0f}s)")
+                    ydl.download([target_url])
+                    if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                        logger.info(f"Successfully downloaded audio from SoundCloud for '{clean_query}' ({video_id})")
+                        return out_file
+                except Exception as candidate_err:
+                    logger.debug(f"Candidate '{e.get('title')}' failed: {candidate_err}. Trying next candidate...")
 
-            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                logger.info(f"Successfully downloaded audio from SoundCloud for '{clean_query}' ({video_id})")
-                return out_file
     except Exception as e:
-        logger.warning(f"SoundCloud fallback download failed for '{clean_query}': {e}")
+        logger.warning(f"SoundCloud fallback search failed for '{clean_query}': {e}")
 
     logger.error(f"Failed to download audio for '{title}' ({video_id}) across all available sources.")
     return None
