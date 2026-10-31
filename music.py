@@ -200,6 +200,7 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
             "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
+            "ignoreerrors": True,
             "ffmpeg_location": ffmpeg_exe,
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
@@ -209,15 +210,17 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
         }
         with yt_dlp.YoutubeDL(ydl_opts_sc) as ydl:
             info = ydl.extract_info(f"scsearch5:{clean_query}", download=False)
-            entries = info.get("entries", []) if info else []
+            entries = [e for e in (info.get("entries") or []) if e]
+            # Prioritize full non-preview tracks (> 60s) before short previews
+            entries.sort(key=lambda x: (
+                1 if any("preview" in f.get("format_id", "") for f in x.get("formats", [])) else 0,
+                -(x.get("duration") or 0)
+            ))
             for e in entries:
                 target_url = e.get("webpage_url") or e.get("url")
                 if not target_url:
                     continue
-                # Skip tracks that are shorter than 45 seconds to avoid short previews
                 dur = e.get("duration") or 0
-                if 0 < dur < 45:
-                    continue
                 try:
                     logger.info(f"Trying SoundCloud candidate: '{e.get('title')}' ({dur:.0f}s)")
                     ydl.download([target_url])
