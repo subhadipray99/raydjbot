@@ -9,6 +9,7 @@ dependencies = [
     "highrise-bot-sdk>=23.1.0b13",
     "python-dotenv>=1.0.0",
     "setuptools<70",
+    "yt-dlp>=2026.10.21",
 ]
 
 [tool.uv]

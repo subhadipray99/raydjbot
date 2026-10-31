@@ -20,6 +20,7 @@ class Track:
     requester: str
     thumbnail: str
     url: str
+    stream_url: str | None = None
 
     def to_dict(self):
         return asdict(self)
@@ -38,8 +39,26 @@ def parse_duration_str(dur_str: str) -> int:
     return 180  # Default fallback 3 minutes
 
 
+def extract_direct_audio_url_sync(video_id: str) -> str | None:
+    """Extract direct playable audio stream URL using yt-dlp."""
+    try:
+        import yt_dlp
+        ydl_opts = {
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            return info.get("url")
+    except Exception as e:
+        logger.error(f"Failed to extract direct stream for {video_id}: {e}")
+        return None
+
+
 def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | None:
-    """Search YouTube for a query or video ID without third-party dependencies."""
+    """Search YouTube for a query or video ID."""
     query = query.strip()
     video_id = None
 
@@ -70,7 +89,7 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
         logger.error(f"Network error while querying YouTube: {e}")
         return None
 
-    # If it was a search results page
+    # Search results page extraction
     match = re.search(r"var ytInitialData = ({.*?});</script>", html)
     if match:
         try:
@@ -134,6 +153,16 @@ class MusicManager:
             self._runner_task = asyncio.create_task(self._queue_runner())
             logger.info("Music queue runner initialized.")
 
+    async def get_current_stream_url(self) -> str | None:
+        """Get direct playable audio stream URL for Highrise Studio PlayMusic."""
+        if not self.current:
+            return None
+        if not self.current.stream_url:
+            self.current.stream_url = await asyncio.to_thread(
+                extract_direct_audio_url_sync, self.current.id
+            )
+        return self.current.stream_url
+
     async def search_and_queue(self, query: str, requester: str) -> tuple[bool, str, Track | None]:
         """Search YouTube asynchronously and enqueue."""
         loop = asyncio.get_running_loop()
@@ -166,10 +195,12 @@ class MusicManager:
         if self.current and self.started_at > 0:
             position = max(0.0, time.time() - self.started_at)
 
+        base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
         return {
             "is_playing": self.current is not None,
             "position_sec": round(position, 2),
             "now_playing": self.current.to_dict() if self.current else None,
+            "stream_url": f"{base_url}/audio/current.mp3" if self.current else None,
             "queue": [t.to_dict() for t in self.queue],
             "queue_count": len(self.queue),
         }
@@ -189,6 +220,9 @@ class MusicManager:
                 self.started_at = time.time()
                 logger.info(f"[Music] Now Playing: {self.current.title} (Requested by @{self.current.requester})")
 
+                # Pre-fetch stream URL in background so PlayMusic can load instantly
+                asyncio.create_task(self.get_current_stream_url())
+
                 # Announce in Highrise room
                 if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
                     try:
@@ -196,7 +230,7 @@ class MusicManager:
                         announcement = (
                             f"🎶 Now Playing: \"{self.current.title}\" [{self.current.duration_str}]\n"
                             f"👤 Requested by: @{self.current.requester}\n"
-                            f"📻 Live Player: {base_url}/player"
+                            f"📻 Web Player: {base_url}/player"
                         )
                         await self.bot.highrise.chat(announcement)
                     except Exception as e:

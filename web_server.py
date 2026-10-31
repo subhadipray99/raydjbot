@@ -444,12 +444,25 @@ async def handle_player_page(request: web.Request) -> web.Response:
     return web.Response(text=PLAYER_HTML, content_type="text/html")
 
 
+async def handle_audio_current(request: web.Request) -> web.Response:
+    """Direct audio stream endpoint for Highrise Studio's PlayMusic component."""
+    stream_url = await music_manager.get_current_stream_url()
+    if not stream_url:
+        return web.Response(text="No active music stream", status=404)
+    raise web.HTTPFound(location=stream_url, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    })
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_root)
     app.router.add_get("/health", handle_health)
     app.router.add_get("/player", handle_player_page)
     app.router.add_get("/api/player-state", handle_player_state)
+    app.router.add_get("/audio/current.mp3", handle_audio_current)
+    app.router.add_get("/audio/current", handle_audio_current)
     return app
 
 
