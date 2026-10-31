@@ -78,7 +78,9 @@ async def main():
         return
 
     # 4. Instantiate and launch Highrise Bot concurrently
+    from music import music_manager
     bot = HighriseBot()
+    music_manager.start(bot)
     bot_task = asyncio.create_task(run_bot_with_reconnect(bot, room_id, api_token))
 
     try:

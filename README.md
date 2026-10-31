@@ -8,6 +8,12 @@ A Python bot for [Highrise](https://highrise.game) built with the official `high
 
 - **24/7 Render Keep-Alive**: Includes a background HTTP health-check server (`0.0.0.0:$PORT`) so Render detects an active web port and your external cron job / pinger (e.g., cron-job.org or UptimeRobot) can keep it awake.
 - **Auto-Reconnect**: Resilient WebSocket loop that automatically reconnects if Highrise restarts or network drops.
+- **YouTube Jukebox & Synced Music Queue**:
+  - `/play <name or URL>` or `/p <name>` - Searches YouTube, extracts metadata, and adds to queue.
+  - `/skip` or `/s` - Skips the current song.
+  - `/queue` or `/q` - Shows currently playing song and upcoming queue list.
+  - `/np` - Displays now-playing song and elapsed/total duration.
+  - `/player` - Links to the live synchronized web player (`/player`).
 - **Interactive Commands**:
   - `!help` or `!commands` - Displays available commands.
   - `!ping` - Checks bot responsiveness and online status.

@@ -11,6 +11,7 @@ from highrise import (
 )
 from highrise.models import GetRoomUsersRequest, GetWalletRequest, Error
 import config
+from music import music_manager
 
 logger = logging.getLogger("HighriseBot")
 
@@ -58,10 +59,17 @@ class HighriseBot(BaseBot):
         self.session_metadata = session_metadata
         self.bot_id = str(session_metadata.user_id)
         logger.info(f"Bot successfully connected to room! Bot User ID: {self.bot_id}")
-        
+
+        # Start the music queue runner with this bot instance for room announcements
+        music_manager.start(self)
+
         # Only broadcast welcome message once on initial startup, not on every reconnect
         if not self._has_announced:
-            await self.highrise.chat("Bot is now online! Type !help to see available commands.")
+            base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
+            await self.highrise.chat(
+                f"🤖 RayDJBot is online! Type /play <song> to queue music.\n"
+                f"📻 Live Jukebox: {base_url}/player"
+            )
             self._has_announced = True
         else:
             logger.info("Bot reconnected silently (avoiding chat spam).")
@@ -69,12 +77,10 @@ class HighriseBot(BaseBot):
     async def on_user_join(self, user: User, position: Position | AnchorPosition | None = None) -> None:
         """Triggered when a user joins the room."""
         logger.info(f"User joined: {user.username} (ID: {user.id})")
-        # Don't welcome the bot itself
         if user.id == self.bot_id:
             return
         welcome = config.WELCOME_MESSAGE.format(username=user.username)
         await self.highrise.chat(welcome)
-        # Greet with a wave emote
         try:
             await self.highrise.send_emote("emote-wave")
         except Exception as e:
@@ -107,40 +113,41 @@ class HighriseBot(BaseBot):
             except Exception:
                 pass
 
+    def _extract_command(self, raw_message: str) -> tuple[str, list[str]] | None:
+        """Support both '/' and '!' prefixes for commands."""
+        msg = raw_message.strip()
+        prefix = None
+        if msg.startswith("/"):
+            prefix = "/"
+        elif msg.startswith("!"):
+            prefix = "!"
+        elif msg.startswith(config.BOT_PREFIX):
+            prefix = config.BOT_PREFIX
+        else:
+            return None
+
+        body = msg[len(prefix):].strip()
+        parts = body.split()
+        if not parts:
+            return None
+        return parts[0].lower(), parts[1:]
+
     async def on_chat(self, user: User, message: str) -> None:
         """Triggered on public room chat messages."""
-        msg = message.strip()
-        logger.info(f"[{user.username}]: {msg}")
-
-        # Check for command prefix
-        prefix = config.BOT_PREFIX
-        if not msg.startswith(prefix):
+        logger.info(f"[{user.username}]: {message}")
+        parsed = self._extract_command(message)
+        if not parsed:
             return
-
-        command_body = msg[len(prefix):].strip()
-        parts = command_body.split()
-        if not parts:
-            return
-
-        cmd = parts[0].lower()
-        args = parts[1:]
-
+        cmd, args = parsed
         await self.handle_command(user, cmd, args, is_whisper=False)
 
     async def on_whisper(self, user: User, message: str) -> None:
         """Triggered on private whisper messages."""
-        msg = message.strip()
-        logger.info(f"[Whisper from {user.username}]: {msg}")
-
-        prefix = config.BOT_PREFIX
-        command_body = msg[len(prefix):].strip() if msg.startswith(prefix) else msg
-        parts = command_body.split()
-        if not parts:
+        logger.info(f"[Whisper from {user.username}]: {message}")
+        parsed = self._extract_command(message)
+        if not parsed:
             return
-
-        cmd = parts[0].lower()
-        args = parts[1:]
-
+        cmd, args = parsed
         await self.handle_command(user, cmd, args, is_whisper=True)
 
     async def handle_command(self, user: User, cmd: str, args: list[str], is_whisper: bool = False) -> None:
@@ -151,26 +158,90 @@ class HighriseBot(BaseBot):
             else:
                 await self.highrise.chat(text)
 
-        p = config.BOT_PREFIX
+        base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
+        player_link = f"{base_url}/player"
 
-        if cmd in ("help", "commands"):
+        # ---------------- MUSIC COMMANDS ----------------
+        if cmd in ("play", "p"):
+            if not args:
+                await reply(f"Usage: /play <song name or YouTube URL>")
+                return
+
+            query = " ".join(args)
+            await reply(f"🔍 Searching YouTube for: \"{query}\"...")
+            success, msg, track = await music_manager.search_and_queue(query, user.username)
+            if success and track:
+                await reply(f"{msg}\n📻 Listen along: {player_link}")
+            else:
+                await reply(msg)
+
+        elif cmd in ("skip", "s"):
+            success, msg = music_manager.skip()
+            await reply(msg)
+
+        elif cmd in ("queue", "q"):
+            state = music_manager.get_state()
+            current = state.get("now_playing")
+            queue = state.get("queue", [])
+            lines = []
+
+            if current:
+                lines.append(f"🎧 Now Playing: \"{current['title']}\" [{current['duration_str']}] (Requested by @{current['requester']})")
+            else:
+                lines.append("🎧 Nothing currently playing.")
+
+            if queue:
+                lines.append(f"📋 Upcoming Queue ({len(queue)} songs):")
+                for idx, t in enumerate(queue[:4], start=1):
+                    lines.append(f"  {idx}. \"{t['title']}\" [{t['duration_str']}] (@{t['requester']})")
+                if len(queue) > 4:
+                    lines.append(f"  ... and {len(queue) - 4} more tracks.")
+            else:
+                lines.append("Queue is empty. Use /play <song> to queue music!")
+
+            lines.append(f"📻 Live Jukebox: {player_link}")
+            await reply("\n".join(lines))
+
+        elif cmd in ("np", "nowplaying"):
+            state = music_manager.get_state()
+            current = state.get("now_playing")
+            if current:
+                pos = int(state.get("position_sec", 0))
+                m, s = divmod(pos, 60)
+                pos_str = f"{m}:{s:02d}"
+                await reply(
+                    f"🎶 Now: \"{current['title']}\" [{pos_str} / {current['duration_str']}]\n"
+                    f"👤 Requested by: @{current['requester']}\n"
+                    f"📻 Live Jukebox: {player_link}"
+                )
+            else:
+                await reply("No music is currently playing. Use /play <song> to start!")
+
+        elif cmd in ("player", "radio", "jukebox"):
+            await reply(f"📻 Listen to live room music here: {player_link}")
+
+        # ---------------- ROOM & BOT COMMANDS ----------------
+        elif cmd in ("help", "commands"):
             help_text = (
-                f"🤖 Available Commands:\n"
-                f"{p}ping - Check bot latency\n"
-                f"{p}come - Walk to your location\n"
-                f"{p}emote <name> - Play an emote\n"
-                f"{p}emotes - List available emotes\n"
-                f"{p}teleport <user> - Teleport user to bot (requires mod)\n"
-                f"{p}wallet - Show bot tip wallet\n"
-                f"{p}say <text> - Bot echoes your message"
+                f"🤖 RayDJBot Commands:\n"
+                f"/play <song> (or /p) - Search & queue YouTube song\n"
+                f"/skip (or /s) - Skip to next song\n"
+                f"/queue (or /q) - View upcoming songs\n"
+                f"/np - Check currently playing song\n"
+                f"/player - Get synchronized live player link\n"
+                f"!come - Bot walks to your location\n"
+                f"!emote <name> - Play emote\n"
+                f"!emotes - List popular emotes\n"
+                f"!teleport <user> - Teleport user (requires mod)\n"
+                f"!wallet - Check bot tip wallet\n"
+                f"!ping - Bot status"
             )
             await reply(help_text)
 
         elif cmd == "ping":
-            await reply(f"Pong! 🏓 Bot is active and running 24/7.")
+            await reply("Pong! 🏓 RayDJBot is active and running 24/7.")
 
         elif cmd == "come":
-            # Find the user's position and walk to them
             try:
                 response = await self.highrise.get_room_users()
                 if isinstance(response, GetRoomUsersRequest.GetRoomUsersResponse):
@@ -192,13 +263,12 @@ class HighriseBot(BaseBot):
 
         elif cmd in ("emote", "e"):
             if not args:
-                await reply(f"Usage: {p}emote <name>. Type {p}emotes to view list.")
+                await reply("Usage: !emote <name>. Type !emotes to view list.")
                 return
 
             emote_query = args[0].lower()
             emote_id = EMOTE_MAP.get(emote_query, emote_query)
 
-            # Check if a target username is provided (e.g., !emote dance @username)
             target_user_id = user.id
             if len(args) > 1 and args[1].startswith("@"):
                 target_username = args[1][1:].lower()
@@ -220,20 +290,17 @@ class HighriseBot(BaseBot):
 
         elif cmd == "emotes":
             sample_emotes = ", ".join(list(EMOTE_MAP.keys())[:15])
-            await reply(f"Popular emotes: {sample_emotes}... (Use: {p}emote <name>)")
+            await reply(f"Popular emotes: {sample_emotes}... (Use: !emote <name>)")
 
         elif cmd in ("teleport", "tp"):
-            # Requires designer/moderator privileges in the room
             try:
                 users_resp = await self.highrise.get_room_users()
                 if not isinstance(users_resp, GetRoomUsersRequest.GetRoomUsersResponse):
                     await reply("Failed to fetch room users.")
                     return
 
-                # Determine target user
                 target_user = None
                 bot_pos = None
-
                 target_name = args[0].lstrip("@").lower() if args else user.username.lower()
 
                 for r_user, pos in users_resp.content:
@@ -271,7 +338,7 @@ class HighriseBot(BaseBot):
 
         elif cmd == "say":
             if not args:
-                await reply(f"Usage: {p}say <message>")
+                await reply("Usage: !say <message>")
                 return
             to_say = " ".join(args)
             await self.highrise.chat(to_say)
