@@ -458,47 +458,42 @@ async def handle_audio_current(request: web.Request) -> web.Response:
 
 
 async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
-    """Stream live audio bytes for browser audio players and Highrise custom radio."""
-    if not music_manager.current:
-        return web.Response(
-            text="No music is currently playing! Request a song in your Highrise room using /play <song> first.",
-            status=404,
-            content_type="text/plain",
-        )
-
-    stream_url, upstream_headers = await music_manager.get_current_stream_url()
-    if not stream_url:
-        return web.Response(text="Failed to extract audio stream for current track.", status=502)
-
-    headers = dict(upstream_headers or {})
-    range_header = request.headers.get("Range")
-    if range_header:
-        headers["Range"] = range_header
+    """Stream continuous 24/7 internet radio for Highrise in-room Custom Radio Station."""
+    response = web.StreamResponse(
+        status=200,
+        reason="OK",
+        headers={
+            "Content-Type": "audio/mpeg",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Connection": "keep-alive",
+            "icy-name": "Highrise RayDJBot Radio",
+            "icy-genre": "Pop / Dance / Lofi",
+        },
+    )
+    await response.prepare(request)
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(stream_url, headers=headers) as upstream:
-            content_type = upstream.headers.get("Content-Type", "audio/mp4")
-            resp_headers = {
-                "Content-Type": content_type,
-                "Accept-Ranges": "bytes",
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "no-cache",
-            }
-            if "Content-Length" in upstream.headers:
-                resp_headers["Content-Length"] = upstream.headers["Content-Length"]
-            if "Content-Range" in upstream.headers:
-                resp_headers["Content-Range"] = upstream.headers["Content-Range"]
-
-            response = web.StreamResponse(status=upstream.status, headers=resp_headers)
-            await response.prepare(request)
-
+        while True:
+            station_url = music_manager.get_current_station_url()
+            current_key = music_manager.current_station_key
             try:
-                async for chunk in upstream.content.iter_chunked(16384):
-                    await response.write(chunk)
+                async with session.get(station_url) as upstream:
+                    async for chunk in upstream.content.iter_chunked(16384):
+                        # Break chunk loop if user changed the station via chat command
+                        if music_manager.current_station_key != current_key:
+                            break
+                        try:
+                            await response.write(chunk)
+                        except (ConnectionResetError, asyncio.CancelledError):
+                            return response
             except (ConnectionResetError, asyncio.CancelledError):
-                pass
+                break
+            except Exception as e:
+                logger.debug(f"Radio stream relay error: {e}")
+                await asyncio.sleep(2)
 
-            return response
+    return response
 
 
 def create_app() -> web.Application:

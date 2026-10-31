@@ -10,6 +10,34 @@ import config
 
 logger = logging.getLogger("MusicManager")
 
+# Curated 24/7 internet radio stations that stream crystal-clear audio into Highrise rooms
+RADIO_STATIONS = {
+    "dance": {
+        "name": "Dance Wave (EDM / Club / Electronic)",
+        "url": "https://dancewave.online/dance.mp3",
+    },
+    "lofi": {
+        "name": "SomaFM Lofi Hip-Hop (Beats to Relax)",
+        "url": "https://ice1.somafm.com/lofi-128-mp3",
+    },
+    "pop": {
+        "name": "Antenne Bayern (Top 40 / Pop Hits)",
+        "url": "https://mp3channels.webradio.antenne.de/antenne-bayern.mp3",
+    },
+    "chill": {
+        "name": "SomaFM Groove Salad (Ambient / Lounge)",
+        "url": "https://ice2.somafm.com/groovesalad-128-mp3",
+    },
+    "hiphop": {
+        "name": "Hot 108 Jamz (Hip-Hop & R&B)",
+        "url": "https://s2.viastreaming.net:7200/;",
+    },
+    "ibiza": {
+        "name": "Ibiza Global Radio (Deep House & Techno)",
+        "url": "https://ibizaglobalradio.streaming-pro.com:8000/ibizaglobalradio.mp3",
+    },
+}
+
 
 @dataclass
 class Track:
@@ -40,37 +68,6 @@ def parse_duration_str(dur_str: str) -> int:
     except ValueError:
         pass
     return 180  # Default fallback 3 minutes
-
-
-def extract_direct_audio_url_sync(video_id: str) -> tuple[str | None, dict]:
-    """Extract direct playable audio stream URL using yt-dlp with mobile client fallback."""
-    import os
-    try:
-        import yt_dlp
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios", "web"]
-                }
-            },
-        }
-        if os.path.exists("cookies.txt"):
-            ydl_opts["cookiefile"] = "cookies.txt"
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            if "entries" in info:
-                info = info["entries"][0]
-            url = info.get("url")
-            headers = info.get("http_headers", {})
-            return url, headers
-    except Exception as e:
-        logger.error(f"Failed to extract direct stream for {video_id}: {e}")
-        return None, {}
 
 
 def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | None:
@@ -157,6 +154,7 @@ class MusicManager:
         self.started_at: float = 0.0
         self.bot = None
 
+        self.current_station_key: str = "dance"
         self._skip_event = asyncio.Event()
         self._new_track_event = asyncio.Event()
         self._runner_task: asyncio.Task | None = None
@@ -169,20 +167,23 @@ class MusicManager:
             self._runner_task = asyncio.create_task(self._queue_runner())
             logger.info("Music queue runner initialized.")
 
-    async def get_current_stream_url(self) -> tuple[str | None, dict]:
-        """Get direct playable audio stream URL and headers for Highrise Studio PlayMusic."""
-        if not self.current:
-            return None, {}
-        if not self.current.stream_url:
-            url, headers = await asyncio.to_thread(
-                extract_direct_audio_url_sync, self.current.id
-            )
-            self.current.stream_url = url
-            self.current.http_headers = headers
-        return self.current.stream_url, self.current.http_headers or {}
+    def set_station(self, key: str) -> tuple[bool, str]:
+        """Change the active 24/7 radio station stream."""
+        k = key.lower().strip()
+        if k in RADIO_STATIONS:
+            self.current_station_key = k
+            station_name = RADIO_STATIONS[k]["name"]
+            logger.info(f"Radio station changed to: {station_name}")
+            return True, f"📻 Highrise Room Radio switched to: {station_name}"
+        available = ", ".join(RADIO_STATIONS.keys())
+        return False, f"Unknown station '{key}'. Available stations: {available}"
+
+    def get_current_station_url(self) -> str:
+        """Get the URL of the currently active 24/7 radio station."""
+        return RADIO_STATIONS.get(self.current_station_key, RADIO_STATIONS["dance"])["url"]
 
     async def search_and_queue(self, query: str, requester: str) -> tuple[bool, str, Track | None]:
-        """Search YouTube asynchronously and enqueue."""
+        """Search YouTube asynchronously and enqueue for Web Jukebox."""
         loop = asyncio.get_running_loop()
         track = await loop.run_in_executor(None, search_youtube_sync, query, requester)
         if not track:
@@ -200,9 +201,9 @@ class MusicManager:
         return True, msg, track
 
     def skip(self) -> tuple[bool, str]:
-        """Skip currently playing track."""
+        """Skip currently playing track on Web Jukebox."""
         if not self.current:
-            return False, "No music is currently playing."
+            return False, "No music is currently playing on the jukebox."
         skipped_title = self.current.title
         self._skip_event.set()
         return True, f"⏭️ Skipped: \"{skipped_title}\""
@@ -214,17 +215,23 @@ class MusicManager:
             position = max(0.0, time.time() - self.started_at)
 
         base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
+        station_info = RADIO_STATIONS.get(self.current_station_key, RADIO_STATIONS["dance"])
+
         return {
             "is_playing": self.current is not None,
             "position_sec": round(position, 2),
             "now_playing": self.current.to_dict() if self.current else None,
-            "stream_url": f"{base_url}/audio/current.mp3" if self.current else None,
+            "current_station": {
+                "key": self.current_station_key,
+                "name": station_info["name"],
+                "stream_url": f"{base_url}/radio.mp3",
+            },
             "queue": [t.to_dict() for t in self.queue],
             "queue_count": len(self.queue),
         }
 
     async def _queue_runner(self):
-        """Continuously advances tracks from queue."""
+        """Continuously advances tracks from queue for Web Jukebox."""
         while True:
             try:
                 if not self.queue:
@@ -238,9 +245,6 @@ class MusicManager:
                 self.started_at = time.time()
                 logger.info(f"[Music] Now Playing: {self.current.title} (Requested by @{self.current.requester})")
 
-                # Pre-fetch stream URL in background so PlayMusic can load instantly
-                asyncio.create_task(self.get_current_stream_url())
-
                 # Announce in Highrise room
                 if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
                     try:
@@ -248,7 +252,7 @@ class MusicManager:
                         announcement = (
                             f"🎶 Now Playing: \"{self.current.title}\" [{self.current.duration_str}]\n"
                             f"👤 Requested by: @{self.current.requester}\n"
-                            f"📻 Web Player: {base_url}/player"
+                            f"📻 Web Jukebox: {base_url}/player"
                         )
                         await self.bot.highrise.chat(announcement)
                     except Exception as e:
