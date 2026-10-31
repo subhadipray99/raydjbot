@@ -113,8 +113,23 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
     return None
 
 
+def clean_search_query(title: str) -> str:
+    """Clean video title to produce a high-accuracy search term for audio sources."""
+    # Remove bracketed text like [Official Video], (Audio), (Lyrics), (Remix) etc.
+    s = re.sub(r"\[.*?\]|\(.*?\)", "", title)
+    # Remove common video buzzwords
+    s = re.sub(r"(?i)\b(official\s+video|official\s+audio|music\s+video|lyric\s+video|lyrics|full\s+song|visualizer|audio|hd|4k)\b", "", s)
+    # If title has multiple pipe-delimited segments, keep only the first two (Song + Artist / Movie)
+    if "|" in s:
+        parts = [p.strip() for p in s.split("|") if p.strip()]
+        s = " ".join(parts[:2])
+    # Collapse whitespace
+    s = re.sub(r"\s+", " ", s).strip()
+    return s or title
+
+
 def download_track_audio_sync(title: str, video_id: str) -> str | None:
-    """Download audio file locally using yt-dlp directly from YouTube (mobile client)."""
+    """Download audio locally using multi-tier resilient strategy (YouTube default -> embedded -> SoundCloud fallback)."""
     import yt_dlp
     import imageio_ffmpeg
 
@@ -127,23 +142,39 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
 
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
-    # Mobile clients bypass YouTube datacenter IP rate limits, bot challenges, and SABR restrictions
-    client_candidates = [
-        ["android", "ios"],
-        ["ios", "mweb"],
-        ["web", "mweb"],
-    ]
+    # Tier 1: YouTube using modern yt-dlp default extractor (uses visionos/tv_samsung)
+    try:
+        ydl_opts_yt = {
+            "format": "18/140/251/bestaudio/best",
+            "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
+            "quiet": True,
+            "no_warnings": True,
+            "ffmpeg_location": ffmpeg_exe,
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "128",
+            }],
+        }
+        with yt_dlp.YoutubeDL(ydl_opts_yt) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                logger.info(f"Downloaded audio from YouTube for '{title}' ({video_id}) via default client")
+                return out_file
+    except Exception as e:
+        logger.warning(f"YouTube default download failed for '{title}': {e}")
 
-    for client_list in client_candidates:
-        ydl_opts = {
-            "format": "140/251/18/bestaudio/best",
+    # Tier 2: YouTube with web_embedded/tv_samsung client
+    try:
+        ydl_opts_embed = {
+            "format": "18/140/bestaudio/best",
             "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
             "ffmpeg_location": ffmpeg_exe,
             "extractor_args": {
                 "youtube": {
-                    "player_client": client_list
+                    "player_client": ["web_embedded", "tv_samsung"]
                 }
             },
             "postprocessors": [{
@@ -152,17 +183,57 @@ def download_track_audio_sync(title: str, video_id: str) -> str | None:
                 "preferredquality": "128",
             }],
         }
+        with yt_dlp.YoutubeDL(ydl_opts_embed) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                logger.info(f"Downloaded audio from YouTube for '{title}' ({video_id}) via embedded client")
+                return out_file
+    except Exception as e:
+        logger.warning(f"YouTube embedded download failed for '{title}': {e}")
 
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
-                if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                    logger.info(f"Downloaded audio from YouTube for '{title}' ({video_id}) via {client_list}")
-                    return out_file
-        except Exception as e:
-            logger.warning(f"YouTube download via {client_list} failed for '{title}': {e}")
+    # Tier 3: SoundCloud search fallback (bypasses YouTube datacenter bot challenges completely!)
+    clean_query = clean_search_query(title)
+    logger.info(f"Attempting SoundCloud search fallback for '{clean_query}'...")
+    try:
+        ydl_opts_sc = {
+            "format": "bestaudio/best",
+            "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
+            "quiet": True,
+            "no_warnings": True,
+            "ffmpeg_location": ffmpeg_exe,
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "128",
+            }],
+        }
+        with yt_dlp.YoutubeDL(ydl_opts_sc) as ydl:
+            info = ydl.extract_info(f"scsearch5:{clean_query}", download=False)
+            entries = info.get("entries", []) if info else []
+            downloaded = False
+            for e in entries:
+                dur = e.get("duration") or 0
+                if dur > 60:
+                    fmts = [f.get("format_id", "") for f in e.get("formats", []) if "preview" not in f.get("format_id", "")]
+                    if fmts:
+                        target_url = e.get("webpage_url") or e.get("url")
+                        if target_url:
+                            logger.info(f"Found SoundCloud match: '{e.get('title')}' ({dur:.0f}s)")
+                            ydl.download([target_url])
+                            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                                downloaded = True
+                                break
+            if not downloaded and entries and (entries[0].get("webpage_url") or entries[0].get("url")):
+                first_url = entries[0].get("webpage_url") or entries[0].get("url")
+                ydl.download([first_url])
 
-    logger.error(f"Failed to download YouTube audio for '{title}' ({video_id}) across all client options.")
+            if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                logger.info(f"Successfully downloaded audio from SoundCloud for '{clean_query}' ({video_id})")
+                return out_file
+    except Exception as e:
+        logger.warning(f"SoundCloud fallback download failed for '{clean_query}': {e}")
+
+    logger.error(f"Failed to download audio for '{title}' ({video_id}) across all available sources.")
     return None
 
 
@@ -240,7 +311,8 @@ class MusicManager:
         base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
 
         return {
-            "is_playing": self.current is not None,
+            "is_playing": self.current is not None and self.started_at > 0,
+            "is_loading": self.current is not None and self.started_at == 0,
             "position_sec": round(position, 2),
             "now_playing": self.current.to_dict() if self.current else None,
             "radio_stream_url": f"{base_url}/radio.mp3",
