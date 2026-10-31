@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -10,6 +11,26 @@ from dataclasses import asdict, dataclass
 import config
 
 logger = logging.getLogger("MusicManager")
+
+# Stop words ignored during word-overlap matching
+STOP_WORDS = {"the", "a", "an", "of", "in", "and", "or", "ft", "feat", "to", "is", "song", "video", "by", "from"}
+
+# Official record labels, publishing houses, and verified music entities
+OFFICIAL_CHANNELS = {
+    "t-series", "tseries", "saregama music", "saregama", "sony music india", "sony music",
+    "zee music company", "zeemusiccompany", "yrf", "svf", "tips official", "speed records",
+    "warner music", "universal music", "vevo", "atlantic records", "republic records",
+    "columbia records", "interscope", "def jam", "geffen records", "rca records",
+    "capitol records", "epic records", "island records", "virgin records"
+}
+
+# Buzzwords that indicate non-standard, altered, or promotional variants
+REMIX_INDICATORS = {
+    "remix", "re-mix", "mix", "slowed", "reverb", "lofi", "lo-fi", "8d", "bass boosted",
+    "mashup", "club", "dj", "cover", "acoustic", "live", "concert", "reaction", "teaser",
+    "trailer", "status", "ringtone", "short", "shorts", "instrumental", "karaoke", "speed up",
+    "sped up", "nightcore"
+}
 
 
 @dataclass
@@ -41,80 +62,238 @@ def parse_duration_str(dur_str: str) -> int:
     return 180  # Default fallback 3 minutes
 
 
-def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | None:
-    """Search YouTube for a query or video ID."""
-    query = query.strip()
-    video_id = None
+def parse_view_count(text: str) -> int:
+    """Parse view count text (e.g. '378,226,830 views', '50M views', '2.8K views') into an integer."""
+    if not text:
+        return 0
+    t = text.lower().replace(",", "").replace("views", "").strip()
+    try:
+        if "b" in t:
+            return int(float(t.replace("b", "").strip()) * 1_000_000_000)
+        elif "m" in t:
+            return int(float(t.replace("m", "").strip()) * 1_000_000)
+        elif "k" in t:
+            return int(float(t.replace("k", "").strip()) * 1_000)
+        digits = re.sub(r"[^\d]", "", t)
+        return int(digits) if digits else 0
+    except Exception:
+        return 0
 
+
+def score_youtube_candidate(c: dict, query: str) -> float:
+    """Calculate composite canonical score for a candidate video. Higher score = more authentic/accepted."""
+    q_lower = query.lower().strip()
+    user_wants_remix = any(rw in q_lower for rw in ["remix", "mashup", "lofi", "slowed", "reverb", "cover", "live", "acoustic"])
+    
+    q_words = set(re.findall(r"\w+", q_lower)) - STOP_WORDS
+    if not q_words:
+        q_words = set(re.findall(r"\w+", q_lower))
+
+    title = (c.get("title") or "").lower()
+    channel = (c.get("channel") or "").lower()
+    views = c.get("view_count") or 0
+    dur = c.get("duration") or 0
+
+    # 1. Hard filter on extreme durations for standard tracks
+    if dur > 0 and (dur < 45 or dur > 750):
+        return -999.0
+
+    score = 0.0
+
+    # 2. Query word overlap (0 to 100 points)
+    t_words = set(re.findall(r"\w+", title))
+    c_words = set(re.findall(r"\w+", channel))
+    all_words = t_words.union(c_words)
+    matched = q_words.intersection(all_words)
+    overlap = len(matched) / max(1, len(q_words))
+
+    # Must match at least 50% of query words (or 100% if single word query)
+    if len(q_words) >= 2 and overlap < 0.5:
+        return -999.0
+    if len(q_words) == 1 and overlap < 1.0:
+        return -999.0
+
+    score += overlap * 100.0
+
+    # 3. Channel Credibility (+40 for official labels or verified topic/vevo channels)
+    is_official_channel = (
+        any(lbl in channel for lbl in OFFICIAL_CHANNELS)
+        or "topic" in channel
+        or "vevo" in channel
+    )
+    if is_official_channel:
+        score += 40.0
+
+    # 4. Title Quality Markers (+25 for official video/audio, +15 for lyric/full song)
+    if any(qm in title for qm in ["official video", "official music video", "official audio"]):
+        score += 25.0
+    elif any(qm in title for qm in ["lyric", "lyrical", "full song", "original"]):
+        score += 15.0
+
+    # 5. Popularity / View Count Bonus (Logarithmic scale)
+    if views > 0:
+        score += math.log10(views) * 10.0
+
+    # 6. Remix / Unwanted Variant Penalty (-120 points)
+    has_remix_word = any(re.search(r"\b" + re.escape(rw) + r"\b", title) for rw in REMIX_INDICATORS)
+    if has_remix_word and not user_wants_remix:
+        score -= 120.0
+
+    return score
+
+
+def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | None:
+    """Search YouTube for the widely accepted, canonical version of a track using multi-candidate ranking."""
+    query = query.strip()
+    if not query:
+        return None
+
+    # 1. Direct YouTube URL or Video ID check
     url_match = re.search(r"(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})", query)
     if url_match:
         video_id = url_match.group(1)
         search_url = f"https://www.youtube.com/watch?v={video_id}"
-    else:
-        query_encoded = urllib.parse.quote_plus(query)
-        search_url = f"https://www.youtube.com/results?search_query={query_encoded}"
-
-    req = urllib.request.Request(
-        search_url,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
+        try:
+            import yt_dlp
+            opts = {"quiet": True, "extract_flat": True}
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(search_url, download=False)
+                t_title = info.get("title") or query
+                dur_sec = info.get("duration") or 210
+                m, s = divmod(int(dur_sec), 60)
+                dur_str = f"{m}:{s:02d}"
+                return Track(
+                    id=video_id,
+                    title=t_title,
+                    duration_str=dur_str,
+                    duration_sec=int(dur_sec),
+                    requester=requester,
+                    thumbnail=f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+                    url=search_url,
+                    query=query,
+                )
+        except Exception:
+            return Track(
+                id=video_id,
+                title=query,
+                duration_str="3:30",
+                duration_sec=210,
+                requester=requester,
+                thumbnail=f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+                url=search_url,
+                query=query,
             )
-        },
-    )
 
+    candidates = []
+
+    # 2. Strategy A: Use yt-dlp flat search (fast, structured, includes view counts and channels)
     try:
-        with urllib.request.urlopen(req, timeout=8) as response:
-            html = response.read().decode("utf-8", errors="ignore")
+        import yt_dlp
+        ydl_search_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": True,
+            "socket_timeout": 6,
+        }
+        with yt_dlp.YoutubeDL(ydl_search_opts) as ydl:
+            res = ydl.extract_info(f"ytsearch10:{query}", download=False)
+            entries = res.get("entries") or []
+            for e in entries:
+                if e and e.get("id"):
+                    candidates.append({
+                        "id": e.get("id"),
+                        "title": e.get("title") or "",
+                        "channel": e.get("channel") or e.get("uploader") or "",
+                        "view_count": e.get("view_count") or 0,
+                        "duration": e.get("duration") or 0,
+                        "url": e.get("url") or f"https://www.youtube.com/watch?v={e.get('id')}",
+                    })
     except Exception as e:
-        logger.error(f"Network error while querying YouTube: {e}")
+        logger.debug(f"yt-dlp search error: {e}")
+
+    # 3. Strategy B: Scrape web search results as resilient fallback if yt-dlp yielded few results
+    if len(candidates) < 3:
+        try:
+            query_encoded = urllib.parse.quote_plus(query)
+            search_url = f"https://www.youtube.com/results?search_query={query_encoded}"
+            req = urllib.request.Request(
+                search_url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"
+                    )
+                },
+            )
+            with urllib.request.urlopen(req, timeout=6) as response:
+                html = response.read().decode("utf-8", errors="ignore")
+            match = re.search(r"var ytInitialData = ({.*?});</script>", html)
+            if match:
+                data = json.loads(match.group(1))
+                contents = data["contents"]["twoColumnSearchResultsRenderer"]["primaryContents"]["sectionListRenderer"]["contents"]
+                for section in contents:
+                    if "itemSectionRenderer" in section:
+                        for item in section["itemSectionRenderer"]["contents"]:
+                            if "videoRenderer" in item:
+                                vr = item["videoRenderer"]
+                                v_id = vr.get("videoId")
+                                if not v_id:
+                                    continue
+                                v_title = vr.get("title", {}).get("runs", [{}])[0].get("text", "")
+                                v_channel = vr.get("ownerText", {}).get("runs", [{}])[0].get("text", "")
+                                v_views_text = vr.get("viewCountText", {}).get("simpleText", "")
+                                v_views = parse_view_count(v_views_text)
+                                v_dur_text = vr.get("lengthText", {}).get("simpleText", "3:00")
+                                v_dur = parse_duration_str(v_dur_text)
+                                candidates.append({
+                                    "id": v_id,
+                                    "title": v_title,
+                                    "channel": v_channel,
+                                    "view_count": v_views,
+                                    "duration": v_dur,
+                                    "url": f"https://www.youtube.com/watch?v={v_id}",
+                                })
+        except Exception as html_err:
+            logger.debug(f"HTML search parsing error: {html_err}")
+
+    if not candidates:
+        logger.warning(f"No YouTube candidates found for query: '{query}'")
         return None
 
-    match = re.search(r"var ytInitialData = ({.*?});</script>", html)
-    if match:
-        try:
-            data = json.loads(match.group(1))
-            contents = data["contents"]["twoColumnSearchResultsRenderer"]["primaryContents"]["sectionListRenderer"]["contents"]
-            for section in contents:
-                if "itemSectionRenderer" in section:
-                    for item in section["itemSectionRenderer"]["contents"]:
-                        if "videoRenderer" in item:
-                            vr = item["videoRenderer"]
-                            v_id = vr["videoId"]
-                            title = vr["title"]["runs"][0]["text"]
-                            dur_str = vr.get("lengthText", {}).get("simpleText", "3:00")
-                            dur_sec = parse_duration_str(dur_str)
-                            thumb = f"https://img.youtube.com/vi/{v_id}/hqdefault.jpg"
-                            return Track(
-                                id=v_id,
-                                title=title,
-                                duration_str=dur_str,
-                                duration_sec=dur_sec,
-                                requester=requester,
-                                thumbnail=thumb,
-                                url=f"https://www.youtube.com/watch?v={v_id}",
-                                query=query,
-                            )
-        except Exception as e:
-            logger.debug(f"Error parsing search results json: {e}")
+    # 4. Rank candidates by canonical score
+    scored_candidates = []
+    for c in candidates:
+        sc = score_youtube_candidate(c, query)
+        scored_candidates.append((sc, c))
 
-    title_match = re.search(r"<title>(.*?)(?: - YouTube)?</title>", html)
-    found_title = title_match.group(1) if title_match else query
-    if video_id:
-        return Track(
-            id=video_id,
-            title=found_title,
-            duration_str="3:30",
-            duration_sec=210,
-            requester=requester,
-            thumbnail=f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
-            url=f"https://www.youtube.com/watch?v={video_id}",
-            query=query,
-        )
+    scored_candidates.sort(key=lambda x: x[0], reverse=True)
+    best_score, best_candidate = scored_candidates[0]
 
-    return None
+    # If all candidates got filtered out (e.g. extreme mismatch), pick best candidate available
+    if best_score <= -990.0 and candidates:
+        best_candidate = candidates[0]
+
+    v_id = best_candidate["id"]
+    dur_sec = int(best_candidate.get("duration") or 210)
+    m, s = divmod(dur_sec, 60)
+    dur_str = f"{m}:{s:02d}"
+
+    logger.info(
+        f"Canonical track resolved for '{query}': '{best_candidate['title']}' "
+        f"[Score: {best_score:.1f}, Channel: {best_candidate.get('channel')}, Views: {best_candidate.get('view_count', 0):,}]"
+    )
+
+    return Track(
+        id=v_id,
+        title=best_candidate["title"],
+        duration_str=dur_str,
+        duration_sec=dur_sec,
+        requester=requester,
+        thumbnail=f"https://img.youtube.com/vi/{v_id}/hqdefault.jpg",
+        url=f"https://www.youtube.com/watch?v={v_id}",
+        query=query,
+    )
 
 
 def clean_search_query(title: str) -> str:
@@ -202,14 +381,15 @@ def rank_soundcloud_candidates(entries: list, search_term: str, target_dur: int 
     if valid:
         valid.sort(key=lambda x: x[0])
         return [x[1] for x in valid]
-    if fallback:
+    # Under Strict Anti-Remix policy, only return fallback if user explicitly wanted a remix/mashup
+    if fallback and user_wants_remix:
         fallback.sort(key=lambda x: x[0])
         return [x[1] for x in fallback]
     return []
 
 
 def search_jiosaavn_sync(query: str) -> str | None:
-    """Search JioSaavn for official licensed studio tracks."""
+    """Search JioSaavn for official licensed studio tracks with CTR popularity ranking."""
     import urllib.parse
     import urllib.request
     try:
@@ -219,10 +399,36 @@ def search_jiosaavn_sync(query: str) -> str | None:
         with urllib.request.urlopen(req, timeout=5) as res:
             data = json.loads(res.read().decode("utf-8", errors="ignore"))
             songs = data.get("songs", {}).get("data", [])
+            if not songs:
+                return None
+
+            q_clean = query.lower()
+            user_wants_remix = any(rw in q_clean for rw in ["remix", "lofi", "slowed", "reverb", "cover"])
+
+            best_song_url = None
+            best_ctr = -1
             for song in songs:
                 song_url = song.get("url")
-                if song_url and "jiosaavn.com/song/" in song_url:
-                    return song_url
+                if not song_url or "jiosaavn.com/song/" not in song_url:
+                    continue
+                s_title = (song.get("title") or "").lower()
+                ctr = song.get("ctr") or 0
+
+                # Strict remix avoidance unless requested
+                has_remix = any(re.search(r"\b" + re.escape(rw) + r"\b", s_title) for rw in ["remix", "lofi", "slowed", "reverb"])
+                if has_remix and not user_wants_remix:
+                    continue
+
+                if ctr > best_ctr:
+                    best_ctr = ctr
+                    best_song_url = song_url
+
+            if best_song_url:
+                return best_song_url
+            for song in songs:
+                s_url = song.get("url")
+                if s_url and "jiosaavn.com/song/" in s_url:
+                    return s_url
     except Exception as e:
         logger.debug(f"JioSaavn search lookup error: {e}")
     return None
@@ -244,17 +450,23 @@ def download_track_audio_sync(
 
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
-    # Tier 1: YouTube using modern yt-dlp default extractor (uses visionos/tv_samsung)
+    # Tier 1: YouTube with Node JS-runtime and robust multi-client challenge solver
     try:
         ydl_opts_yt = {
             "format": "18/140/251/bestaudio/best",
             "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
-            "retries": 0,
-            "extractor_retries": 0,
-            "socket_timeout": 4,
+            "retries": 2,
+            "extractor_retries": 2,
+            "socket_timeout": 12,
             "ffmpeg_location": ffmpeg_exe,
+            "js_runtimes": {"node": {}},
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["tv_samsung", "visionos", "android", "web"]
+                }
+            },
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
