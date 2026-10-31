@@ -21,9 +21,12 @@ class Track:
     thumbnail: str
     url: str
     stream_url: str | None = None
+    http_headers: dict | None = None
 
     def to_dict(self):
-        return asdict(self)
+        d = asdict(self)
+        d.pop("http_headers", None)
+        return d
 
 
 def parse_duration_str(dur_str: str) -> int:
@@ -39,22 +42,35 @@ def parse_duration_str(dur_str: str) -> int:
     return 180  # Default fallback 3 minutes
 
 
-def extract_direct_audio_url_sync(video_id: str) -> str | None:
-    """Extract direct playable audio stream URL using yt-dlp."""
+def extract_direct_audio_url_sync(video_id: str) -> tuple[str | None, dict]:
+    """Extract direct playable audio stream URL using yt-dlp with mobile client fallback."""
+    import os
     try:
         import yt_dlp
         ydl_opts = {
-            "format": "bestaudio[ext=m4a]/bestaudio/best",
+            "format": "bestaudio/best",
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "web"]
+                }
+            },
         }
+        if os.path.exists("cookies.txt"):
+            ydl_opts["cookiefile"] = "cookies.txt"
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            return info.get("url")
+            if "entries" in info:
+                info = info["entries"][0]
+            url = info.get("url")
+            headers = info.get("http_headers", {})
+            return url, headers
     except Exception as e:
         logger.error(f"Failed to extract direct stream for {video_id}: {e}")
-        return None
+        return None, {}
 
 
 def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | None:
@@ -153,15 +169,17 @@ class MusicManager:
             self._runner_task = asyncio.create_task(self._queue_runner())
             logger.info("Music queue runner initialized.")
 
-    async def get_current_stream_url(self) -> str | None:
-        """Get direct playable audio stream URL for Highrise Studio PlayMusic."""
+    async def get_current_stream_url(self) -> tuple[str | None, dict]:
+        """Get direct playable audio stream URL and headers for Highrise Studio PlayMusic."""
         if not self.current:
-            return None
+            return None, {}
         if not self.current.stream_url:
-            self.current.stream_url = await asyncio.to_thread(
+            url, headers = await asyncio.to_thread(
                 extract_direct_audio_url_sync, self.current.id
             )
-        return self.current.stream_url
+            self.current.stream_url = url
+            self.current.http_headers = headers
+        return self.current.stream_url, self.current.http_headers or {}
 
     async def search_and_queue(self, query: str, requester: str) -> tuple[bool, str, Track | None]:
         """Search YouTube asynchronously and enqueue."""

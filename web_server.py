@@ -448,7 +448,7 @@ async def handle_player_page(request: web.Request) -> web.Response:
 
 async def handle_audio_current(request: web.Request) -> web.Response:
     """Direct audio stream endpoint for Highrise Studio's PlayMusic component."""
-    stream_url = await music_manager.get_current_stream_url()
+    stream_url, _ = await music_manager.get_current_stream_url()
     if not stream_url:
         return web.Response(text="No active music stream", status=404)
     raise web.HTTPFound(location=stream_url, headers={
@@ -466,24 +466,17 @@ async def handle_radio_stream(request: web.Request) -> web.StreamResponse:
             content_type="text/plain",
         )
 
-    stream_url = await music_manager.get_current_stream_url()
+    stream_url, upstream_headers = await music_manager.get_current_stream_url()
     if not stream_url:
         return web.Response(text="Failed to extract audio stream for current track.", status=502)
 
-    # Forward client Range header if requested (essential for browser audio seeking/buffering)
+    headers = dict(upstream_headers or {})
     range_header = request.headers.get("Range")
-    upstream_headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
     if range_header:
-        upstream_headers["Range"] = range_header
+        headers["Range"] = range_header
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(stream_url, headers=upstream_headers) as upstream:
+        async with session.get(stream_url, headers=headers) as upstream:
             content_type = upstream.headers.get("Content-Type", "audio/mp4")
             resp_headers = {
                 "Content-Type": content_type,
