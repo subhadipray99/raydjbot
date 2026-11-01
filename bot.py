@@ -444,11 +444,13 @@ class HighriseBot(BaseBot):
         elif cmd in ("admin", "setup"):
             admin_text = (
                 f"⚙️ Admin & Setup Commands:\n"
-                f"• !setfloor <name> - Set floor spawn (e.g. !setfloor f1, !setfloor f2)\n"
-                f"• !delfloor <name> - Remove a floor spawn\n"
-                f"• !setpos - Set bot permanent location to where YOU are standing\n"
+                f"• !setpos [front/left/right/back] - Set bot spot to your location\n"
+                f"• !turn - Rotate bot 90 degrees\n"
+                f"• !face <front|left|right|back> - Turn bot direction\n"
                 f"• !botpos - Show bot saved position\n"
                 f"• !resetpos - Reset bot to room entrance\n"
+                f"• !setfloor <name> - Set floor spawn (e.g. !setfloor f1, !setfloor f2)\n"
+                f"• !delfloor <name> - Remove a floor spawn\n"
                 f"• !fit save <name> - Save current look as a preset\n"
                 f"• !wardrobe - Check bot inventory\n"
                 f"• /autoplay on|off - Toggle radio background autoplay"
@@ -570,14 +572,93 @@ class HighriseBot(BaseBot):
                 await reply(f"Could not detect your position @{user.username}. Try taking a step or jumping, then type !setpos again!")
                 return
 
-            position.save_room_position(config.ROOM_ID, user_pos)
-            await self.move_bot_to(user_pos)
-            pos_env = f"{user_pos.x:.2f},{user_pos.y:.2f},{user_pos.z:.2f},{user_pos.facing}"
+            # Check if caller passed a desired facing direction (e.g. !setpos front, !setpos left)
+            desired_facing = None
+            if args:
+                f_arg = args[0].lower().strip()
+                if f_arg in ("front", "right", "frontright", "fr"):
+                    desired_facing = "FrontRight"
+                elif f_arg in ("left", "frontleft", "fl"):
+                    desired_facing = "FrontLeft"
+                elif f_arg in ("back", "backleft", "bl"):
+                    desired_facing = "BackLeft"
+                elif f_arg in ("backright", "br"):
+                    desired_facing = "BackRight"
+
+            if isinstance(user_pos, Position):
+                # Highrise avatars face away from camera when walking to booth.
+                # Default to FrontRight so the bot looks forward at the room/audience!
+                if desired_facing:
+                    final_facing = desired_facing
+                elif user_pos.facing in ("BackLeft", "BackRight"):
+                    final_facing = "FrontRight" if user_pos.facing == "BackLeft" else "FrontLeft"
+                else:
+                    final_facing = user_pos.facing or "FrontRight"
+
+                target_pos = Position(
+                    x=user_pos.x,
+                    y=user_pos.y,
+                    z=user_pos.z,
+                    facing=final_facing
+                )
+            else:
+                target_pos = user_pos
+
+            position.save_room_position(config.ROOM_ID, target_pos)
+            await self.move_bot_to(target_pos)
+            pos_env = f"{target_pos.x:.2f},{target_pos.y:.2f},{target_pos.z:.2f},{target_pos.facing}" if isinstance(target_pos, Position) else ""
             await reply(
-                f"📍 Bot position set to your location: {position.format_position(user_pos)}!\n"
+                f"📍 Bot position set to your location: {position.format_position(target_pos)}!\n"
                 f"✅ Saved! Bot will now stay here and auto-spawn at this exact spot on every reconnect/restart.\n"
-                f"💡 Tip: To permanently lock this position across Render code redeploys, set BOT_POSITION={pos_env} in Render Environment tab."
+                f"💡 Tip: Type !turn or !face front/left/right/back to rotate the bot anytime!"
             )
+
+        elif cmd in ("face", "turn", "rotate"):
+            saved_pos = position.get_saved_position(config.ROOM_ID)
+            if not saved_pos or not isinstance(saved_pos, Position):
+                bot_user_pos = None
+                try:
+                    resp = await self.highrise.get_room_users()
+                    if isinstance(resp, GetRoomUsersRequest.GetRoomUsersResponse):
+                        for r_u, r_p in resp.content:
+                            if r_u.id == self.bot_id and isinstance(r_p, Position):
+                                bot_user_pos = r_p
+                                break
+                except Exception:
+                    pass
+                saved_pos = bot_user_pos
+
+            if not saved_pos or not isinstance(saved_pos, Position):
+                await reply("Could not determine bot position to rotate. Stand where you want the bot and type !setpos first!")
+            else:
+                cycle_map = {
+                    "FrontRight": "FrontLeft",
+                    "FrontLeft": "BackLeft",
+                    "BackLeft": "BackRight",
+                    "BackRight": "FrontRight",
+                }
+                target_arg = args[0].lower().strip() if args else ""
+                if target_arg in ("fr", "frontright", "front_right", "right", "front"):
+                    new_facing = "FrontRight"
+                elif target_arg in ("fl", "frontleft", "front_left", "left"):
+                    new_facing = "FrontLeft"
+                elif target_arg in ("br", "backright", "back_right"):
+                    new_facing = "BackRight"
+                elif target_arg in ("bl", "backleft", "back_left", "back"):
+                    new_facing = "BackLeft"
+                else:
+                    current_facing = saved_pos.facing or "BackLeft"
+                    new_facing = cycle_map.get(current_facing, "FrontRight")
+
+                new_pos = Position(
+                    x=saved_pos.x,
+                    y=saved_pos.y,
+                    z=saved_pos.z,
+                    facing=new_facing
+                )
+                position.save_room_position(config.ROOM_ID, new_pos)
+                await self.move_bot_to(new_pos)
+                await reply(f"🔄 Bot turned! Now facing: {new_facing}. (Saved to room config)")
 
         elif cmd in ("mypos", "pos"):
             user_pos = await self._get_user_position(user)
