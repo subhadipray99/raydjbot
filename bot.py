@@ -223,7 +223,7 @@ class HighriseBot(BaseBot):
                 return
 
             query = " ".join(args)
-            await reply(f"🔍 Searching YouTube for: \"{query}\"...")
+            await reply(f"🔍 Searching music for: \"{query}\"...")
             success, msg, track = await music_manager.search_and_queue(query, user.username)
             if success and track:
                 await reply(f"{msg}\n📻 Listen along: {player_link}")

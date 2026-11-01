@@ -213,12 +213,12 @@ class RadioBroadcaster:
             return None
 
     async def _play_track(self, track: Track):
-        """Stream audio file for the track through ffmpeg."""
-        file_path = await self._ensure_audio_file_while_streaming(track)
+        """Stream audio for the track through ffmpeg (instant stream piping or disk cache)."""
+        source = await music_manager.resolve_audio_stream_source(track)
 
-        if not file_path or not os.path.exists(file_path):
+        if not source:
             if not self._skip_flag:
-                logger.warning(f"Could not load audio file for '{track.title}'. Skipping.")
+                logger.warning(f"Could not resolve audio source for '{track.title}'. Skipping.")
                 if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
                     try:
                         await self.bot.highrise.chat(f"⚠️ Could not load audio for \"{track.title}\". Skipping to next song.")
@@ -226,11 +226,19 @@ class RadioBroadcaster:
                         pass
             return
 
+        is_url = source.startswith("http://") or source.startswith("https://")
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-        cmd = [
-            ffmpeg_exe,
-            "-re",                 # Read local file at native 1x real-time rate
-            "-i", file_path,       # Local audio file
+
+        cmd = [ffmpeg_exe]
+        if is_url:
+            cmd.extend([
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
+            ])
+        cmd.extend([
+            "-re",                 # Read at native 1x real-time rate
+            "-i", source,          # Stream URL or local cache file
             "-vn",                 # Disable video
             "-ar", "44100",        # 44.1 kHz
             "-ac", "2",            # Stereo
@@ -239,7 +247,18 @@ class RadioBroadcaster:
             "-id3v2_version", "0", # No ID3v2 in stream body
             "-f", "mp3",           # MP3 container
             "pipe:1"               # Pipe to stdout
-        ]
+        ])
+
+        cache_file = os.path.join("cache", f"{track.id}.mp3")
+        cache_part = cache_file + ".part"
+        cache_f = None
+        # If streaming from network and not already cached on disk, write stream chunks to cache
+        if is_url and not os.path.exists(cache_file):
+            try:
+                os.makedirs("cache", exist_ok=True)
+                cache_f = open(cache_part, "wb")
+            except Exception as e:
+                logger.debug(f"Could not open cache part file: {e}")
 
         proc = None
         try:
@@ -249,10 +268,9 @@ class RadioBroadcaster:
                 stderr=asyncio.subprocess.DEVNULL
             )
             self._active_proc = proc
-            # Audio has actively started broadcasting now!
             music_manager.started_at = time.time()
             await self._announce_now_playing(track)
-            logger.info(f"Broadcasting requested song: \"{track.title}\" [{track.duration_str}]")
+            logger.info(f"Broadcasting song: \"{track.title}\" [{track.duration_str}] from {'stream URL' if is_url else 'local cache'}")
 
             while True:
                 if self._skip_flag:
@@ -265,11 +283,34 @@ class RadioBroadcaster:
                     break
 
                 self.broadcast(chunk)
+                if cache_f:
+                    try:
+                        cache_f.write(chunk)
+                    except Exception:
+                        pass
                 await asyncio.sleep(0)
 
         except Exception as e:
             logger.error(f"Error streaming track '{track.title}': {e}")
         finally:
+            if cache_f:
+                try:
+                    cache_f.close()
+                except Exception:
+                    pass
+                if not self._skip_flag and os.path.exists(cache_part) and os.path.getsize(cache_part) > 10000:
+                    try:
+                        os.replace(cache_part, cache_file)
+                        logger.info(f"Cached complete broadcast audio: {cache_file}")
+                    except Exception as e:
+                        logger.debug(f"Cache rename error: {e}")
+                else:
+                    try:
+                        if os.path.exists(cache_part):
+                            os.remove(cache_part)
+                    except Exception:
+                        pass
+
             if proc:
                 try:
                     proc.terminate()
@@ -277,13 +318,6 @@ class RadioBroadcaster:
                 except Exception:
                     pass
             self._active_proc = None
-
-            # Clean up local cache file
-            try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-            except Exception:
-                pass
 
     async def _stream_idle_silence_tick(self):
         """Stream silence keeping the radio connection alive 24/7 when no songs are queued."""

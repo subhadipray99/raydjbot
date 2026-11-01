@@ -375,7 +375,11 @@ PLAYER_HTML = """<!DOCTYPE html>
       }
 
       currentTrackId = now.id;
-      document.getElementById('track-title').innerText = now.title;
+      let titleHtml = now.title;
+      if (now.artist) {
+        titleHtml += `<div style="font-size:14px;color:#9ca3af;font-weight:600;margin-top:4px;">${now.artist}</div>`;
+      }
+      document.getElementById('track-title').innerHTML = titleHtml;
       if (now.is_autoplay) {
         document.getElementById('track-requester').innerHTML = '<span style="color:#f59e0b;font-weight:600;">📻 Radio AutoDJ</span> &bull; <span style="color:#9ca3af;">Type /play in chat to jump ahead!</span>';
       } else {

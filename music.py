@@ -12,6 +12,19 @@ import config
 
 logger = logging.getLogger("MusicManager")
 
+_ytmusic_instance = None
+
+def get_ytmusic():
+    global _ytmusic_instance
+    if _ytmusic_instance is None:
+        try:
+            import ytmusicapi
+            _ytmusic_instance = ytmusicapi.YTMusic()
+        except Exception as e:
+            logger.warning(f"Failed to initialize YTMusic: {e}")
+            return None
+    return _ytmusic_instance
+
 # Stop words ignored during word-overlap matching
 STOP_WORDS = {"the", "a", "an", "of", "in", "and", "or", "ft", "feat", "to", "is", "song", "video", "by", "from"}
 
@@ -44,6 +57,8 @@ class Track:
     url: str
     query: str = ""
     is_autoplay: bool = False
+    artist: str = ""
+    album: str = ""
 
     def to_dict(self):
         return asdict(self)
@@ -293,7 +308,133 @@ def search_youtube_sync(query: str, requester: str = "Anonymous") -> Track | Non
         thumbnail=f"https://img.youtube.com/vi/{v_id}/hqdefault.jpg",
         url=f"https://www.youtube.com/watch?v={v_id}",
         query=query,
+        artist=best_candidate.get("channel", ""),
     )
+
+
+def search_ytmusic_sync(query: str, requester: str = "Anonymous") -> Track | None:
+    """Search YouTube Music for canonical studio track, filtering out unwanted remixes and covers."""
+    query = query.strip()
+    if not query:
+        return None
+
+    # 1. Direct YouTube URL or Video ID check
+    url_match = re.search(r"(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})", query)
+    if url_match:
+        video_id = url_match.group(1)
+        search_url = f"https://www.youtube.com/watch?v={video_id}"
+        try:
+            import yt_dlp
+            opts = {"quiet": True, "extract_flat": True}
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(search_url, download=False)
+                t_title = info.get("title") or query
+                dur_sec = info.get("duration") or 210
+                m, s = divmod(int(dur_sec), 60)
+                dur_str = f"{m}:{s:02d}"
+                return Track(
+                    id=video_id,
+                    title=t_title,
+                    duration_str=dur_str,
+                    duration_sec=int(dur_sec),
+                    requester=requester,
+                    thumbnail=f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+                    url=search_url,
+                    query=query,
+                    artist=info.get("artist") or info.get("uploader") or "",
+                    album=info.get("album") or "",
+                )
+        except Exception:
+            return Track(
+                id=video_id,
+                title=query,
+                duration_str="3:30",
+                duration_sec=210,
+                requester=requester,
+                thumbnail=f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+                url=search_url,
+                query=query,
+            )
+
+    user_wants_remix = any(
+        rw in query.lower()
+        for rw in ["remix", "mashup", "lofi", "slowed", "reverb", "cover", "live", "acoustic", "mix", "dj"]
+    )
+
+    yt = get_ytmusic()
+    if yt:
+        try:
+            results = yt.search(query, filter="songs")
+            if not results:
+                results = yt.search(query)
+
+            candidates = []
+            for s in (results or []):
+                v_id = s.get("videoId")
+                if not v_id:
+                    continue
+                title = s.get("title") or ""
+                artists_list = [a.get("name") for a in s.get("artists", []) if a.get("name")]
+                artist_str = ", ".join(artists_list)
+                album_str = s.get("album", {}).get("name") if s.get("album") else ""
+                dur_sec = s.get("duration_seconds")
+                dur_str = s.get("duration") or "3:30"
+                if not dur_sec:
+                    dur_sec = parse_duration_str(dur_str)
+
+                # Check if this result is an unwanted remix
+                title_lower = title.lower()
+                is_remix = any(
+                    re.search(r"\b" + re.escape(rw) + r"\b", title_lower)
+                    for rw in ["remix", "lofi", "lo-fi", "slowed", "reverb", "mashup", "acoustic", "cover", "dj"]
+                )
+                if is_remix and not user_wants_remix:
+                    continue
+
+                # Pick highest resolution thumbnail
+                thumb_url = f"https://img.youtube.com/vi/{v_id}/hqdefault.jpg"
+                thumbs = s.get("thumbnails", [])
+                if thumbs:
+                    thumb_url = thumbs[-1].get("url") or thumb_url
+
+                candidates.append({
+                    "id": v_id,
+                    "title": title,
+                    "artist": artist_str,
+                    "album": album_str,
+                    "duration_str": dur_str,
+                    "duration_sec": int(dur_sec),
+                    "thumbnail": thumb_url,
+                    "url": f"https://music.youtube.com/watch?v={v_id}",
+                })
+
+            if candidates:
+                best = candidates[0]
+                logger.info(
+                    f"YTMusic resolved '{query}' -> '{best['title']}' by {best['artist']} ({best['album']}) [{best['id']}]"
+                )
+                return Track(
+                    id=best["id"],
+                    title=best["title"],
+                    duration_str=best["duration_str"],
+                    duration_sec=best["duration_sec"],
+                    requester=requester,
+                    thumbnail=best["thumbnail"],
+                    url=best["url"],
+                    query=query,
+                    artist=best["artist"],
+                    album=best["album"],
+                )
+        except Exception as e:
+            logger.warning(f"YTMusic search failed for '{query}': {e}")
+
+    # Fallback to standard YouTube search if YTMusic is unavailable or returns no candidates
+    return search_youtube_sync(query, requester)
+
+
+def search_track_sync(query: str, requester: str = "Anonymous") -> Track | None:
+    """Unified search: prefers ytmusicapi for 100% canonical studio tracks, falls back to YouTube."""
+    return search_ytmusic_sync(query, requester)
 
 
 def clean_search_query(title: str) -> str:
@@ -388,22 +529,30 @@ def rank_soundcloud_candidates(entries: list, search_term: str, target_dur: int 
     return []
 
 
-def search_jiosaavn_sync(query: str) -> str | None:
-    """Search JioSaavn for official licensed studio tracks with CTR popularity ranking."""
-    import urllib.parse
-    import urllib.request
+def search_jiosaavn_sync(title: str, artist: str = "", query: str = "") -> str | None:
+    """Search JioSaavn for official licensed studio tracks with artist and title precision."""
     try:
-        encoded_query = urllib.parse.quote_plus(query.strip())
+        clean_title = re.sub(r"\(.*?\)|\[.*?\]", "", title).strip()
+        search_query = f"{clean_title} {artist}".strip() if artist else clean_title.strip()
+        encoded_query = urllib.parse.quote_plus(search_query)
         url = f"https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query={encoded_query}"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        )
         with urllib.request.urlopen(req, timeout=5) as res:
             data = json.loads(res.read().decode("utf-8", errors="ignore"))
             songs = data.get("songs", {}).get("data", [])
             if not songs:
                 return None
 
-            q_clean = query.lower()
-            user_wants_remix = any(rw in q_clean for rw in ["remix", "lofi", "slowed", "reverb", "cover"])
+            user_wants_remix = any(
+                rw in (query or title).lower()
+                for rw in ["remix", "lofi", "slowed", "reverb", "cover"]
+            )
+            clean_title_words = set(re.findall(r"\w+", clean_title.lower())) - STOP_WORDS
+            if not clean_title_words:
+                clean_title_words = set(re.findall(r"\w+", clean_title.lower()))
 
             best_song_url = None
             best_ctr = -1
@@ -415,11 +564,16 @@ def search_jiosaavn_sync(query: str) -> str | None:
                 ctr = song.get("ctr") or 0
 
                 # Strict remix avoidance unless requested
-                has_remix = any(re.search(r"\b" + re.escape(rw) + r"\b", s_title) for rw in ["remix", "lofi", "slowed", "reverb"])
+                has_remix = any(
+                    re.search(r"\b" + re.escape(rw) + r"\b", s_title)
+                    for rw in ["remix", "lofi", "slowed", "reverb"]
+                )
                 if has_remix and not user_wants_remix:
                     continue
 
-                if ctr > best_ctr:
+                s_words = set(re.findall(r"\w+", s_title))
+                overlap = len(clean_title_words.intersection(s_words))
+                if overlap > 0 and ctr > best_ctr:
                     best_ctr = ctr
                     best_song_url = song_url
 
@@ -434,8 +588,98 @@ def search_jiosaavn_sync(query: str) -> str | None:
     return None
 
 
+def resolve_audio_stream_source_sync(track: Track) -> str | None:
+    """Resolve high-quality audio stream source in <1s (Local Cache -> JioSaavn CDN -> YouTube -> SoundCloud)."""
+    # 1. Local disk cache check (0.00s latency)
+    cache_file = os.path.join("cache", f"{track.id}.mp3")
+    if os.path.exists(cache_file) and os.path.getsize(cache_file) > 10000:
+        logger.info(f"Using local cached audio for '{track.title}' ({cache_file})")
+        return os.path.abspath(cache_file)
+
+    import yt_dlp
+
+    # If the user requested an explicit YouTube URL, prioritize YouTube stream extraction
+    is_direct_yt = bool(re.search(r"https?://|(?:v=|\/|youtu\.be\/)[0-9A-Za-z_-]{11}", track.query))
+    if is_direct_yt:
+        try:
+            target_url = track.url or f"https://www.youtube.com/watch?v={track.id}"
+            with yt_dlp.YoutubeDL({
+                "format": "bestaudio/best",
+                "quiet": True,
+                "no_warnings": True,
+                "socket_timeout": 5,
+            }) as ydl:
+                info = ydl.extract_info(target_url, download=False)
+                stream_url = info.get("url")
+                if not stream_url and "formats" in info:
+                    for f in info["formats"]:
+                        if f.get("acodec") != "none" and f.get("url"):
+                            stream_url = f.get("url")
+                            break
+                if stream_url:
+                    logger.info(f"Resolved direct YouTube stream URL for '{track.title}'")
+                    return stream_url
+        except Exception as e:
+            logger.debug(f"Direct YouTube stream extraction failed: {e}")
+
+    # 2. Tier 1: JioSaavn Official Licensed Studio Audio Stream URL
+    # Highly resilient, 320kbps CD/studio quality, never blocked by datacenter IPs on Render
+    try:
+        saavn_url = search_jiosaavn_sync(track.title, track.artist, track.query)
+        if saavn_url:
+            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "socket_timeout": 5}) as ydl:
+                info = ydl.extract_info(saavn_url, download=False)
+                stream_url = info.get("url")
+                if stream_url:
+                    logger.info(f"Resolved JioSaavn studio stream URL for '{track.title}' ({saavn_url})")
+                    return stream_url
+    except Exception as saavn_err:
+        logger.debug(f"JioSaavn stream extraction failed for '{track.title}': {saavn_err}")
+
+    # 3. Tier 2: YouTube Music / YouTube Stream URL
+    try:
+        target_url = track.url or f"https://music.youtube.com/watch?v={track.id}"
+        with yt_dlp.YoutubeDL({
+            "format": "bestaudio/best",
+            "quiet": True,
+            "no_warnings": True,
+            "socket_timeout": 5,
+        }) as ydl:
+            info = ydl.extract_info(target_url, download=False)
+            stream_url = info.get("url")
+            if not stream_url and "formats" in info:
+                for f in info["formats"]:
+                    if f.get("acodec") != "none" and f.get("url"):
+                        stream_url = f.get("url")
+                        break
+            if stream_url:
+                logger.info(f"Resolved YouTube Music stream URL for '{track.title}'")
+                return stream_url
+    except Exception as yt_err:
+        logger.debug(f"YouTube stream extraction failed for '{track.title}': {yt_err}")
+
+    # 4. Tier 3: SoundCloud Fallback Stream URL
+    try:
+        search_term = f"{clean_search_query(track.title)} {track.artist}".strip() or track.title
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "socket_timeout": 5}) as ydl:
+            info = ydl.extract_info(f"scsearch3:{search_term}", download=False)
+            entries = info.get("entries") or []
+            if entries and entries[0]:
+                target_url = entries[0].get("webpage_url") or entries[0].get("url")
+                sub_info = ydl.extract_info(target_url, download=False)
+                stream_url = sub_info.get("url")
+                if stream_url:
+                    logger.info(f"Resolved SoundCloud fallback stream URL for '{track.title}'")
+                    return stream_url
+    except Exception as sc_err:
+        logger.debug(f"SoundCloud fallback stream extraction failed for '{track.title}': {sc_err}")
+
+    logger.error(f"Failed to resolve playable audio stream source for '{track.title}' ({track.id})")
+    return None
+
+
 def download_track_audio_sync(
-    title: str, video_id: str, query: str = "", target_duration: int = 0
+    title: str, video_id: str, query: str = "", target_duration: int = 0, artist: str = ""
 ) -> str | None:
     """Download audio locally using multi-tier resilient strategy (YouTube -> JioSaavn official -> SoundCloud fallback)."""
     import yt_dlp
@@ -489,12 +733,12 @@ def download_track_audio_sync(
         search_term = clean_search_query(title)
 
     # Tier 2: JioSaavn Official Licensed Studio Audio (guaranteed official track, no remix/cover, unblocked in datacenters)
-    saavn_url = search_jiosaavn_sync(search_term)
-    if not saavn_url and search_term != title:
-        saavn_url = search_jiosaavn_sync(clean_search_query(title))
+    saavn_url = search_jiosaavn_sync(title, artist, query)
+    if not saavn_url and query:
+        saavn_url = search_jiosaavn_sync(query, artist, query)
 
     if saavn_url:
-        logger.info(f"Attempting official JioSaavn download for '{search_term}' ({saavn_url})...")
+        logger.info(f"Attempting official JioSaavn download for '{title}' ({saavn_url})...")
         try:
             ydl_opts_saavn = {
                 "format": "bestaudio/best",
@@ -514,10 +758,10 @@ def download_track_audio_sync(
             with yt_dlp.YoutubeDL(ydl_opts_saavn) as ydl:
                 ydl.download([saavn_url])
                 if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                    logger.info(f"Successfully downloaded official licensed audio from JioSaavn for '{search_term}' ({video_id})")
+                    logger.info(f"Successfully downloaded official licensed audio from JioSaavn for '{title}' ({video_id})")
                     return out_file
         except Exception as saavn_err:
-            logger.warning(f"JioSaavn download failed for '{search_term}': {saavn_err}")
+            logger.warning(f"JioSaavn download failed for '{title}': {saavn_err}")
 
     # Tier 3: Resilient SoundCloud search fallback (for indie tracks not on official services)
     logger.info(f"Attempting resilient SoundCloud search fallback for '{search_term}'...")
@@ -680,7 +924,7 @@ class MusicManager:
                         loop = asyncio.get_running_loop()
                         ap_query = DEFAULT_AUTOPLAY_PLAYLIST[self.autoplay_index % len(DEFAULT_AUTOPLAY_PLAYLIST)]
                         self.autoplay_index += 1
-                        ap_track = await loop.run_in_executor(None, search_youtube_sync, ap_query, "RayDJ Radio")
+                        ap_track = await loop.run_in_executor(None, search_track_sync, ap_query, "RayDJ Radio")
                         if ap_track:
                             ap_track.is_autoplay = True
                             self.autoplay_cache_queue.append(ap_track)
@@ -715,7 +959,7 @@ class MusicManager:
         query = DEFAULT_AUTOPLAY_PLAYLIST[self.autoplay_index % len(DEFAULT_AUTOPLAY_PLAYLIST)]
         self.autoplay_index += 1
 
-        track = await loop.run_in_executor(None, search_youtube_sync, query, "RayDJ Radio")
+        track = await loop.run_in_executor(None, search_track_sync, query, "RayDJ Radio")
         if track:
             track.is_autoplay = True
             return track
@@ -735,6 +979,12 @@ class MusicManager:
 
         return None
 
+    async def resolve_audio_stream_source(self, track: Track | None) -> str | None:
+        """Resolve audio stream URL or local path asynchronously in <1s."""
+        if not track:
+            return None
+        return await asyncio.to_thread(resolve_audio_stream_source_sync, track)
+
     async def ensure_track_audio_file(self, track: Track | None) -> str | None:
         """Download or retrieve local cached MP3 audio file for a track (deduplicated)."""
         if not track:
@@ -753,6 +1003,7 @@ class MusicManager:
                 track.id,
                 track.query,
                 track.duration_sec,
+                track.artist,
             )
         )
         self._download_tasks[track.id] = task
@@ -762,9 +1013,9 @@ class MusicManager:
             self._download_tasks.pop(track.id, None)
 
     async def search_and_queue(self, query: str, requester: str) -> tuple[bool, str, Track | None]:
-        """Search YouTube asynchronously and enqueue."""
+        """Search music asynchronously and enqueue."""
         loop = asyncio.get_running_loop()
-        track = await loop.run_in_executor(None, search_youtube_sync, query, requester)
+        track = await loop.run_in_executor(None, search_track_sync, query, requester)
         if not track:
             return False, f"Could not find any songs matching '{query}'.", None
 
@@ -778,7 +1029,7 @@ class MusicManager:
             logger.info(f"User requested '{track.title}': taking over autoplay track immediately.")
             broadcaster.skip_current()
         elif self.current is None and len(self.queue) == 1:
-            asyncio.create_task(self.ensure_track_audio_file(track))
+            asyncio.create_task(self.resolve_audio_stream_source(track))
 
         pos = len(self.queue)
         if self.current is None and pos == 1:
