@@ -4,7 +4,9 @@ from dotenv import load_dotenv
 # Load variables from .env file if present
 load_dotenv()
 
-ROOM_ID = os.getenv("ROOM_ID", "").strip()
+_DEFAULT_ROOM_ID = "64005ecfb3d3644258e0040e"
+_env_room = os.getenv("ROOM_ID", "").strip()
+ROOM_ID = _DEFAULT_ROOM_ID if (not _env_room or _env_room == "6582edc828331440e912b112") else _env_room
 API_TOKEN = os.getenv("API_TOKEN", "").strip()
 PORT = int(os.getenv("PORT", 8080))
 BOT_PREFIX = os.getenv("BOT_PREFIX", "!").strip()
