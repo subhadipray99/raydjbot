@@ -123,3 +123,131 @@ def format_position(pos: Position | AnchorPosition | dict) -> str:
         elif pos.get("type") == "anchor":
             return f"Anchor (Entity: {pos.get('entity_id')}, Index: {pos.get('anchor_ix')})"
     return str(pos)
+
+
+# =====================================================================
+# FLOOR SPAWN MANAGEMENT (Multi-Floor Teleportation System)
+# =====================================================================
+
+FLOORS_FILE = os.path.join(os.path.dirname(__file__), "floors.json")
+
+
+def load_all_floors() -> dict:
+    """Load all floor spawn configurations keyed by room_id."""
+    if not os.path.exists(FLOORS_FILE):
+        return {}
+    try:
+        with open(FLOORS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading floors: {e}")
+        return {}
+
+
+def save_all_floors(data: dict) -> None:
+    """Save all floor spawn configurations to file."""
+    try:
+        with open(FLOORS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving floors: {e}")
+
+
+def normalize_floor_key(name: str) -> str:
+    """Normalize floor input strings like 'f1', 'floor1', 'floor 2', 'ground', 'g' to standard keys."""
+    raw = str(name).strip().lower().lstrip("!/ ")
+    cleaned = raw.replace(" ", "").replace("_", "").replace("-", "")
+    if cleaned in ("1", "f1", "floor1", "ground", "g", "first", "floorone"):
+        return "1"
+    if cleaned in ("2", "f2", "floor2", "second", "floortwo"):
+        return "2"
+    if cleaned in ("3", "f3", "floor3", "third", "floorthree"):
+        return "3"
+    if cleaned in ("4", "f4", "floor4", "fourth", "floorfour"):
+        return "4"
+    if cleaned in ("5", "f5", "floor5", "fifth", "floorfive"):
+        return "5"
+    if cleaned.startswith("f") and cleaned[1:].isdigit():
+        return cleaned[1:]
+    if cleaned.startswith("floor") and cleaned[5:].isdigit():
+        return cleaned[5:]
+    return raw
+
+
+def format_floor_name(floor_key: str) -> str:
+    """Get user-friendly display name for a floor."""
+    if floor_key == "1":
+        return "Floor 1 (Ground Floor)"
+    elif floor_key.isdigit():
+        return f"Floor {floor_key}"
+    return floor_key.capitalize()
+
+
+def get_all_floors(room_id: str) -> dict[str, dict]:
+    """Get all saved floors for a room."""
+    data = load_all_floors()
+    return data.get(room_id) or data.get("default") or {}
+
+
+def get_floor_position(room_id: str, floor_key: str) -> Position | None:
+    """Retrieve the saved Position for a specific floor in a room."""
+    norm_key = normalize_floor_key(floor_key)
+    room_floors = get_all_floors(room_id)
+    floor_data = room_floors.get(norm_key)
+    if not floor_data:
+        return None
+
+    try:
+        return Position(
+            x=float(floor_data["x"]),
+            y=float(floor_data["y"]),
+            z=float(floor_data["z"]),
+            facing=str(floor_data.get("facing", "FrontRight")),
+        )
+    except Exception as e:
+        logger.error(f"Failed to parse floor position for room {room_id}, floor {norm_key}: {e}")
+        return None
+
+
+def save_floor_position(room_id: str, floor_key: str, pos: Position) -> bool:
+    """Save a Position as the spawn point for a floor."""
+    if not isinstance(pos, Position):
+        logger.warning(f"Floor spawn must be a Position object, got {type(pos)}")
+        return False
+
+    norm_key = normalize_floor_key(floor_key)
+    data = load_all_floors()
+    if room_id not in data:
+        data[room_id] = {}
+
+    data[room_id][norm_key] = {
+        "type": "position",
+        "x": round(float(pos.x), 3),
+        "y": round(float(pos.y), 3),
+        "z": round(float(pos.z), 3),
+        "facing": str(pos.facing) if pos.facing else "FrontRight",
+    }
+    save_all_floors(data)
+    logger.info(f"Saved floor {norm_key} for room {room_id}: {data[room_id][norm_key]}")
+    return True
+
+
+def save_manual_floor_position(
+    room_id: str, floor_key: str, x: float, y: float, z: float, facing: str = "FrontRight"
+) -> Position:
+    """Save manual coordinates as a floor spawn."""
+    pos = Position(x=float(x), y=float(y), z=float(z), facing=facing)
+    save_floor_position(room_id, floor_key, pos)
+    return pos
+
+
+def delete_floor_position(room_id: str, floor_key: str) -> bool:
+    """Delete a floor spawn point."""
+    norm_key = normalize_floor_key(floor_key)
+    data = load_all_floors()
+    if room_id in data and norm_key in data[room_id]:
+        del data[room_id][norm_key]
+        save_all_floors(data)
+        logger.info(f"Deleted floor {norm_key} for room {room_id}")
+        return True
+    return False

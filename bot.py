@@ -98,6 +98,39 @@ class HighriseBot(BaseBot):
             logger.error(f"Error fetching user position: {e}")
         return None
 
+    async def teleport_user_to_floor(self, user: User, floor_input: str, reply) -> None:
+        """Teleport a user to the specified floor spawn position."""
+        floor_key = position.normalize_floor_key(floor_input)
+        floor_label = position.format_floor_name(floor_key)
+
+        target_pos = position.get_floor_position(config.ROOM_ID, floor_key)
+        if not target_pos:
+            all_floors = position.get_all_floors(config.ROOM_ID)
+            if all_floors:
+                avail_list = [f"/f{k}" if k.isdigit() else f"/{k}" for k in sorted(all_floors.keys())]
+                avail_str = ", ".join(avail_list)
+                await reply(
+                    f"⚠️ {floor_label} spawn is not set yet.\n"
+                    f"Available floors: {avail_str}\n"
+                    f"To set this floor: Stand there and type !setfloor {floor_input}"
+                )
+            else:
+                await reply(
+                    f"⚠️ {floor_label} spawn has not been set yet.\n"
+                    f"Stand where you want players to land and type !setfloor {floor_input} to configure it!"
+                )
+            return
+
+        try:
+            await self.highrise.teleport(user.id, target_pos)
+            await reply(f"⚡ Teleported @{user.username} to {floor_label}!")
+        except Exception as e:
+            logger.error(f"Error teleporting user {user.username} to floor {floor_key}: {e}")
+            await reply(
+                f"⚠️ Could not teleport to {floor_label}: {e}\n"
+                f"(Make sure the bot has Designer or Moderator permissions in this room!)"
+            )
+
     async def on_start(self, session_metadata: SessionMetadata) -> None:
         """Triggered when connection to room is established."""
         self.session_metadata = session_metadata
@@ -361,7 +394,14 @@ class HighriseBot(BaseBot):
                 f"/autoplay on|off - Toggle 24/7 radio background autoplay\n"
                 f"/np - Check currently playing song\n"
                 f"/player - Get live player link\n\n"
-                f"📍 Position Commands:\n"
+                f"🏢 Floor Teleport Commands:\n"
+                f"• /f1 (or /ground) - Teleport to Floor 1 (Ground Floor)\n"
+                f"• /f2 - Teleport to Floor 2\n"
+                f"• /floor <name/num> - Teleport to any configured floor\n"
+                f"• !setfloor <name> - Set that floor's spawn to your spot (e.g. !setfloor f1, !setfloor f2)\n"
+                f"• !floors - List all configured floor spawns\n"
+                f"• !delfloor <name> - Remove a floor spawn\n\n"
+                f"📍 Bot Position Commands:\n"
                 f"• !setpos - Set bot permanent spot to where YOU are standing\n"
                 f"• !come / !bring - Call bot to you right now\n"
                 f"• !mypos - Show your coordinates (X, Y, Z)\n"
@@ -383,6 +423,95 @@ class HighriseBot(BaseBot):
 
         elif cmd == "ping":
             await reply("Pong! 🏓 RayDJBot is active and running 24/7.")
+
+        # ---------------- FLOOR TELEPORTATION COMMANDS ----------------
+        elif cmd in ("f1", "ground", "g"):
+            await self.teleport_user_to_floor(user, "1", reply)
+
+        elif cmd == "f2":
+            await self.teleport_user_to_floor(user, "2", reply)
+
+        elif cmd.startswith("f") and len(cmd) > 1 and cmd[1:].isdigit():
+            await self.teleport_user_to_floor(user, cmd[1:], reply)
+
+        elif cmd == "floor":
+            if args:
+                await self.teleport_user_to_floor(user, args[0], reply)
+            else:
+                all_floors = position.get_all_floors(config.ROOM_ID)
+                if all_floors:
+                    avail_list = [f"/f{k}" if k.isdigit() else f"/{k}" for k in sorted(all_floors.keys())]
+                    avail_str = ", ".join(avail_list)
+                    await reply(f"🏢 Available floors: {avail_str}\nUsage: /f1, /f2, or /floor <name>")
+                else:
+                    await reply("No floor spawns configured yet! Stand where you want a floor spawn and type !setfloor f1 or !setfloor f2.")
+
+        elif cmd in ("floors", "floorlist"):
+            all_floors = position.get_all_floors(config.ROOM_ID)
+            if not all_floors:
+                await reply("No floor spawns configured yet! Stand where you want a spawn and type !setfloor f1 or !setfloor f2.")
+            else:
+                lines = ["🏢 Room Floor Spawns:"]
+                for f_key in sorted(all_floors.keys()):
+                    f_data = all_floors[f_key]
+                    f_label = position.format_floor_name(f_key)
+                    cmd_hint = f"/f{f_key}" if f_key.isdigit() else f"/floor {f_key}"
+                    lines.append(f"  • {f_label}: {position.format_position(f_data)} -> Use {cmd_hint}")
+                lines.append("Set or update with: !setfloor <floor>")
+                await reply("\n".join(lines))
+
+        elif cmd in ("setfloor", "addfloor"):
+            if not args:
+                await reply("Usage: !setfloor <floor> (e.g. !setfloor f1, !setfloor f2), or !setfloor <floor> <x> <y> <z> [facing]")
+                return
+
+            floor_input = args[0]
+            floor_key = position.normalize_floor_key(floor_input)
+            floor_label = position.format_floor_name(floor_key)
+
+            # Option A: Manual coordinates e.g. !setfloor f1 12.5 0.0 14.5 [FrontRight]
+            if len(args) >= 4:
+                try:
+                    x = float(args[1])
+                    y = float(args[2])
+                    z = float(args[3])
+                    facing = args[4] if len(args) > 4 else "FrontRight"
+                    new_pos = position.save_manual_floor_position(config.ROOM_ID, floor_key, x, y, z, facing)
+                    cmd_hint = f"/f{floor_key}" if floor_key.isdigit() else f"/floor {floor_key}"
+                    await reply(f"📍 {floor_label} spawn set manually to {position.format_position(new_pos)}!\nPlayers can now type {cmd_hint} to teleport here.")
+                    return
+                except ValueError:
+                    await reply("Invalid coordinates. Usage: !setfloor <floor> <x> <y> <z> [facing]")
+                    return
+
+            # Option B: Capture caller's current location
+            user_pos = await self._get_user_position(user)
+            if not user_pos:
+                await reply(f"Could not detect your position @{user.username}. Try taking a step, then type !setfloor {floor_input} again!")
+                return
+
+            if isinstance(user_pos, AnchorPosition):
+                await reply("⚠️ You are currently sitting on furniture. Please stand on the floor where players should spawn, then type !setfloor again!")
+                return
+
+            position.save_floor_position(config.ROOM_ID, floor_key, user_pos)
+            cmd_hint = f"/f{floor_key}" if floor_key.isdigit() else f"/floor {floor_key}"
+            await reply(
+                f"📍 {floor_label} spawn saved at your location: {position.format_position(user_pos)}!\n"
+                f"✅ Players can now type {cmd_hint} to teleport here anytime."
+            )
+
+        elif cmd in ("delfloor", "clearfloor", "removefloor"):
+            if not args:
+                await reply("Usage: !delfloor <floor> (e.g. !delfloor f1, !delfloor f2)")
+                return
+            floor_input = args[0]
+            floor_key = position.normalize_floor_key(floor_input)
+            floor_label = position.format_floor_name(floor_key)
+            if position.delete_floor_position(config.ROOM_ID, floor_key):
+                await reply(f"🗑️ Removed {floor_label} spawn point.")
+            else:
+                await reply(f"Floor '{floor_input}' was not found in saved floors for this room.")
 
         # ---------------- POSITION & MOVEMENT COMMANDS ----------------
         elif cmd in ("setpos", "setposition", "stayhere"):

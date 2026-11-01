@@ -14,6 +14,14 @@ A Python bot for [Highrise](https://highrise.game) built with the official `high
   - `/queue` or `/q` - Shows currently playing song and upcoming queue list.
   - `/np` - Displays now-playing song and elapsed/total duration.
   - `/player` - Links to the live synchronized web player (`/player`).
+- **Floor Teleportation System**:
+  - `/f1` (or `/ground`, `/g`) - Teleports caller to Floor 1 (Ground Floor).
+  - `/f2` - Teleports caller to Floor 2.
+  - `/floor <name_or_number>` - Teleports to any configured floor (e.g. `/floor 1`, `/floor 2`, `/floor roof`).
+  - `!setfloor <floor>` (e.g. `!setfloor f1`, `!setfloor f2`) - Stand anywhere in the room and type this to set your current location as that floor's permanent spawn point!
+  - `!setfloor <floor> <x> <y> <z> [facing]` - Manually configure coordinates for a floor.
+  - `!floors` or `/floors` - Lists all configured floor spawns in the room with teleport hints.
+  - `!delfloor <floor>` - Removes a floor spawn.
 - **Interactive Commands**:
   - `!help` or `!commands` - Displays available commands.
   - `!ping` - Checks bot responsiveness and online status.

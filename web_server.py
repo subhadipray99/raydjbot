@@ -48,6 +48,7 @@ async def handle_root(request: web.Request) -> web.Response:
         "room_configured": bool(config.ROOM_ID),
         "room_id": config.ROOM_ID,
         "saved_position": position.get_saved_position_dict(config.ROOM_ID),
+        "floors": position.get_all_floors(config.ROOM_ID),
         "player_url": f"{base_url}/player",
         "music_state": music_manager.get_state(),
     })
