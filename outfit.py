@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from highrise.models import Item
+import config
 
 logger = logging.getLogger("HighriseOutfit")
 
@@ -189,6 +190,14 @@ def save_active_outfit(outfit: list[Item]) -> None:
 
 def get_active_outfit() -> list[Item] | None:
     """Gets the previously active saved outfit if available."""
+    # 1. Check environment variable override (e.g. BOT_OUTFIT=suit or dj)
+    env_outfit = getattr(config, "BOT_OUTFIT", None)
+    if env_outfit:
+        preset = get_full_preset(env_outfit)
+        if preset:
+            return preset
+
+    # 2. Check saved active outfit in JSON
     data = _load_data()
     active = data.get("active")
     if active:

@@ -176,8 +176,36 @@ class HighriseBot(BaseBot):
             self.user_positions[user.id] = position
         if user.id == self.bot_id:
             return
-        welcome = config.WELCOME_MESSAGE.format(username=user.username)
-        await self.highrise.chat(welcome)
+
+        # Whisper private automated welcome message with all public commands (no admin commands)
+        w1 = (
+            f"Welcome to YouTube. This is an automated message.\n\n"
+            f"🎶 Music Commands:\n"
+            f"• /play <song> (or /p) - Request song\n"
+            f"• /skip (or /s) - Skip song\n"
+            f"• /queue (or /q) - View queue\n"
+            f"• /np - Now playing\n"
+            f"• /player - Web jukebox"
+        )
+        w2 = (
+            f"🏢 Floor Teleport:\n"
+            f"• /f1 - Ground Floor\n"
+            f"• /f2 - Floor 2\n"
+            f"• /f3 - Floor 3\n"
+            f"• /floors - List all floors\n\n"
+            f"✨ Outfits & Emotes:\n"
+            f"• !fit <preset> | !copyfit\n"
+            f"• !emote <name> | !emotes\n\n"
+            f"Created and maintained by @shuvodip"
+        )
+        try:
+            await self.highrise.send_whisper(user.id, w1)
+            await asyncio.sleep(0.5)
+            await self.highrise.send_whisper(user.id, w2)
+        except Exception as e:
+            logger.warning(f"Error sending welcome whisper to {user.username}: {e}")
+
+        # Wave at the user
         try:
             await self.highrise.send_emote("emote-wave")
         except Exception as e:
@@ -387,39 +415,45 @@ class HighriseBot(BaseBot):
         # ---------------- ROOM & BOT COMMANDS ----------------
         elif cmd in ("help", "commands"):
             help_text = (
-                f"🤖 RayDJBot Room Radio Commands:\n"
-                f"/play <song> (or /p) - Request a song (takes top priority!)\n"
-                f"/skip (or /s) - Skip to next song in queue\n"
-                f"/queue (or /q) - View upcoming songs in queue\n"
-                f"/autoplay on|off - Toggle 24/7 radio background autoplay\n"
-                f"/np - Check currently playing song\n"
-                f"/player - Get live player link\n\n"
+                f"🤖 RayDJBot Commands:\n"
+                f"Welcome to YouTube. This is an automated message.\n\n"
+                f"🎶 Music Commands:\n"
+                f"• /play <song> (or /p) - Request a song (takes top priority!)\n"
+                f"• /skip (or /s) - Skip to next song in queue\n"
+                f"• /queue (or /q) - View upcoming songs in queue\n"
+                f"• /np - Check currently playing song\n"
+                f"• /player - Get live player link\n\n"
                 f"🏢 Floor Teleport Commands:\n"
                 f"• /f1 (or /ground) - Teleport to Floor 1 (Ground Floor)\n"
                 f"• /f2 - Teleport to Floor 2\n"
+                f"• /f3 - Teleport to Floor 3\n"
                 f"• /floor <name/num> - Teleport to any configured floor\n"
-                f"• !setfloor <name> - Set that floor's spawn to your spot (e.g. !setfloor f1, !setfloor f2)\n"
-                f"• !floors - List all configured floor spawns\n"
-                f"• !delfloor <name> - Remove a floor spawn\n\n"
-                f"📍 Bot Position Commands:\n"
-                f"• !setpos - Set bot permanent spot to where YOU are standing\n"
-                f"• !come / !bring - Call bot to you right now\n"
-                f"• !mypos - Show your coordinates (X, Y, Z)\n"
-                f"• !botpos - Show bot saved position\n"
-                f"• !resetpos - Reset bot to default room entrance\n\n"
-                f"👗 Outfit & Wardrobe Commands:\n"
+                f"• /floors - List all configured floor spawns\n\n"
+                f"👗 Outfit & Fun Commands:\n"
                 f"• !fit <preset> - Change dress (dj, suit, street, camo, goth, chill, puffer)\n"
                 f"• !copyfit [@user] - Clone someone's outfit\n"
-                f"• !fit save <name> - Save current look as a preset\n"
-                f"• !wardrobe - Check bot inventory\n\n"
-                f"✨ Emotes & Fun:\n"
                 f"• !emote <name> - Play emote\n"
                 f"• !emotes - List popular emotes\n"
-                f"• !teleport <user> - Teleport user to bot (requires mod)\n"
                 f"• !wallet - Check bot tip wallet\n"
-                f"• !ping - Bot status"
+                f"• !ping - Bot status\n\n"
+                f"Created and maintained by @shuvodip\n"
+                f"(Admins: Type !admin for setup & room management commands)"
             )
             await reply(help_text)
+
+        elif cmd in ("admin", "setup"):
+            admin_text = (
+                f"⚙️ Admin & Setup Commands:\n"
+                f"• !setfloor <name> - Set floor spawn (e.g. !setfloor f1, !setfloor f2)\n"
+                f"• !delfloor <name> - Remove a floor spawn\n"
+                f"• !setpos - Set bot permanent location to where YOU are standing\n"
+                f"• !botpos - Show bot saved position\n"
+                f"• !resetpos - Reset bot to room entrance\n"
+                f"• !fit save <name> - Save current look as a preset\n"
+                f"• !wardrobe - Check bot inventory\n"
+                f"• /autoplay on|off - Toggle radio background autoplay"
+            )
+            await reply(admin_text)
 
         elif cmd == "ping":
             await reply("Pong! 🏓 RayDJBot is active and running 24/7.")
@@ -538,9 +572,11 @@ class HighriseBot(BaseBot):
 
             position.save_room_position(config.ROOM_ID, user_pos)
             await self.move_bot_to(user_pos)
+            pos_env = f"{user_pos.x:.2f},{user_pos.y:.2f},{user_pos.z:.2f},{user_pos.facing}"
             await reply(
                 f"📍 Bot position set to your location: {position.format_position(user_pos)}!\n"
-                f"✅ Saved! Bot will now stay here and auto-spawn at this exact spot on every reconnect/restart."
+                f"✅ Saved! Bot will now stay here and auto-spawn at this exact spot on every reconnect/restart.\n"
+                f"💡 Tip: To permanently lock this position across Render code redeploys, set BOT_POSITION={pos_env} in Render Environment tab."
             )
 
         elif cmd in ("mypos", "pos"):
@@ -738,7 +774,10 @@ class HighriseBot(BaseBot):
                         await self.highrise.send_emote("dance-shoppingcart")
                     except Exception:
                         pass
-                    await reply(f"✨ Outfit changed to '{preset_name}'! Looking stylish.")
+                    await reply(
+                        f"✨ Outfit changed to '{preset_name}'! Looking stylish.\n"
+                        f"💡 Tip: To permanently lock this look across Render code redeploys, set BOT_OUTFIT={preset_name} in Render Environment tab."
+                    )
             except Exception as e:
                 logger.error(f"Error setting outfit: {e}")
                 await reply(f"Error equipping outfit: {e}")

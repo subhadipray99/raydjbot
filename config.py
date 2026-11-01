@@ -20,3 +20,7 @@ WELCOME_MESSAGE = os.getenv(
 AUTOPLAY_ENABLED = os.getenv("AUTOPLAY_ENABLED", "true").lower() in ("true", "1", "yes")
 AUTOPLAY_INSTANT_TAKEOVER = os.getenv("AUTOPLAY_INSTANT_TAKEOVER", "true").lower() in ("true", "1", "yes")
 AUTOPLAY_CHAT_ANNOUNCEMENTS = os.getenv("AUTOPLAY_CHAT_ANNOUNCEMENTS", "true").lower() in ("true", "1", "yes")
+
+# Permanent Bot Position and Outfit overrides (optional)
+BOT_POSITION = os.getenv("BOT_POSITION", "").strip()
+BOT_OUTFIT = os.getenv("BOT_OUTFIT", "").strip()

@@ -1,1 +1,25 @@
-{}
+{
+  "64005ecfb3d3644258e0040e": {
+    "1": {
+      "type": "position",
+      "x": 15.721,
+      "y": 0.0,
+      "z": 18.701,
+      "facing": "BackLeft"
+    },
+    "2": {
+      "type": "position",
+      "x": 14.439,
+      "y": 11.5,
+      "z": 14.981,
+      "facing": "BackLeft"
+    },
+    "3": {
+      "type": "position",
+      "x": 15.333,
+      "y": 17.5,
+      "z": 10.117,
+      "facing": "BackLeft"
+    }
+  }
+}

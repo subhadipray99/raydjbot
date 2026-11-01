@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from highrise import Position, AnchorPosition
+import config
 
 logger = logging.getLogger("HighrisePosition")
 
@@ -31,6 +32,21 @@ def save_all_positions(data: dict) -> None:
 
 def get_saved_position(room_id: str) -> Position | AnchorPosition | None:
     """Retrieve saved Position or AnchorPosition for a given room."""
+    # 1. Environment variable override (locks position across redeploys)
+    env_pos = getattr(config, "BOT_POSITION", None)
+    if env_pos:
+        try:
+            parts = [p.strip() for p in env_pos.split(",")]
+            if len(parts) >= 3:
+                x = float(parts[0])
+                y = float(parts[1])
+                z = float(parts[2])
+                facing = parts[3] if len(parts) > 3 else "FrontRight"
+                return Position(x=x, y=y, z=z, facing=facing)
+        except Exception as e:
+            logger.warning(f"Error parsing BOT_POSITION env override: {e}")
+
+    # 2. Check saved room position in JSON
     data = load_all_positions()
     room_data = data.get(room_id) or data.get("default")
     if not room_data:
