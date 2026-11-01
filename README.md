@@ -36,6 +36,7 @@ A Python bot for [Highrise](https://highrise.game) built with the official `high
   - `!emote <name> [@user]` - Plays popular emotes (e.g. `dance`, `wave`, `macarena`, `hot`, `laugh`).
   - `!emotes` - Shows quick list of popular emote keywords.
   - `!teleport <@user>` - Teleports a player to the bot (or `!tp bot` to bring bot to you).
+  - `!top` or `!tippers` - Displays the room's Top Tippers leaderboard.
   - `!wallet` - Checks bot gold/bubbles tip balance.
   - `!say <message>` - Echoes your message into chat.
 - **Automated Room Interactions**:

@@ -15,6 +15,7 @@ import config
 from music import music_manager
 import outfit
 import position
+import tips
 
 logger = logging.getLogger("HighriseBot")
 
@@ -187,15 +188,14 @@ class HighriseBot(BaseBot):
             f"• /np - Now playing\n"
             f"• /player - Web jukebox"
         )
+        top_tipper_text = tips.format_top_tipper(config.ROOM_ID)
         w2 = (
             f"🏢 Floor Teleport:\n"
-            f"• /f1 - Ground Floor\n"
-            f"• /f2 - Floor 2\n"
-            f"• /f3 - Floor 3\n"
+            f"• /f1 - Ground | /f2 - Floor 2 | /f3\n"
             f"• /floors - List all floors\n\n"
             f"✨ Outfits & Emotes:\n"
-            f"• !fit <preset> | !copyfit\n"
-            f"• !emote <name> | !emotes\n\n"
+            f"• !fit <preset> | !copyfit | !emote\n\n"
+            f"🏆 {top_tipper_text}\n"
             f"Created and maintained by @shuvodip"
         )
         try:
@@ -230,18 +230,33 @@ class HighriseBot(BaseBot):
                 logger.error(f"Error sending reaction back: {e}")
 
     async def on_tip(self, sender: User, receiver: User, tip: CurrencyItem | Item) -> None:
-        """Triggered when someone tips in the room."""
+        """Triggered when someone tips the bot in the room."""
         if receiver.id == self.bot_id:
             if isinstance(tip, CurrencyItem):
-                msg = f"Thank you so much @{sender.username} for the tip of {tip.amount} {tip.type}! ❤️"
+                amount = int(tip.amount)
+                currency = str(tip.type)
+                is_new_top, top_info = tips.record_tip(
+                    config.ROOM_ID, sender.id, sender.username, amount, currency
+                )
+                if is_new_top:
+                    msg = (
+                        f"🎉 WOW! Huge thank you @{sender.username} for the tip of {amount} {currency}! ❤️\n"
+                        f"👑 @{sender.username} is now the #1 TOP TIPPER in the room!"
+                    )
+                else:
+                    msg = f"Thank you so much @{sender.username} for the generous tip of {amount} {currency}! ❤️"
             else:
                 msg = f"Thank you so much @{sender.username} for the gift tip! ❤️"
+
             logger.info(f"Tip received: {msg}")
             await self.highrise.chat(msg)
             try:
-                await self.highrise.send_emote("emote-lust")
+                await self.highrise.send_emote("emoji-celebrate")
             except Exception:
-                pass
+                try:
+                    await self.highrise.send_emote("dance-pennywise")
+                except Exception:
+                    pass
 
     def _extract_command(self, raw_message: str) -> tuple[str, list[str]] | None:
         """Support both '/' and '!' prefixes for commands."""
@@ -432,6 +447,7 @@ class HighriseBot(BaseBot):
                 f"👗 Outfit & Fun Commands:\n"
                 f"• !fit <preset> - Change dress (dj, suit, street, camo, goth, chill, puffer)\n"
                 f"• !copyfit [@user] - Clone someone's outfit\n"
+                f"• !top - View Top Tippers leaderboard 🏆\n"
                 f"• !emote <name> - Play emote\n"
                 f"• !emotes - List popular emotes\n"
                 f"• !wallet - Check bot tip wallet\n"
@@ -451,6 +467,8 @@ class HighriseBot(BaseBot):
                 f"• !resetpos - Reset bot to room entrance\n"
                 f"• !setfloor <name> - Set floor spawn (e.g. !setfloor f1, !setfloor f2)\n"
                 f"• !delfloor <name> - Remove a floor spawn\n"
+                f"• !settoptipper <user> [gold] - Set top tipper manually\n"
+                f"• !cleartippers - Reset tip leaderboard\n"
                 f"• !fit save <name> - Save current look as a preset\n"
                 f"• !wardrobe - Check bot inventory\n"
                 f"• /autoplay on|off - Toggle radio background autoplay"
@@ -774,6 +792,33 @@ class HighriseBot(BaseBot):
             except Exception as e:
                 logger.error(f"Wallet fetch error: {e}")
                 await reply("Failed to get wallet balance.")
+
+        elif cmd in ("tippers", "top", "toptippers", "leaderboard"):
+            top_tippers = tips.get_top_tippers_list(config.ROOM_ID, limit=5)
+            if not top_tippers:
+                await reply("🏆 Top Tippers: No tips recorded yet! Click on the bot and tap 'Tip' to take the #1 spot!")
+            else:
+                lines = ["🏆 Room Top Tippers Leaderboard:"]
+                medals = ["🥇", "🥈", "🥉", "4.", "5."]
+                for idx, t in enumerate(top_tippers):
+                    medal = medals[idx] if idx < len(medals) else f"{idx+1}."
+                    gold_str = f"{t.get('total_gold', 0)} gold"
+                    lines.append(f"  {medal} @{t['username']} - {gold_str}")
+                lines.append("Tip the bot to climb the leaderboard! ❤️")
+                await reply("\n".join(lines))
+
+        elif cmd == "settoptipper":
+            if not args:
+                await reply("Usage: !settoptipper <username> [gold_amount]")
+                return
+            target_name = args[0]
+            gold_amount = int(args[1]) if len(args) > 1 and args[1].isdigit() else 100
+            res = tips.set_manual_top_tipper(config.ROOM_ID, target_name, gold_amount)
+            await reply(f"🏆 Top tipper manually set to @{res['username']} ({res['total_gold']} gold)!")
+
+        elif cmd in ("cleartippers", "resettippers"):
+            tips.clear_room_tips(config.ROOM_ID)
+            await reply("🗑️ Room tip leaderboard has been reset.")
 
         elif cmd == "say":
             if not args:

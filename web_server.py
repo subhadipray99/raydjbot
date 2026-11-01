@@ -9,6 +9,7 @@ import config
 from music import music_manager
 from broadcaster import broadcaster
 import position
+import tips
 
 logger = logging.getLogger("WebServer")
 start_time = time.time()
@@ -49,6 +50,7 @@ async def handle_root(request: web.Request) -> web.Response:
         "room_id": config.ROOM_ID,
         "saved_position": position.get_saved_position_dict(config.ROOM_ID),
         "floors": position.get_all_floors(config.ROOM_ID),
+        "top_tipper": tips.get_top_tipper(config.ROOM_ID),
         "player_url": f"{base_url}/player",
         "music_state": music_manager.get_state(),
     })
