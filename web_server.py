@@ -8,6 +8,7 @@ from aiohttp import web
 import config
 from music import music_manager
 from broadcaster import broadcaster
+import position
 
 logger = logging.getLogger("WebServer")
 start_time = time.time()
@@ -45,6 +46,8 @@ async def handle_root(request: web.Request) -> web.Response:
         "service": "Highrise Bot Web Service & Jukebox",
         "uptime": get_uptime(),
         "room_configured": bool(config.ROOM_ID),
+        "room_id": config.ROOM_ID,
+        "saved_position": position.get_saved_position_dict(config.ROOM_ID),
         "player_url": f"{base_url}/player",
         "music_state": music_manager.get_state(),
     })

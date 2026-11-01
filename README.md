@@ -17,10 +17,17 @@ A Python bot for [Highrise](https://highrise.game) built with the official `high
 - **Interactive Commands**:
   - `!help` or `!commands` - Displays available commands.
   - `!ping` - Checks bot responsiveness and online status.
-  - `!come` - Finds your position and walks the bot to you.
+  - `!setpos` (or `!stayhere`) - Stand anywhere and type this to set your current location as the bot's permanent spot! The bot will stay there and auto-spawn at those coordinates on every restart/reconnect.
+  - `!setpos <x> <y> <z> [facing]` - Manually set coordinates.
+  - `!mypos` or `!pos` - Displays your current 3D coordinates (`X, Y, Z, Facing`).
+  - `!botpos` - Displays bot saved spawn position for this room.
+  - `!resetpos` - Clears saved spot, returning bot to default room entrance.
+  - `!come` or `!bring` - Finds your position and brings the bot to you immediately.
+  - `!fit <preset>` - Change bot outfit/dress (presets: `dj`, `suit`, `street`, `camo`, `goth`, `chill`, `puffer`).
+  - `!copyfit [@user]` - Clone a player's outfit.
   - `!emote <name> [@user]` - Plays popular emotes (e.g. `dance`, `wave`, `macarena`, `hot`, `laugh`).
   - `!emotes` - Shows quick list of popular emote keywords.
-  - `!teleport <@user>` - Teleports a player to the bot (requires room Designer rights).
+  - `!teleport <@user>` - Teleports a player to the bot (or `!tp bot` to bring bot to you).
   - `!wallet` - Checks bot gold/bubbles tip balance.
   - `!say <message>` - Echoes your message into chat.
 - **Automated Room Interactions**:

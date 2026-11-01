@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from highrise import (
     BaseBot,
@@ -13,6 +14,7 @@ from highrise.models import GetRoomUsersRequest, GetWalletRequest, Error
 import config
 from music import music_manager
 import outfit
+import position
 
 logger = logging.getLogger("HighriseBot")
 
@@ -54,6 +56,47 @@ class HighriseBot(BaseBot):
         self.bot_id: str | None = None
         self.session_metadata: SessionMetadata | None = None
         self._has_announced: bool = False
+        self.user_positions: dict[str, Position | AnchorPosition] = {}
+
+    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 2.0) -> None:
+        """Wait briefly after room connect for world registration, then move bot to saved spot."""
+        await asyncio.sleep(delay)
+        success = await self.move_bot_to(pos)
+        if success:
+            logger.info(f"Successfully relocated bot to saved position: {position.format_position(pos)}")
+        else:
+            logger.warning(f"Failed to relocate bot to saved position: {position.format_position(pos)}")
+
+    async def move_bot_to(self, target_pos: Position | AnchorPosition) -> bool:
+        """Move or teleport the bot to target position, falling back gracefully to walk_to."""
+        try:
+            if isinstance(target_pos, Position) and self.bot_id:
+                try:
+                    await self.highrise.teleport(self.bot_id, target_pos)
+                    return True
+                except Exception as tp_err:
+                    logger.debug(f"Teleport bot failed ({tp_err}), falling back to walk_to")
+            await self.highrise.walk_to(target_pos)
+            return True
+        except Exception as e:
+            logger.error(f"Error moving bot to {target_pos}: {e}")
+            return False
+
+    async def _get_user_position(self, target_user: User) -> Position | AnchorPosition | None:
+        """Find the freshest position for a user (cache first, then room users API)."""
+        if target_user.id in self.user_positions:
+            return self.user_positions[target_user.id]
+
+        try:
+            response = await self.highrise.get_room_users()
+            if isinstance(response, GetRoomUsersRequest.GetRoomUsersResponse):
+                for room_user, pos in response.content:
+                    if room_user.id == target_user.id:
+                        self.user_positions[room_user.id] = pos
+                        return pos
+        except Exception as e:
+            logger.error(f"Error fetching user position: {e}")
+        return None
 
     async def on_start(self, session_metadata: SessionMetadata) -> None:
         """Triggered when connection to room is established."""
@@ -76,6 +119,12 @@ class HighriseBot(BaseBot):
             except Exception as e:
                 logger.warning(f"Error restoring outfit on start: {e}")
 
+        # Restore saved room position if available
+        saved_pos = position.get_saved_position(config.ROOM_ID)
+        if saved_pos:
+            logger.info(f"Found saved position for room {config.ROOM_ID}: {position.format_position(saved_pos)}. Relocating bot...")
+            asyncio.create_task(self._apply_saved_position_delayed(saved_pos))
+
         # Only broadcast welcome message once on initial startup, not on every reconnect
         if not self._has_announced:
             base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
@@ -90,6 +139,8 @@ class HighriseBot(BaseBot):
     async def on_user_join(self, user: User, position: Position | AnchorPosition | None = None) -> None:
         """Triggered when a user joins the room."""
         logger.info(f"User joined: {user.username} (ID: {user.id})")
+        if position:
+            self.user_positions[user.id] = position
         if user.id == self.bot_id:
             return
         welcome = config.WELCOME_MESSAGE.format(username=user.username)
@@ -99,9 +150,14 @@ class HighriseBot(BaseBot):
         except Exception as e:
             logger.debug(f"Could not send wave emote on join: {e}")
 
+    async def on_user_move(self, user: User, destination: Position | AnchorPosition) -> None:
+        """Track user positions in real-time as they walk or sit."""
+        self.user_positions[user.id] = destination
+
     async def on_user_leave(self, user: User) -> None:
         """Triggered when a user leaves the room."""
         logger.info(f"User left: {user.username} (ID: {user.id})")
+        self.user_positions.pop(user.id, None)
 
     async def on_reaction(self, user: User, reaction: Reaction, receiver: User) -> None:
         """Echo reactions back to users if they react to the bot."""
@@ -304,42 +360,88 @@ class HighriseBot(BaseBot):
                 f"/queue (or /q) - View upcoming songs in queue\n"
                 f"/autoplay on|off - Toggle 24/7 radio background autoplay\n"
                 f"/np - Check currently playing song\n"
-                f"/player - Get live player link\n"
-                f"!fit <preset> - Change bot dress/outfit\n"
-                f"!copyfit [@user] - Clone someone's outfit\n"
-                f"!fit save <name> - Save current outfit as custom preset\n"
-                f"!wardrobe - Check bot inventory\n"
-                f"!come - Bot walks to your location\n"
-                f"!emote <name> - Play emote\n"
-                f"!emotes - List popular emotes\n"
-                f"!teleport <user> - Teleport user (requires mod)\n"
-                f"!wallet - Check bot tip wallet\n"
-                f"!ping - Bot status"
+                f"/player - Get live player link\n\n"
+                f"📍 Position Commands:\n"
+                f"• !setpos - Set bot permanent spot to where YOU are standing\n"
+                f"• !come / !bring - Call bot to you right now\n"
+                f"• !mypos - Show your coordinates (X, Y, Z)\n"
+                f"• !botpos - Show bot saved position\n"
+                f"• !resetpos - Reset bot to default room entrance\n\n"
+                f"👗 Outfit & Wardrobe Commands:\n"
+                f"• !fit <preset> - Change dress (dj, suit, street, camo, goth, chill, puffer)\n"
+                f"• !copyfit [@user] - Clone someone's outfit\n"
+                f"• !fit save <name> - Save current look as a preset\n"
+                f"• !wardrobe - Check bot inventory\n\n"
+                f"✨ Emotes & Fun:\n"
+                f"• !emote <name> - Play emote\n"
+                f"• !emotes - List popular emotes\n"
+                f"• !teleport <user> - Teleport user to bot (requires mod)\n"
+                f"• !wallet - Check bot tip wallet\n"
+                f"• !ping - Bot status"
             )
             await reply(help_text)
 
         elif cmd == "ping":
             await reply("Pong! 🏓 RayDJBot is active and running 24/7.")
 
-        elif cmd == "come":
-            try:
-                response = await self.highrise.get_room_users()
-                if isinstance(response, GetRoomUsersRequest.GetRoomUsersResponse):
-                    user_pos = None
-                    for room_user, pos in response.content:
-                        if room_user.id == user.id:
-                            user_pos = pos
-                            break
-                    if user_pos:
-                        await self.highrise.walk_to(user_pos)
-                        await reply(f"On my way, @{user.username}!")
-                    else:
-                        await reply(f"Could not determine your position, @{user.username}.")
-                else:
-                    await reply("Could not retrieve room users.")
-            except Exception as e:
-                logger.error(f"Error handling !come: {e}")
-                await reply("Failed to walk to your position.")
+        # ---------------- POSITION & MOVEMENT COMMANDS ----------------
+        elif cmd in ("setpos", "setposition", "stayhere"):
+            # Option A: Manual coordinates e.g. !setpos 10.5 0.0 14.2 [FrontRight]
+            if len(args) >= 3:
+                try:
+                    x = float(args[0])
+                    y = float(args[1])
+                    z = float(args[2])
+                    facing = args[3] if len(args) > 3 else "FrontRight"
+                    new_pos = position.save_manual_position(config.ROOM_ID, x, y, z, facing)
+                    await self.move_bot_to(new_pos)
+                    await reply(f"📍 Bot position set manually: {position.format_position(new_pos)}!\nBot will return here automatically on restart.")
+                    return
+                except ValueError:
+                    await reply("Invalid coordinates. Usage: !setpos <x> <y> <z> [facing], or just stand somewhere and type !setpos")
+                    return
+
+            # Option B: Capture caller's current standing/sitting location
+            user_pos = await self._get_user_position(user)
+            if not user_pos:
+                await reply(f"Could not detect your position @{user.username}. Try taking a step or jumping, then type !setpos again!")
+                return
+
+            position.save_room_position(config.ROOM_ID, user_pos)
+            await self.move_bot_to(user_pos)
+            await reply(
+                f"📍 Bot position set to your location: {position.format_position(user_pos)}!\n"
+                f"✅ Saved! Bot will now stay here and auto-spawn at this exact spot on every reconnect/restart."
+            )
+
+        elif cmd in ("mypos", "pos"):
+            user_pos = await self._get_user_position(user)
+            if user_pos:
+                await reply(f"📍 @{user.username}'s Position: {position.format_position(user_pos)}")
+            else:
+                await reply(f"Could not detect your position @{user.username}. Try walking a step, then try !mypos.")
+
+        elif cmd == "botpos":
+            saved = position.get_saved_position(config.ROOM_ID)
+            if saved:
+                await reply(f"🤖 Bot Saved Spawn: {position.format_position(saved)} (Room: {config.ROOM_ID})")
+            else:
+                await reply(f"🤖 Bot Spawn: Default Room Entrance (no custom position saved for room {config.ROOM_ID}). Stand anywhere and type !setpos to set one!")
+
+        elif cmd in ("resetpos", "clearpos"):
+            cleared = position.clear_room_position(config.ROOM_ID)
+            if cleared:
+                await reply("🗑️ Custom bot position cleared for this room! Bot will spawn at the default entrance on next start.")
+            else:
+                await reply("No custom position was saved for this room.")
+
+        elif cmd in ("come", "bring"):
+            user_pos = await self._get_user_position(user)
+            if user_pos:
+                await self.move_bot_to(user_pos)
+                await reply(f"On my way, @{user.username}! 🏃")
+            else:
+                await reply(f"Could not determine your position, @{user.username}.")
 
         elif cmd in ("emote", "e"):
             if not args:
@@ -373,6 +475,17 @@ class HighriseBot(BaseBot):
             await reply(f"Popular emotes: {sample_emotes}... (Use: !emote <name>)")
 
         elif cmd in ("teleport", "tp"):
+            target_arg = args[0].lstrip("@").lower() if args else ""
+            if target_arg in ("bot", "dj", "raydjbot"):
+                # Bring bot to caller
+                user_pos = await self._get_user_position(user)
+                if user_pos:
+                    await self.move_bot_to(user_pos)
+                    await reply(f"Teleported bot to @{user.username}! ⚡")
+                else:
+                    await reply(f"Could not determine your position, @{user.username}.")
+                return
+
             try:
                 users_resp = await self.highrise.get_room_users()
                 if not isinstance(users_resp, GetRoomUsersRequest.GetRoomUsersResponse):
@@ -381,7 +494,7 @@ class HighriseBot(BaseBot):
 
                 target_user = None
                 bot_pos = None
-                target_name = args[0].lstrip("@").lower() if args else user.username.lower()
+                target_name = target_arg if target_arg else user.username.lower()
 
                 for r_user, pos in users_resp.content:
                     if r_user.username.lower() == target_name:
