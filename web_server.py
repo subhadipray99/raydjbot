@@ -24,7 +24,9 @@ class MemoryLogHandler(logging.Handler):
             pass
 
 memory_handler = MemoryLogHandler()
+memory_handler.setLevel(logging.INFO)
 memory_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+logging.getLogger().setLevel(logging.INFO)
 logging.getLogger().addHandler(memory_handler)
 
 
@@ -460,9 +462,9 @@ async def handle_player_page(request: web.Request) -> web.Response:
     )
 
 
-async def handle_audio_current(request: web.Request) -> web.Response:
-    """Redirect to the continuous custom radio stream."""
-    raise web.HTTPFound(location="/radio.mp3")
+async def handle_audio_current(request: web.Request) -> web.StreamResponse:
+    """Stream directly for Highrise in-room radio player without 302 redirect."""
+    return await handle_radio_stream(request)
 
 
 async def handle_radio_stream(request: web.Request) -> web.StreamResponse:

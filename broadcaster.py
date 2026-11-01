@@ -175,7 +175,7 @@ class RadioBroadcaster:
                 if track.is_autoplay:
                     if config.AUTOPLAY_CHAT_ANNOUNCEMENTS:
                         announcement = (
-                            f"📻 Radio AutoDJ: \"{track.title}\" [{track.duration_str}]\n"
+                            f"🎶 Now Playing [Radio AutoDJ]: \"{track.title}\" [{track.duration_str}]\n"
                             f"💡 Type /play <song> to queue your request next!"
                         )
                         await self.bot.highrise.chat(announcement)
@@ -212,29 +212,16 @@ class RadioBroadcaster:
             logger.error(f"Error in audio download for '{track.title}': {e}")
             return None
 
-    async def _play_track(self, track: Track):
-        """Stream audio for the track through ffmpeg (instant stream piping or disk cache)."""
-        source = await music_manager.resolve_audio_stream_source(track)
-
-        if not source:
-            if not self._skip_flag:
-                logger.warning(f"Could not resolve audio source for '{track.title}'. Skipping.")
-                if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
-                    try:
-                        await self.bot.highrise.chat(f"⚠️ Could not load audio for \"{track.title}\". Skipping to next song.")
-                    except Exception:
-                        pass
-            return
-
-        is_url = source.startswith("http://") or source.startswith("https://")
+    async def _stream_source_through_ffmpeg(self, track: Track, source: str, is_local_file: bool = False) -> bool:
+        """Stream an audio source through ffmpeg. Returns True if streaming started and finished normally; False on startup failure."""
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-
         cmd = [ffmpeg_exe]
-        if is_url:
+        if not is_local_file:
             cmd.extend([
                 "-reconnect", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
+                "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             ])
         cmd.extend([
             "-re",                 # Read at native 1x real-time rate
@@ -252,25 +239,41 @@ class RadioBroadcaster:
         cache_file = os.path.join("cache", f"{track.id}.mp3")
         cache_part = cache_file + ".part"
         cache_f = None
-        # If streaming from network and not already cached on disk, write stream chunks to cache
-        if is_url and not os.path.exists(cache_file):
+        if not is_local_file and not os.path.exists(cache_file):
             try:
                 os.makedirs("cache", exist_ok=True)
                 cache_f = open(cache_part, "wb")
-            except Exception as e:
-                logger.debug(f"Could not open cache part file: {e}")
+            except Exception:
+                pass
 
         proc = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL
+                stderr=asyncio.subprocess.PIPE
             )
             self._active_proc = proc
+
+            # Read first chunk to ensure stream opened successfully
+            first_chunk = await proc.stdout.read(4096)
+            if not first_chunk:
+                stderr_data = await proc.stderr.read()
+                err_msg = stderr_data.decode("utf-8", errors="ignore").strip()
+                logger.warning(f"FFmpeg failed to read from '{source[:60]}...' for '{track.title}': {err_msg[:300]}")
+                return False
+
+            # Stream successfully began!
             music_manager.started_at = time.time()
             await self._announce_now_playing(track)
-            logger.info(f"Broadcasting song: \"{track.title}\" [{track.duration_str}] from {'stream URL' if is_url else 'local cache'}")
+            logger.info(f"Broadcasting song: \"{track.title}\" [{track.duration_str}] from {'stream URL' if not is_local_file else 'local file'}")
+
+            self.broadcast(first_chunk)
+            if cache_f:
+                try:
+                    cache_f.write(first_chunk)
+                except Exception:
+                    pass
 
             while True:
                 if self._skip_flag:
@@ -290,8 +293,11 @@ class RadioBroadcaster:
                         pass
                 await asyncio.sleep(0)
 
+            return True
+
         except Exception as e:
             logger.error(f"Error streaming track '{track.title}': {e}")
+            return False
         finally:
             if cache_f:
                 try:
@@ -318,6 +324,37 @@ class RadioBroadcaster:
                 except Exception:
                     pass
             self._active_proc = None
+
+    async def _play_track(self, track: Track):
+        """Play track: tries fast stream URL first; if that fails, downloads locally while streaming silence."""
+        # 1. Try resolving direct stream URL or disk cache
+        source = await music_manager.resolve_audio_stream_source(track)
+        if source:
+            is_local = os.path.exists(source)
+            success = await self._stream_source_through_ffmpeg(track, source, is_local_file=is_local)
+            if success:
+                return
+
+        # 2. If direct streaming failed or was skipped, download local audio file while keeping radio alive with silence
+        if self._skip_flag:
+            return
+
+        logger.info(f"Direct stream unavailable or failed for '{track.title}'. Downloading audio file locally...")
+        file_path = await self._ensure_audio_file_while_streaming(track)
+        if file_path and os.path.exists(file_path):
+            await self._stream_source_through_ffmpeg(track, file_path, is_local_file=True)
+            return
+
+        # 3. Only if both failed and track wasn't skipped
+        if not self._skip_flag:
+            logger.warning(f"Could not load audio for '{track.title}'. Skipping.")
+            if self.bot and hasattr(self.bot, "highrise") and self.bot.highrise:
+                try:
+                    await self.bot.highrise.chat(f"⚠️ Could not load audio for \"{track.title}\". Skipping to next song.")
+                except Exception:
+                    pass
+            # Avoid runaway rapid skip loop
+            await asyncio.sleep(1.5)
 
     async def _stream_idle_silence_tick(self):
         """Stream silence keeping the radio connection alive 24/7 when no songs are queued."""

@@ -533,56 +533,70 @@ def search_jiosaavn_sync(title: str, artist: str = "", query: str = "") -> str |
     """Search JioSaavn for official licensed studio tracks with artist and title precision."""
     try:
         clean_title = re.sub(r"\(.*?\)|\[.*?\]", "", title).strip()
-        search_query = f"{clean_title} {artist}".strip() if artist else clean_title.strip()
-        encoded_query = urllib.parse.quote_plus(search_query)
-        url = f"https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query={encoded_query}"
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        primary_artist = artist.split(",")[0].strip() if artist else ""
+
+        # Try search queries: 1) clean_title + primary_artist, 2) clean_title, 3) raw query
+        queries_to_try = []
+        if primary_artist:
+            queries_to_try.append(f"{clean_title} {primary_artist}")
+        queries_to_try.append(clean_title)
+        if query and query != clean_title and query != title:
+            queries_to_try.append(query)
+
+        user_wants_remix = any(
+            rw in (query or title).lower()
+            for rw in ["remix", "lofi", "slowed", "reverb", "cover"]
         )
-        with urllib.request.urlopen(req, timeout=5) as res:
-            data = json.loads(res.read().decode("utf-8", errors="ignore"))
-            songs = data.get("songs", {}).get("data", [])
-            if not songs:
-                return None
+        clean_title_words = set(re.findall(r"\w+", clean_title.lower())) - STOP_WORDS
+        if not clean_title_words:
+            clean_title_words = set(re.findall(r"\w+", clean_title.lower()))
 
-            user_wants_remix = any(
-                rw in (query or title).lower()
-                for rw in ["remix", "lofi", "slowed", "reverb", "cover"]
-            )
-            clean_title_words = set(re.findall(r"\w+", clean_title.lower())) - STOP_WORDS
-            if not clean_title_words:
-                clean_title_words = set(re.findall(r"\w+", clean_title.lower()))
-
-            best_song_url = None
-            best_ctr = -1
-            for song in songs:
-                song_url = song.get("url")
-                if not song_url or "jiosaavn.com/song/" not in song_url:
-                    continue
-                s_title = (song.get("title") or "").lower()
-                ctr = song.get("ctr") or 0
-
-                # Strict remix avoidance unless requested
-                has_remix = any(
-                    re.search(r"\b" + re.escape(rw) + r"\b", s_title)
-                    for rw in ["remix", "lofi", "slowed", "reverb"]
+        for sq in queries_to_try:
+            try:
+                encoded_query = urllib.parse.quote_plus(sq)
+                url = f"https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query={encoded_query}"
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
                 )
-                if has_remix and not user_wants_remix:
-                    continue
+                with urllib.request.urlopen(req, timeout=5) as res:
+                    data = json.loads(res.read().decode("utf-8", errors="ignore"))
+                    songs = data.get("songs", {}).get("data", [])
+                    if not songs:
+                        continue
 
-                s_words = set(re.findall(r"\w+", s_title))
-                overlap = len(clean_title_words.intersection(s_words))
-                if overlap > 0 and ctr > best_ctr:
-                    best_ctr = ctr
-                    best_song_url = song_url
+                    best_song_url = None
+                    best_ctr = -1
+                    for song in songs:
+                        song_url = song.get("url")
+                        if not song_url or "jiosaavn.com/song/" not in song_url:
+                            continue
+                        s_title = (song.get("title") or "").lower()
+                        ctr = song.get("ctr") or 0
 
-            if best_song_url:
-                return best_song_url
-            for song in songs:
-                s_url = song.get("url")
-                if s_url and "jiosaavn.com/song/" in s_url:
-                    return s_url
+                        # Strict remix avoidance unless requested
+                        has_remix = any(
+                            re.search(r"\b" + re.escape(rw) + r"\b", s_title)
+                            for rw in ["remix", "lofi", "slowed", "reverb"]
+                        )
+                        if has_remix and not user_wants_remix:
+                            continue
+
+                        s_words = set(re.findall(r"\w+", s_title))
+                        overlap = len(clean_title_words.intersection(s_words))
+                        if overlap > 0 and ctr > best_ctr:
+                            best_ctr = ctr
+                            best_song_url = song_url
+
+                    if best_song_url:
+                        return best_song_url
+                    for song in songs:
+                        s_url = song.get("url")
+                        if s_url and "jiosaavn.com/song/" in s_url:
+                            return s_url
+            except Exception:
+                continue
+
     except Exception as e:
         logger.debug(f"JioSaavn search lookup error: {e}")
     return None
@@ -681,7 +695,7 @@ def resolve_audio_stream_source_sync(track: Track) -> str | None:
 def download_track_audio_sync(
     title: str, video_id: str, query: str = "", target_duration: int = 0, artist: str = ""
 ) -> str | None:
-    """Download audio locally using multi-tier resilient strategy (YouTube -> JioSaavn official -> SoundCloud fallback)."""
+    """Download audio locally using multi-tier resilient strategy (JioSaavn official -> YouTube -> SoundCloud fallback)."""
     import yt_dlp
     import imageio_ffmpeg
 
@@ -693,17 +707,51 @@ def download_track_audio_sync(
         return out_file
 
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    is_url = bool(re.search(r"https?://|(?:v=|\/|youtu\.be\/)[0-9A-Za-z_-]{11}", query))
+    search_term = query.strip() if (query and not is_url) else clean_search_query(title)
 
-    # Tier 1: YouTube with Node JS-runtime and robust multi-client challenge solver
+    # Strategy: If not a direct YouTube link, try JioSaavn FIRST (fastest, unblocked in datacenters, official studio audio)
+    if not is_url:
+        saavn_url = search_jiosaavn_sync(title, artist, query)
+        if not saavn_url and query:
+            saavn_url = search_jiosaavn_sync(query, artist, query)
+
+        if saavn_url:
+            logger.info(f"Attempting official JioSaavn download for '{title}' ({saavn_url})...")
+            try:
+                ydl_opts_saavn = {
+                    "format": "bestaudio/best",
+                    "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
+                    "quiet": True,
+                    "no_warnings": True,
+                    "ignoreerrors": True,
+                    "retries": 2,
+                    "socket_timeout": 8,
+                    "ffmpeg_location": ffmpeg_exe,
+                    "postprocessors": [{
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "128",
+                    }],
+                }
+                with yt_dlp.YoutubeDL(ydl_opts_saavn) as ydl:
+                    ydl.download([saavn_url])
+                    if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                        logger.info(f"Successfully downloaded official licensed audio from JioSaavn for '{title}' ({video_id})")
+                        return out_file
+            except Exception as saavn_err:
+                logger.warning(f"JioSaavn download failed for '{title}': {saavn_err}")
+
+    # Fallback / Direct YouTube Link: Try YouTube
     try:
         ydl_opts_yt = {
             "format": "18/140/251/bestaudio/best",
             "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
-            "retries": 2,
-            "extractor_retries": 2,
-            "socket_timeout": 12,
+            "retries": 1,
+            "extractor_retries": 1,
+            "socket_timeout": 6,
             "ffmpeg_location": ffmpeg_exe,
             "js_runtimes": {"node": {}},
             "extractor_args": {
@@ -725,43 +773,33 @@ def download_track_audio_sync(
     except Exception as e:
         logger.warning(f"YouTube download failed for '{title}': {e}")
 
-    # Determine the cleanest search term:
-    is_url = bool(re.search(r"https?://|(?:v=|\/|youtu\.be\/)[0-9A-Za-z_-]{11}", query))
-    if query and not is_url:
-        search_term = query.strip()
-    else:
-        search_term = clean_search_query(title)
-
-    # Tier 2: JioSaavn Official Licensed Studio Audio (guaranteed official track, no remix/cover, unblocked in datacenters)
-    saavn_url = search_jiosaavn_sync(title, artist, query)
-    if not saavn_url and query:
-        saavn_url = search_jiosaavn_sync(query, artist, query)
-
-    if saavn_url:
-        logger.info(f"Attempting official JioSaavn download for '{title}' ({saavn_url})...")
-        try:
-            ydl_opts_saavn = {
-                "format": "bestaudio/best",
-                "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
-                "quiet": True,
-                "no_warnings": True,
-                "ignoreerrors": True,
-                "retries": 2,
-                "socket_timeout": 8,
-                "ffmpeg_location": ffmpeg_exe,
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "128",
-                }],
-            }
-            with yt_dlp.YoutubeDL(ydl_opts_saavn) as ydl:
-                ydl.download([saavn_url])
-                if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
-                    logger.info(f"Successfully downloaded official licensed audio from JioSaavn for '{title}' ({video_id})")
-                    return out_file
-        except Exception as saavn_err:
-            logger.warning(f"JioSaavn download failed for '{title}': {saavn_err}")
+    # If it was a direct URL and YouTube failed, now try JioSaavn fallback
+    if is_url:
+        saavn_url = search_jiosaavn_sync(title, artist, query)
+        if saavn_url:
+            logger.info(f"Attempting JioSaavn download fallback for '{title}'...")
+            try:
+                ydl_opts_saavn = {
+                    "format": "bestaudio/best",
+                    "outtmpl": os.path.join(cache_dir, f"{video_id}.%(ext)s"),
+                    "quiet": True,
+                    "no_warnings": True,
+                    "ignoreerrors": True,
+                    "retries": 2,
+                    "socket_timeout": 8,
+                    "ffmpeg_location": ffmpeg_exe,
+                    "postprocessors": [{
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "128",
+                    }],
+                }
+                with yt_dlp.YoutubeDL(ydl_opts_saavn) as ydl:
+                    ydl.download([saavn_url])
+                    if os.path.exists(out_file) and os.path.getsize(out_file) > 10000:
+                        return out_file
+            except Exception:
+                pass
 
     # Tier 3: Resilient SoundCloud search fallback (for indie tracks not on official services)
     logger.info(f"Attempting resilient SoundCloud search fallback for '{search_term}'...")
