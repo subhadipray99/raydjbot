@@ -1056,6 +1056,16 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
         owner_id = first_owner.get("owner", {}).get("id") or first_owner.get("id")
 
         # Step 2: Create Web Service via Render API
+        env_vars_list = [
+            {"key": "PYTHON_VERSION", "value": "3.11.9"},
+            {"key": "API_TOKEN", "value": highrise_token},
+            {"key": "ROOM_ID", "value": room_id},
+            {"key": "ROOM_OWNER", "value": room_owner or "owner"},
+            {"key": "ROOM_TITLE", "value": room_title},
+            {"key": "BOT_PREFIX", "value": "!"},
+            {"key": "AUTOPLAY_ENABLED", "value": "true"},
+        ]
+
         create_payload = {
             "type": "web_service",
             "name": slug,
@@ -1066,18 +1076,14 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
             "serviceDetails": {
                 "env": "python",
                 "plan": "free",
-                "buildCommand": "pip install -r requirements.txt",
-                "startCommand": "python main.py",
-                "envVars": [
-                    {"key": "PYTHON_VERSION", "value": "3.11.9"},
-                    {"key": "API_TOKEN", "value": highrise_token},
-                    {"key": "ROOM_ID", "value": room_id},
-                    {"key": "ROOM_OWNER", "value": room_owner or "owner"},
-                    {"key": "ROOM_TITLE", "value": room_title},
-                    {"key": "BOT_PREFIX", "value": "!"},
-                    {"key": "AUTOPLAY_ENABLED", "value": "true"},
-                ]
-            }
+                "region": "oregon",
+                "envSpecificDetails": {
+                    "buildCommand": "pip install -r requirements.txt",
+                    "startCommand": "python main.py",
+                },
+                "envVars": env_vars_list,
+            },
+            "envVars": env_vars_list,
         }
 
         try:
@@ -1094,6 +1100,18 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
                 srv_id = srv_data.get("id", "")
                 srv_name = srv_data.get("name", slug)
                 srv_url = srv_data.get("serviceDetails", {}).get("url") or f"https://{srv_name}.onrender.com"
+
+                # Step 3: Firmly commit environment variables via dedicated endpoint
+                if srv_id:
+                    try:
+                        await session.put(
+                            f"https://api.render.com/v1/services/{srv_id}/env-vars",
+                            headers=headers,
+                            json=env_vars_list,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        )
+                    except Exception as ev_err:
+                        logger.warning(f"Secondary env-vars sync notice: {ev_err}")
 
                 return web.json_response({
                     "success": True,
