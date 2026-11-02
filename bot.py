@@ -77,22 +77,12 @@ def delete_custom_welcome(room_id: str) -> bool:
     return False
 
 
-# Map of friendly command names to Highrise emote identifiers
+# Comprehensive map of friendly command names to Highrise emote identifiers (68+ emotes)
 EMOTE_MAP = {
-    "wave": "emote-wave",
-    "tired": "emote-tired",
-    "dance": "dance-macarena",
+    # Dances
     "macarena": "dance-macarena",
+    "dance": "dance-macarena",
     "orangejuice": "dance-orangejuice",
-    "float": "emote-float",
-    "teleport": "emote-teleporting",
-    "hello": "emote-hello",
-    "curtsey": "emote-curtsey",
-    "bow": "emote-bow",
-    "snowball": "emote-snowball",
-    "snowangel": "emote-snowangel",
-    "confused": "emote-confused",
-    "charging": "emote-charging",
     "shopping": "dance-shoppingcart",
     "russian": "dance-russian",
     "pennywise": "dance-pennywise",
@@ -100,12 +90,137 @@ EMOTE_MAP = {
     "tiktok8": "dance-tiktok8",
     "tiktok2": "dance-tiktok2",
     "weird": "dance-weird",
+    "floss": "dance-floss",
+    "blackpink": "dance-blackpink",
+    "pudgy": "dance-pudgy",
+    "vogue": "dance-voguehands",
+    "aerobics": "dance-aerobics",
+    "metal": "dance-metal",
+    "singing": "dance-singing",
+    "smooch": "dance-smooch",
+    "icecream": "dance-icecream",
+    # Poses & Action Emotes
+    "wave": "emote-wave",
+    "hello": "emote-hello",
+    "tired": "emote-tired",
+    "float": "emote-float",
+    "teleport": "emote-teleporting",
+    "curtsey": "emote-curtsey",
+    "bow": "emote-bow",
+    "snowball": "emote-snowball",
+    "snowangel": "emote-snowangel",
+    "confused": "emote-confused",
+    "charging": "emote-charging",
     "hot": "emote-hot",
     "laugh": "emote-laughing",
+    "celebrate": "emoji-celebrate",
     "thumbsup": "emoji-thumbsup",
     "angry": "emoji-angry",
     "scared": "emoji-scared",
-    "celebrate": "emoji-celebrate",
+    # Fun & Moves
+    "frog": "emote-frog",
+    "zombie": "emote-zombie",
+    "cutey": "emote-cutey",
+    "split": "emote-splitsdrop",
+    "peekaboo": "emote-peekaboo",
+    "lust": "emote-lust",
+    "hyped": "emote-hyped",
+    "punch": "emote-superpunch",
+    "maniac": "emote-maniac",
+    "energy": "emote-energyball",
+    "creepycute": "emote-creepycute",
+    "headball": "emote-headball",
+    "guitar": "idle-guitar",
+    "fashion": "emote-fashionista",
+    "gravity": "emote-gravity",
+    "propose": "emote-proposing",
+    "boxer": "emote-boxer",
+    "flex": "emote-flex",
+    "roll": "emote-roll",
+    "boo": "emote-boo",
+    "yes": "emote-yes",
+    "no": "emote-no",
+    "sad": "emote-sad",
+    "kiss": "emote-kiss",
+    "giggle": "emote-giggle",
+    "model": "emote-model",
+    "pose1": "emote-pose1",
+    "pose3": "emote-pose3",
+    "pose5": "emote-pose5",
+    "pose7": "emote-pose7",
+    "pose8": "emote-pose8",
+    "rope": "emote-ropepull",
+}
+
+# Emote animation durations in seconds for seamless repeating loop
+EMOTE_DURATIONS = {
+    "dance-macarena": 11.0,
+    "dance-orangejuice": 9.0,
+    "dance-shoppingcart": 4.5,
+    "dance-russian": 10.0,
+    "dance-pennywise": 4.5,
+    "idle-dance-casual": 9.0,
+    "dance-tiktok8": 11.0,
+    "dance-tiktok2": 10.5,
+    "dance-weird": 21.5,
+    "dance-floss": 21.5,
+    "dance-blackpink": 7.0,
+    "dance-pudgy": 12.0,
+    "dance-voguehands": 9.5,
+    "dance-aerobics": 8.5,
+    "dance-metal": 13.5,
+    "dance-singing": 10.5,
+    "dance-smooch": 6.5,
+    "dance-icecream": 14.5,
+    "emote-wave": 3.0,
+    "emote-hello": 3.0,
+    "emote-tired": 4.5,
+    "emote-float": 9.0,
+    "emote-teleporting": 11.5,
+    "emote-curtsey": 2.5,
+    "emote-bow": 3.5,
+    "emote-snowball": 5.5,
+    "emote-snowangel": 6.5,
+    "emote-confused": 9.0,
+    "emote-charging": 8.0,
+    "emote-hot": 4.5,
+    "emote-laughing": 3.0,
+    "emoji-celebrate": 3.5,
+    "emoji-thumbsup": 2.5,
+    "emoji-angry": 6.0,
+    "emoji-scared": 3.5,
+    "emote-frog": 14.5,
+    "emote-zombie": 13.0,
+    "emote-cutey": 3.0,
+    "emote-splitsdrop": 4.5,
+    "emote-peekaboo": 3.5,
+    "emote-lust": 4.5,
+    "emote-hyped": 7.0,
+    "emote-superpunch": 3.5,
+    "emote-maniac": 5.0,
+    "emote-energyball": 7.5,
+    "emote-creepycute": 8.0,
+    "emote-headball": 10.5,
+    "idle-guitar": 13.5,
+    "emote-fashionista": 5.5,
+    "emote-gravity": 9.0,
+    "emote-proposing": 4.5,
+    "emote-boxer": 5.5,
+    "emote-flex": 3.0,
+    "emote-roll": 4.0,
+    "emote-boo": 4.5,
+    "emote-yes": 2.5,
+    "emote-no": 2.5,
+    "emote-sad": 5.5,
+    "emote-kiss": 3.0,
+    "emote-giggle": 3.0,
+    "emote-model": 6.0,
+    "emote-pose1": 3.0,
+    "emote-pose3": 5.0,
+    "emote-pose5": 4.5,
+    "emote-pose7": 4.5,
+    "emote-pose8": 5.0,
+    "emote-ropepull": 8.5,
 }
 
 
@@ -116,6 +231,8 @@ class HighriseBot(BaseBot):
         self.session_metadata: SessionMetadata | None = None
         self._has_announced: bool = False
         self.user_positions: dict[str, Position | AnchorPosition] = {}
+        self.user_emote_loops: dict[str, asyncio.Task] = {}
+        self.welcomed_users: set[str] = set()
 
     async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 0.5) -> None:
         """Wait briefly after room connect for world registration, then move bot to saved spot."""
@@ -128,6 +245,36 @@ class HighriseBot(BaseBot):
         # Re-apply after 1.2s to ensure facing direction takes effect firmly
         await asyncio.sleep(1.2)
         await self.move_bot_to(pos)
+
+    async def _start_user_emote_loop(self, user: User, emote_id: str, emote_name: str, reply, target_user_id: str | None = None) -> None:
+        """Continuously loop an emote for a user until /stop or new emote."""
+        target_id = target_user_id or user.id
+
+        # Cancel any existing loop task for this user
+        if target_id in self.user_emote_loops:
+            self.user_emote_loops[target_id].cancel()
+            del self.user_emote_loops[target_id]
+
+        duration = EMOTE_DURATIONS.get(emote_id, 5.0)
+        # Sleep slightly less than animation length for a seamless loop, min 2.5s
+        loop_interval = max(2.5, duration - 0.2)
+
+        async def _loop_runner():
+            try:
+                while True:
+                    try:
+                        await self.highrise.send_emote(emote_id, target_id)
+                    except Exception as err:
+                        logger.debug(f"Loop emote error for {target_id}: {err}")
+                    await asyncio.sleep(loop_interval)
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.debug(f"Loop runner exited for {target_id}: {e}")
+
+        task = asyncio.create_task(_loop_runner())
+        self.user_emote_loops[target_id] = task
+        await reply(f"💃 Now looping '{emote_name}' for @{user.username}! Type /stop to cancel anytime.")
 
     async def move_bot_to(self, target_pos: Position | AnchorPosition) -> bool:
         """Move or teleport the bot to target position, falling back gracefully to walk_to."""
@@ -287,18 +434,31 @@ class HighriseBot(BaseBot):
         if user.id == self.bot_id:
             return
 
-        # Whisper private automated welcome message
+        self.welcomed_users.add(user.id)
+
+        # 1. Public room chat welcome greeting (ensures user immediately sees the welcome on screen!)
         custom_welcome = get_custom_welcome(config.ROOM_ID)
-        w1_intro = custom_welcome if custom_welcome else f"Welcome to {config.ROOM_TITLE}. This is an automated message."
+        if custom_welcome:
+            welcome_chat = f"Welcome @{user.username}! {custom_welcome}"
+        else:
+            welcome_chat = f"Welcome to {config.ROOM_TITLE}, @{user.username}! 👋 Type /help for commands or /play to request songs."
+
+        if len(welcome_chat) > 240:
+            welcome_chat = welcome_chat[:237] + "..."
+
+        try:
+            await self.highrise.chat(welcome_chat)
+        except Exception as e:
+            logger.warning(f"Error sending room chat welcome greeting to {user.username}: {e}")
+
+        # 2. Detailed private whisper guide (under 250 character limit)
         w1 = (
-            f"{w1_intro}\n\n"
-            f"🎶 Music Commands:\n"
-            f"• /play <song> (or /p) - Request song\n"
-            f"• /queue (or /q) - View queue\n"
-            f"• /np - Now playing"
+            "🎶 Music Commands:\n"
+            "• /play <song> (or /p) - Request song\n"
+            "• /queue (or /q) - View queue\n"
+            "• /np - Now playing"
         )
 
-        # Dynamic Floor Teleport section based on actual saved floors for this room
         all_floors = position.get_all_floors(config.ROOM_ID)
         if all_floors:
             num_keys = sorted([int(k) for k in all_floors.keys() if k.isdigit()])
@@ -309,19 +469,20 @@ class HighriseBot(BaseBot):
             for k in named_keys:
                 floor_items.append(f"/{k}")
             floors_line = " | ".join(floor_items)
-            floor_section = f"🏢 Floor Teleport:\n• {floors_line}\n• /floors - List all floors\n\n"
+            floor_section = f"🏢 Floor Teleport:\n• {floors_line}\n\n"
         else:
             floor_section = ""
 
-        top_tipper_text = tips.format_top_tipper(config.ROOM_ID)
         w2 = (
             f"{floor_section}"
-            f"✨ Emotes & Fun:\n"
-            f"• !emote <name> | !emotes | !top\n\n"
-            f"🏆 {top_tipper_text}\n"
-            f"{config.ROOM_CREDITS}"
+            "💃 Emotes & Loop:\n"
+            "• /emotes - View full list of 68+ emotes\n"
+            "• /emote <name> - Loop emote continuously\n"
+            "• /stop - Stop your emote loop"
         )
+
         try:
+            await asyncio.sleep(0.5)
             await self.highrise.send_whisper(user.id, w1)
             await asyncio.sleep(0.5)
             await self.highrise.send_whisper(user.id, w2)
@@ -342,6 +503,10 @@ class HighriseBot(BaseBot):
         """Triggered when a user leaves the room."""
         logger.info(f"User left: {user.username} (ID: {user.id})")
         self.user_positions.pop(user.id, None)
+        self.welcomed_users.discard(user.id)
+        if user.id in self.user_emote_loops:
+            self.user_emote_loops[user.id].cancel()
+            del self.user_emote_loops[user.id]
 
     async def on_reaction(self, user: User, reaction: Reaction, receiver: User) -> None:
         """Echo reactions back to users if they react to the bot."""
@@ -405,6 +570,14 @@ class HighriseBot(BaseBot):
         logger.info(f"[{user.username}]: {message}")
         parsed = self._extract_command(message)
         if not parsed:
+            # Check for friendly chat greetings like "hi", "hello", "hey"
+            clean_msg = message.strip().lower().rstrip("!.,")
+            if clean_msg in ("hi", "hello", "hey", "hii", "hiii", "yo"):
+                try:
+                    await self.highrise.send_emote("emote-wave")
+                    await self.highrise.chat(f"Hey @{user.username}! Welcome to {config.ROOM_TITLE}. Type /play <song> or /emotes!")
+                except Exception:
+                    pass
             return
         cmd, args = parsed
         await self.handle_command(user, cmd, args, is_whisper=False)
@@ -874,13 +1047,28 @@ class HighriseBot(BaseBot):
             else:
                 await reply(f"Could not determine your position, @{user.username}.")
 
-        elif cmd in ("emote", "e"):
-            if not args:
-                await reply("Usage: !emote <name>. Type !emotes to view list.")
+        elif cmd in ("emote", "e", "loop"):
+            if not args or args[0].lower() in ("list", "all", "help"):
+                await self.handle_command(user, "emotes", [], is_whisper)
                 return
 
             emote_query = args[0].lower()
-            emote_id = EMOTE_MAP.get(emote_query, emote_query)
+            if emote_query in ("stop", "off", "cancel"):
+                await self.handle_command(user, "stop", [], is_whisper)
+                return
+
+            # Lookup emote in comprehensive map or partial match
+            emote_id = EMOTE_MAP.get(emote_query, None)
+            matched_name = emote_query
+            if not emote_id:
+                for key, eid in EMOTE_MAP.items():
+                    if emote_query == key or emote_query in key:
+                        emote_id = eid
+                        matched_name = key
+                        break
+            if not emote_id:
+                # Direct emote-id fallback
+                emote_id = emote_query
 
             target_user_id = user.id
             if len(args) > 1 and args[1].startswith("@"):
@@ -895,15 +1083,58 @@ class HighriseBot(BaseBot):
                 except Exception as e:
                     logger.debug(f"Target user resolution error: {e}")
 
-            try:
-                await self.highrise.send_emote(emote_id, target_user_id)
-            except Exception as e:
-                logger.error(f"Error executing emote {emote_id}: {e}")
-                await reply(f"Could not perform emote '{emote_query}'. Is the emote ID correct?")
+            if len(args) > 1 and args[1].lower() in ("bot", "dj"):
+                target_user_id = self.bot_id
 
-        elif cmd == "emotes":
-            sample_emotes = ", ".join(list(EMOTE_MAP.keys())[:15])
-            await reply(f"Popular emotes: {sample_emotes}... (Use: !emote <name>)")
+            await self._start_user_emote_loop(user, emote_id, matched_name, reply, target_user_id=target_user_id)
+
+        elif cmd in ("stop", "stoploop"):
+            target_id = user.id
+            if args and args[0].lower() in ("bot", "dj") and user_is_admin:
+                target_id = self.bot_id
+
+            if target_id in self.user_emote_loops:
+                self.user_emote_loops[target_id].cancel()
+                del self.user_emote_loops[target_id]
+                await reply(f"⏹️ Emote loop stopped for @{user.username}!")
+            else:
+                await reply(f"You don't have an active emote loop running, @{user.username}. Type /emotes to see all!")
+
+        elif cmd in ("emotes", "emotelist"):
+            # Send the complete list of 68+ emotes grouped by category in whispers
+            chunk1 = (
+                "💃 Dances (1/4):\n"
+                "• macarena, orangejuice, shopping, russian, pennywise, casual, weird, "
+                "floss, blackpink, pudgy, vogue, aerobics, metal, singing, smooch, icecream, tiktok8, tiktok2"
+            )
+            chunk2 = (
+                "✨ Poses & Classic (2/4):\n"
+                "• wave, hello, tired, float, teleport, curtsey, bow, snowball, snowangel, "
+                "confused, charging, hot, laugh, celebrate, thumbsup, angry, scared, boo, yes, no, sad"
+            )
+            chunk3 = (
+                "⚡ Moves & Fun (3/4):\n"
+                "• frog, zombie, cutey, split, peekaboo, lust, hyped, punch, maniac, energy, "
+                "creepycute, headball, guitar, fashion, gravity, propose, boxer"
+            )
+            chunk4 = (
+                "🔥 More Emotes (4/4):\n"
+                "• flex, roll, kiss, giggle, model, rope, pose1, pose3, pose5, pose7, pose8\n\n"
+                "💡 Type /emote <name> to loop! Type /stop to cancel."
+            )
+            try:
+                await self.highrise.send_whisper(user.id, chunk1)
+                await asyncio.sleep(0.3)
+                await self.highrise.send_whisper(user.id, chunk2)
+                await asyncio.sleep(0.3)
+                await self.highrise.send_whisper(user.id, chunk3)
+                await asyncio.sleep(0.3)
+                await self.highrise.send_whisper(user.id, chunk4)
+            except Exception as e:
+                logger.warning(f"Error whispering emotes list to {user.username}: {e}")
+
+            if not is_whisper:
+                await reply(f"✨ Whispered full list of {len(EMOTE_MAP)} emotes to you, @{user.username}! Type /emote <name> to loop, or /stop to cancel.")
 
         elif cmd in ("teleport", "tp"):
             target_arg = args[0].lstrip("@").lower() if args else ""
