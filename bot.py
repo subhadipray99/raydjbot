@@ -1,3 +1,5 @@
+import os
+import json
 import asyncio
 import logging
 from highrise import (
@@ -18,6 +20,55 @@ import position
 import tips
 
 logger = logging.getLogger("HighriseBot")
+
+WELCOME_MESSAGES_FILE = os.path.join(os.path.dirname(__file__), "welcome_messages.json")
+
+
+def get_custom_welcome(room_id: str) -> str | None:
+    """Retrieve custom welcome message for a room if configured."""
+    if not os.path.exists(WELCOME_MESSAGES_FILE):
+        return None
+    try:
+        with open(WELCOME_MESSAGES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get(room_id)
+    except Exception:
+        return None
+
+
+def set_custom_welcome(room_id: str, text: str) -> None:
+    """Save custom welcome greeting for a room."""
+    data = {}
+    if os.path.exists(WELCOME_MESSAGES_FILE):
+        try:
+            with open(WELCOME_MESSAGES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    data[room_id] = text.strip()
+    try:
+        with open(WELCOME_MESSAGES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving welcome message: {e}")
+
+
+def delete_custom_welcome(room_id: str) -> bool:
+    """Reset custom welcome greeting for a room to default."""
+    if not os.path.exists(WELCOME_MESSAGES_FILE):
+        return False
+    try:
+        with open(WELCOME_MESSAGES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if room_id in data:
+            del data[room_id]
+            with open(WELCOME_MESSAGES_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return True
+    except Exception:
+        pass
+    return False
+
 
 # Map of friendly command names to Highrise emote identifiers
 EMOTE_MAP = {
@@ -59,7 +110,7 @@ class HighriseBot(BaseBot):
         self._has_announced: bool = False
         self.user_positions: dict[str, Position | AnchorPosition] = {}
 
-    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 3.0) -> None:
+    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 0.5) -> None:
         """Wait briefly after room connect for world registration, then move bot to saved spot."""
         await asyncio.sleep(delay)
         success = await self.move_bot_to(pos)
@@ -67,8 +118,8 @@ class HighriseBot(BaseBot):
             logger.info(f"Successfully relocated bot to saved position: {position.format_position(pos)}")
         else:
             logger.warning(f"Failed to relocate bot to saved position: {position.format_position(pos)}")
-        # Re-apply after 2 seconds to make sure Highrise world gateway properly registers position & facing
-        await asyncio.sleep(2.0)
+        # Re-apply after 1.2s to ensure facing direction takes effect firmly
+        await asyncio.sleep(1.2)
         await self.move_bot_to(pos)
 
     async def move_bot_to(self, target_pos: Position | AnchorPosition) -> bool:
@@ -168,18 +219,17 @@ class HighriseBot(BaseBot):
         # Start the music queue runner with this bot instance for room announcements
         music_manager.start(self)
 
-        # Only change outfit if BOT_OUTFIT is explicitly configured in environment
-        if config.BOT_OUTFIT:
-            saved_outfit = outfit.get_active_outfit()
-            if saved_outfit:
-                try:
-                    res = await self.highrise.set_outfit(saved_outfit)
-                    if isinstance(res, Error):
-                        logger.warning(f"Could not restore saved outfit on start: {res.message}")
-                    else:
-                        logger.info(f"Successfully restored saved bot outfit ({len(saved_outfit)} items).")
-                except Exception as e:
-                    logger.warning(f"Error restoring outfit on start: {e}")
+        # Restore saved active outfit on connect (ensures !fit and !copyfit persist across room reloads)
+        saved_outfit = outfit.get_active_outfit()
+        if saved_outfit:
+            try:
+                res = await self.highrise.set_outfit(saved_outfit)
+                if isinstance(res, Error):
+                    logger.warning(f"Could not restore saved outfit on start: {res.message}")
+                else:
+                    logger.info(f"Successfully restored saved bot outfit ({len(saved_outfit)} items).")
+            except Exception as e:
+                logger.warning(f"Error restoring outfit on start: {e}")
 
         # Restore saved room position if available
         saved_pos = position.get_saved_position(config.ROOM_ID)
@@ -202,19 +252,35 @@ class HighriseBot(BaseBot):
         if user.id == self.bot_id:
             return
 
-        # Whisper private automated welcome message (no skip, include /f4, no fit/copyfit, no links)
+        # Whisper private automated welcome message
+        custom_welcome = get_custom_welcome(config.ROOM_ID)
+        w1_intro = custom_welcome if custom_welcome else f"Welcome to {config.ROOM_TITLE}. This is an automated message."
         w1 = (
-            f"Welcome to {config.ROOM_TITLE}. This is an automated message.\n\n"
+            f"{w1_intro}\n\n"
             f"🎶 Music Commands:\n"
             f"• /play <song> (or /p) - Request song\n"
             f"• /queue (or /q) - View queue\n"
             f"• /np - Now playing"
         )
+
+        # Dynamic Floor Teleport section based on actual saved floors for this room
+        all_floors = position.get_all_floors(config.ROOM_ID)
+        if all_floors:
+            num_keys = sorted([int(k) for k in all_floors.keys() if k.isdigit()])
+            named_keys = sorted([k for k in all_floors.keys() if not k.isdigit()])
+            floor_items = []
+            for k in num_keys:
+                floor_items.append(f"/f{k} (Ground)" if k == 1 else f"/f{k}")
+            for k in named_keys:
+                floor_items.append(f"/{k}")
+            floors_line = " | ".join(floor_items)
+            floor_section = f"🏢 Floor Teleport:\n• {floors_line}\n• /floors - List all floors\n\n"
+        else:
+            floor_section = ""
+
         top_tipper_text = tips.format_top_tipper(config.ROOM_ID)
         w2 = (
-            f"🏢 Floor Teleport:\n"
-            f"• /f1 (Ground) | /f2 | /f3 | /f4\n"
-            f"• /floors - List all floors\n\n"
+            f"{floor_section}"
             f"✨ Emotes & Fun:\n"
             f"• !emote <name> | !emotes | !top\n\n"
             f"🏆 {top_tipper_text}\n"
@@ -445,6 +511,21 @@ class HighriseBot(BaseBot):
 
         # ---------------- ROOM & BOT COMMANDS ----------------
         elif cmd in ("help", "commands"):
+            all_floors = position.get_all_floors(config.ROOM_ID)
+            if all_floors:
+                num_keys = sorted([int(k) for k in all_floors.keys() if k.isdigit()])
+                named_keys = sorted([k for k in all_floors.keys() if not k.isdigit()])
+                floor_cmd_lines = []
+                for k in num_keys:
+                    floor_cmd_lines.append(f"• /f{k} (or /ground) - Teleport to Floor 1" if k == 1 else f"• /f{k} - Teleport to Floor {k}")
+                for k in named_keys:
+                    floor_cmd_lines.append(f"• /{k} - Teleport to {k.capitalize()}")
+                floor_cmd_lines.append("• /floor <name/num> - Teleport to any floor")
+                floor_cmd_lines.append("• /floors - List all floor spawns")
+                floors_help_section = "🏢 Floor Teleport Commands:\n" + "\n".join(floor_cmd_lines) + "\n\n"
+            else:
+                floors_help_section = ""
+
             help_text = (
                 f"🤖 {config.BOT_DISPLAY_NAME} Commands:\n"
                 f"Welcome to {config.ROOM_TITLE}. This is an automated message.\n\n"
@@ -453,13 +534,7 @@ class HighriseBot(BaseBot):
                 f"• /skip (or /s) - Skip to next song in queue\n"
                 f"• /queue (or /q) - View upcoming songs in queue\n"
                 f"• /np - Check currently playing song\n\n"
-                f"🏢 Floor Teleport Commands:\n"
-                f"• /f1 (or /ground) - Teleport to Floor 1 (Ground Floor)\n"
-                f"• /f2 - Teleport to Floor 2\n"
-                f"• /f3 - Teleport to Floor 3\n"
-                f"• /f4 - Teleport to Floor 4\n"
-                f"• /floor <name/num> - Teleport to any configured floor\n"
-                f"• /floors - List all configured floor spawns\n\n"
+                f"{floors_help_section}"
                 f"✨ Emotes & Fun:\n"
                 f"• !top - View Top Tippers leaderboard 🏆\n"
                 f"• !emote <name> - Play emote\n"
@@ -487,9 +562,35 @@ class HighriseBot(BaseBot):
                 f"• !delfloor <name> - Remove a floor spawn\n"
                 f"• !settoptipper <user> [gold] - Set top tipper manually\n"
                 f"• !cleartippers - Reset tip leaderboard\n"
+                f"• !setwelcome <message> - Customize welcome greeting\n"
+                f"• !resetwelcome - Reset welcome greeting to default\n"
                 f"• /autoplay on|off - Toggle radio background autoplay"
             )
             await reply(admin_text)
+
+        elif cmd in ("setwelcome", "welcome"):
+            if not user_is_admin:
+                await reply(f"🔒 This command is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
+            if not args:
+                current_w = get_custom_welcome(config.ROOM_ID)
+                if current_w:
+                    await reply(f"Current welcome: \"{current_w}\"\nTo change: !setwelcome <message>\nTo reset: !resetwelcome")
+                else:
+                    await reply(f"Default welcome: \"Welcome to {config.ROOM_TITLE}. This is an automated message.\"\nTo change: !setwelcome <message>")
+                return
+            custom_msg = " ".join(args).strip()
+            set_custom_welcome(config.ROOM_ID, custom_msg)
+            await reply(f"✅ Welcome message saved! New visitors will now receive:\n\"{custom_msg}\"")
+
+        elif cmd in ("resetwelcome", "clearwelcome"):
+            if not user_is_admin:
+                await reply(f"🔒 This command is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
+            if delete_custom_welcome(config.ROOM_ID):
+                await reply(f"✅ Welcome message reset to default: \"Welcome to {config.ROOM_TITLE}. This is an automated message.\"")
+            else:
+                await reply("Welcome message was already using default.")
 
         elif cmd == "ping":
             await reply(f"Pong! 🏓 {config.BOT_DISPLAY_NAME} is active and running 24/7.")

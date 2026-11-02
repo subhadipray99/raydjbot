@@ -30,8 +30,8 @@ async def run_bot_with_reconnect(bot: HighriseBot, room_id: str, api_token: str)
         try:
             logger.info(f"Connecting bot to Highrise Room ID: {room_id}...")
             await bot_runner(bot, room_id, api_token)
-            logger.warning("Bot connection closed cleanly. Reconnecting in 5s...")
-            backoff = 5
+            logger.info("Bot connection closed cleanly. Reconnecting in 1s...")
+            backoff = 1
         except (KeyboardInterrupt, asyncio.CancelledError):
             logger.info("Bot execution cancelled.")
             break
@@ -40,7 +40,7 @@ async def run_bot_with_reconnect(bot: HighriseBot, room_id: str, api_token: str)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60)
         else:
-            await asyncio.sleep(backoff)
+            await asyncio.sleep(1)
 
 
 async def main():
