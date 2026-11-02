@@ -20,6 +20,13 @@
       "y": 17.5,
       "z": 10.117,
       "facing": "BackLeft"
+    },
+    "4": {
+      "type": "position",
+      "x": 12.578,
+      "y": 17.952,
+      "z": 27.0,
+      "facing": "FrontRight"
     }
   }
 }

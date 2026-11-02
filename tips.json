@@ -1,1 +1,20 @@
-{}
+{
+  "64005ecfb3d3644258e0040e": {
+    "tippers": {
+      "63f3bbdf56dab79de656aea7": {
+        "user_id": "63f3bbdf56dab79de656aea7",
+        "username": "Shuvodip",
+        "total_gold": 1,
+        "total_bubbles": 0,
+        "tip_count": 1,
+        "last_tipped_at": 1730476000
+      }
+    },
+    "top_tipper": {
+      "user_id": "63f3bbdf56dab79de656aea7",
+      "username": "Shuvodip",
+      "total_gold": 1,
+      "total_bubbles": 0
+    }
+  }
+}

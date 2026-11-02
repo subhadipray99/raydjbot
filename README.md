@@ -13,12 +13,14 @@ A Python bot for [Highrise](https://highrise.game) built with the official `high
   - `/skip` or `/s` - Skips the current song.
   - `/queue` or `/q` - Shows currently playing song and upcoming queue list.
   - `/np` - Displays now-playing song and elapsed/total duration.
-  - `/player` - Links to the live synchronized web player (`/player`).
+  - `/player` - Room radio status info.
 - **Floor Teleportation System**:
   - `/f1` (or `/ground`, `/g`) - Teleports caller to Floor 1 (Ground Floor).
   - `/f2` - Teleports caller to Floor 2.
-  - `/floor <name_or_number>` - Teleports to any configured floor (e.g. `/floor 1`, `/floor 2`, `/floor roof`).
-  - `!setfloor <floor>` (e.g. `!setfloor f1`, `!setfloor f2`) - Stand anywhere in the room and type this to set your current location as that floor's permanent spawn point!
+  - `/f3` - Teleports caller to Floor 3.
+  - `/f4` - Teleports caller to Floor 4.
+  - `/floor <name_or_number>` - Teleports to any configured floor (e.g. `/floor 1`, `/floor 2`, `/floor 4`).
+  - `!setfloor <floor>` (e.g. `!setfloor f1`, `!setfloor f2`, `!setfloor f4`) - Stand anywhere in the room and type this to set your current location as that floor's permanent spawn point!
   - `!setfloor <floor> <x> <y> <z> [facing]` - Manually configure coordinates for a floor.
   - `!floors` or `/floors` - Lists all configured floor spawns in the room with teleport hints.
   - `!delfloor <floor>` - Removes a floor spawn.
@@ -27,12 +29,11 @@ A Python bot for [Highrise](https://highrise.game) built with the official `high
   - `!ping` - Checks bot responsiveness and online status.
   - `!setpos` (or `!stayhere`) - Stand anywhere and type this to set your current location as the bot's permanent spot! The bot will stay there and auto-spawn at those coordinates on every restart/reconnect.
   - `!setpos <x> <y> <z> [facing]` - Manually set coordinates.
+  - `!turn` or `!face <front|left|right|back>` - Rotate bot facing direction.
   - `!mypos` or `!pos` - Displays your current 3D coordinates (`X, Y, Z, Facing`).
   - `!botpos` - Displays bot saved spawn position for this room.
   - `!resetpos` - Clears saved spot, returning bot to default room entrance.
   - `!come` or `!bring` - Finds your position and brings the bot to you immediately.
-  - `!fit <preset>` - Change bot outfit/dress (presets: `dj`, `suit`, `street`, `camo`, `goth`, `chill`, `puffer`).
-  - `!copyfit [@user]` - Clone a player's outfit.
   - `!emote <name> [@user]` - Plays popular emotes (e.g. `dance`, `wave`, `macarena`, `hot`, `laugh`).
   - `!emotes` - Shows quick list of popular emote keywords.
   - `!teleport <@user>` - Teleports a player to the bot (or `!tp bot` to bring bot to you).

@@ -59,7 +59,7 @@ class HighriseBot(BaseBot):
         self._has_announced: bool = False
         self.user_positions: dict[str, Position | AnchorPosition] = {}
 
-    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 2.0) -> None:
+    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 3.0) -> None:
         """Wait briefly after room connect for world registration, then move bot to saved spot."""
         await asyncio.sleep(delay)
         success = await self.move_bot_to(pos)
@@ -67,6 +67,9 @@ class HighriseBot(BaseBot):
             logger.info(f"Successfully relocated bot to saved position: {position.format_position(pos)}")
         else:
             logger.warning(f"Failed to relocate bot to saved position: {position.format_position(pos)}")
+        # Re-apply after 2 seconds to make sure Highrise world gateway properly registers position & facing
+        await asyncio.sleep(2.0)
+        await self.move_bot_to(pos)
 
     async def move_bot_to(self, target_pos: Position | AnchorPosition) -> bool:
         """Move or teleport the bot to target position, falling back gracefully to walk_to."""
@@ -74,6 +77,11 @@ class HighriseBot(BaseBot):
             if isinstance(target_pos, Position) and self.bot_id:
                 try:
                     await self.highrise.teleport(self.bot_id, target_pos)
+                    # Also walk to ensure facing direction takes effect immediately
+                    try:
+                        await self.highrise.walk_to(target_pos)
+                    except Exception:
+                        pass
                     return True
                 except Exception as tp_err:
                     logger.debug(f"Teleport bot failed ({tp_err}), falling back to walk_to")
@@ -141,17 +149,18 @@ class HighriseBot(BaseBot):
         # Start the music queue runner with this bot instance for room announcements
         music_manager.start(self)
 
-        # Restore saved outfit if available
-        saved_outfit = outfit.get_active_outfit()
-        if saved_outfit:
-            try:
-                res = await self.highrise.set_outfit(saved_outfit)
-                if isinstance(res, Error):
-                    logger.warning(f"Could not restore saved outfit on start: {res.message}")
-                else:
-                    logger.info(f"Successfully restored saved bot outfit ({len(saved_outfit)} items).")
-            except Exception as e:
-                logger.warning(f"Error restoring outfit on start: {e}")
+        # Only change outfit if BOT_OUTFIT is explicitly configured in environment
+        if config.BOT_OUTFIT:
+            saved_outfit = outfit.get_active_outfit()
+            if saved_outfit:
+                try:
+                    res = await self.highrise.set_outfit(saved_outfit)
+                    if isinstance(res, Error):
+                        logger.warning(f"Could not restore saved outfit on start: {res.message}")
+                    else:
+                        logger.info(f"Successfully restored saved bot outfit ({len(saved_outfit)} items).")
+                except Exception as e:
+                    logger.warning(f"Error restoring outfit on start: {e}")
 
         # Restore saved room position if available
         saved_pos = position.get_saved_position(config.ROOM_ID)
@@ -161,11 +170,7 @@ class HighriseBot(BaseBot):
 
         # Only broadcast welcome message once on initial startup, not on every reconnect
         if not self._has_announced:
-            base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
-            await self.highrise.chat(
-                f"🤖 RayDJBot is online! Type /play <song> to queue music.\n"
-                f"📻 Live Jukebox: {base_url}/player"
-            )
+            await self.highrise.chat("🤖 RayDJBot is online! Type /play <song> to queue music.")
             self._has_announced = True
         else:
             logger.info("Bot reconnected silently (avoiding chat spam).")
@@ -178,23 +183,21 @@ class HighriseBot(BaseBot):
         if user.id == self.bot_id:
             return
 
-        # Whisper private automated welcome message with all public commands (no admin commands)
+        # Whisper private automated welcome message (no skip, include /f4, no fit/copyfit, no links)
         w1 = (
             f"Welcome to YouTube. This is an automated message.\n\n"
             f"🎶 Music Commands:\n"
             f"• /play <song> (or /p) - Request song\n"
-            f"• /skip (or /s) - Skip song\n"
             f"• /queue (or /q) - View queue\n"
-            f"• /np - Now playing\n"
-            f"• /player - Web jukebox"
+            f"• /np - Now playing"
         )
         top_tipper_text = tips.format_top_tipper(config.ROOM_ID)
         w2 = (
             f"🏢 Floor Teleport:\n"
-            f"• /f1 - Ground | /f2 - Floor 2 | /f3\n"
+            f"• /f1 (Ground) | /f2 | /f3 | /f4\n"
             f"• /floors - List all floors\n\n"
-            f"✨ Outfits & Emotes:\n"
-            f"• !fit <preset> | !copyfit | !emote\n\n"
+            f"✨ Emotes & Fun:\n"
+            f"• !emote <name> | !emotes | !top\n\n"
             f"🏆 {top_tipper_text}\n"
             f"Created and maintained by @shuvodip"
         )
@@ -345,9 +348,6 @@ class HighriseBot(BaseBot):
             else:
                 await self.highrise.chat(text)
 
-        base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
-        player_link = f"{base_url}/player"
-
         # ---------------- MUSIC COMMANDS ----------------
         if cmd in ("play", "p"):
             if not args:
@@ -357,10 +357,7 @@ class HighriseBot(BaseBot):
             query = " ".join(args)
             await reply(f"🔍 Searching music for: \"{query}\"...")
             success, msg, track = await music_manager.search_and_queue(query, user.username)
-            if success and track:
-                await reply(f"{msg}\n📻 Listen along: {player_link}")
-            else:
-                await reply(msg)
+            await reply(msg)
 
         elif cmd in ("skip", "s"):
             success, msg = music_manager.skip()
@@ -390,7 +387,6 @@ class HighriseBot(BaseBot):
                 else:
                     lines.append("Queue is empty. Use /play <song> to queue music!")
 
-            lines.append(f"📻 Live Jukebox: {player_link}")
             await reply("\n".join(lines))
 
         elif cmd in ("autoplay", "ap"):
@@ -418,14 +414,13 @@ class HighriseBot(BaseBot):
                 req_info = "📻 Radio AutoDJ" if current.get("is_autoplay") else f"@{current['requester']}"
                 await reply(
                     f"🎶 Now: \"{current['title']}\" [{pos_str} / {current['duration_str']}]\n"
-                    f"👤 Requested by: {req_info}\n"
-                    f"📻 Live Jukebox: {player_link}"
+                    f"👤 Requested by: {req_info}"
                 )
             else:
                 await reply("No music is currently playing. Use /play <song> to start!")
 
         elif cmd in ("player", "radio", "jukebox"):
-            await reply(f"📻 Custom Room Radio: {base_url}/radio.mp3\n🎧 Web Player: {player_link}")
+            await reply("📻 Custom Room Radio is streaming live 24/7.")
 
         # ---------------- ROOM & BOT COMMANDS ----------------
         elif cmd in ("help", "commands"):
@@ -436,17 +431,15 @@ class HighriseBot(BaseBot):
                 f"• /play <song> (or /p) - Request a song (takes top priority!)\n"
                 f"• /skip (or /s) - Skip to next song in queue\n"
                 f"• /queue (or /q) - View upcoming songs in queue\n"
-                f"• /np - Check currently playing song\n"
-                f"• /player - Get live player link\n\n"
+                f"• /np - Check currently playing song\n\n"
                 f"🏢 Floor Teleport Commands:\n"
                 f"• /f1 (or /ground) - Teleport to Floor 1 (Ground Floor)\n"
                 f"• /f2 - Teleport to Floor 2\n"
                 f"• /f3 - Teleport to Floor 3\n"
+                f"• /f4 - Teleport to Floor 4\n"
                 f"• /floor <name/num> - Teleport to any configured floor\n"
                 f"• /floors - List all configured floor spawns\n\n"
-                f"👗 Outfit & Fun Commands:\n"
-                f"• !fit <preset> - Change dress (dj, suit, street, camo, goth, chill, puffer)\n"
-                f"• !copyfit [@user] - Clone someone's outfit\n"
+                f"✨ Emotes & Fun:\n"
                 f"• !top - View Top Tippers leaderboard 🏆\n"
                 f"• !emote <name> - Play emote\n"
                 f"• !emotes - List popular emotes\n"
@@ -469,8 +462,6 @@ class HighriseBot(BaseBot):
                 f"• !delfloor <name> - Remove a floor spawn\n"
                 f"• !settoptipper <user> [gold] - Set top tipper manually\n"
                 f"• !cleartippers - Reset tip leaderboard\n"
-                f"• !fit save <name> - Save current look as a preset\n"
-                f"• !wardrobe - Check bot inventory\n"
                 f"• /autoplay on|off - Toggle radio background autoplay"
             )
             await reply(admin_text)
@@ -827,99 +818,6 @@ class HighriseBot(BaseBot):
             to_say = " ".join(args)
             await self.highrise.chat(to_say)
 
-        # ---------------- OUTFIT & WARDROBE COMMANDS ----------------
-        elif cmd in ("fit", "outfit"):
-            if not args or args[0].lower() in ("help", "info"):
-                presets_dict = outfit.list_available_presets()
-                preset_names = ", ".join(presets_dict.keys())
-                await reply(
-                    f"👗 Bot Wardrobe Commands:\n"
-                    f"• !fit <preset> - Change dress (Presets: {preset_names})\n"
-                    f"• !copyfit [@user] - Clone someone's outfit\n"
-                    f"• !fit save <name> - Save current look as a preset\n"
-                    f"• !fit load <name> - Equip saved preset\n"
-                    f"• !fit list - View all presets with details\n"
-                    f"• !wardrobe - Check owned items in bot inventory"
-                )
-                return
-
-            subcmd = args[0].lower()
-
-            if subcmd == "list":
-                presets_dict = outfit.list_available_presets()
-                lines = ["👗 Available Outfits & Presets:"]
-                for p_name, p_desc in presets_dict.items():
-                    lines.append(f"  • {p_name}: {p_desc}")
-                lines.append("Wear one using: !fit <name>")
-                await reply("\n".join(lines))
-                return
-
-            if subcmd == "copy":
-                target_str = args[1] if len(args) > 1 else user.username
-                await self._handle_copyfit(user, target_str, reply)
-                return
-
-            if subcmd == "save":
-                if len(args) < 2:
-                    await reply("Usage: !fit save <preset_name>")
-                    return
-                save_name = args[1].lower().strip()
-                try:
-                    my_outfit_resp = await self.highrise.get_my_outfit()
-                    if hasattr(my_outfit_resp, "outfit") and my_outfit_resp.outfit:
-                        outfit.save_custom_preset(save_name, my_outfit_resp.outfit)
-                        await reply(f"💾 Saved current outfit as '{save_name}'! Wear it anytime with !fit {save_name}")
-                    else:
-                        await reply("Could not retrieve current outfit to save.")
-                except Exception as e:
-                    logger.error(f"Error saving outfit preset: {e}")
-                    await reply(f"Failed to save outfit: {e}")
-                return
-
-            if subcmd == "load":
-                if len(args) < 2:
-                    await reply("Usage: !fit load <preset_name>")
-                    return
-                preset_name = args[1].lower().strip()
-            else:
-                preset_name = subcmd
-
-            # Equip preset
-            new_outfit = outfit.get_full_preset(preset_name)
-            if not new_outfit:
-                await reply(f"Unknown preset '{preset_name}'. Type !fit list to see all available outfits.")
-                return
-
-            try:
-                res = await self.highrise.set_outfit(new_outfit)
-                if isinstance(res, Error):
-                    await reply(f"⚠️ Failed to equip '{preset_name}': {res.message}")
-                else:
-                    outfit.save_active_outfit(new_outfit)
-                    try:
-                        await self.highrise.send_emote("dance-shoppingcart")
-                    except Exception:
-                        pass
-                    await reply(
-                        f"✨ Outfit changed to '{preset_name}'! Looking stylish.\n"
-                        f"💡 Tip: To permanently lock this look across Render code redeploys, set BOT_OUTFIT={preset_name} in Render Environment tab."
-                    )
-            except Exception as e:
-                logger.error(f"Error setting outfit: {e}")
-                await reply(f"Error equipping outfit: {e}")
-
-        elif cmd in ("copyfit", "copy"):
-            target_str = args[0] if args else user.username
-            await self._handle_copyfit(user, target_str, reply)
-
-        elif cmd in ("wardrobe", "inventory"):
-            try:
-                inv_resp = await self.highrise.get_inventory()
-                if hasattr(inv_resp, "items"):
-                    items_count = len(inv_resp.items)
-                    await reply(f"🎒 Bot Wardrobe: {items_count} clothing items in inventory. (Use !fit to change dress)")
-                else:
-                    await reply("Could not access bot inventory.")
-            except Exception as e:
-                logger.error(f"Error fetching inventory: {e}")
-                await reply(f"Failed to inspect wardrobe: {e}")
+        # ---------------- OUTFIT & WARDROBE COMMANDS (DISABLED) ----------------
+        elif cmd in ("fit", "outfit", "copyfit", "copy", "wardrobe", "inventory"):
+            await reply("👗 Outfit commands are disabled. The bot's outfit is managed directly by the room owner.")

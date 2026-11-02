@@ -182,8 +182,7 @@ class RadioBroadcaster:
                 else:
                     announcement = (
                         f"🎶 Now Playing: \"{track.title}\" [{track.duration_str}]\n"
-                        f"👤 Requested by: @{track.requester}\n"
-                        f"📻 Room Radio: {base_url}/radio.mp3"
+                        f"👤 Requested by: @{track.requester}"
                     )
                     await self.bot.highrise.chat(announcement)
             except Exception as e:

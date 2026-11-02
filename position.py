@@ -30,6 +30,17 @@ def save_all_positions(data: dict) -> None:
         logger.error(f"Error saving bot positions: {e}")
 
 
+DEFAULT_ROOM_POSITIONS = {
+    "64005ecfb3d3644258e0040e": {
+        "type": "position",
+        "x": 11.0,
+        "y": 12.056,
+        "z": 25.71,
+        "facing": "FrontRight",
+    }
+}
+
+
 def get_saved_position(room_id: str) -> Position | AnchorPosition | None:
     """Retrieve saved Position or AnchorPosition for a given room."""
     # 1. Environment variable override (locks position across redeploys)
@@ -48,7 +59,7 @@ def get_saved_position(room_id: str) -> Position | AnchorPosition | None:
 
     # 2. Check saved room position in JSON
     data = load_all_positions()
-    room_data = data.get(room_id) or data.get("default")
+    room_data = data.get(room_id) or DEFAULT_ROOM_POSITIONS.get(room_id) or data.get("default")
     if not room_data:
         return None
 
