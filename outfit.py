@@ -186,6 +186,14 @@ def save_active_outfit(outfit: list[Item]) -> None:
     data = _load_data()
     data["active"] = [item_to_dict(it) for it in outfit]
     _save_data(data)
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import db
+            asyncio.create_task(db.save_room_attribute(config.ROOM_ID, "active_outfit", data["active"]))
+    except Exception:
+        pass
 
 
 def get_active_outfit() -> list[Item] | None:

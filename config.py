@@ -12,6 +12,9 @@ PORT = int(os.getenv("PORT", 8080))
 BOT_PREFIX = os.getenv("BOT_PREFIX", "!").strip()
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
 CUSTOM_DOMAIN = os.getenv("CUSTOM_DOMAIN", "https://zevray.com").strip().rstrip("/")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ahvvanhxbqtcbtuwfxtm.supabase.co").strip().rstrip("/")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
 WELCOME_MESSAGE = os.getenv(
     "WELCOME_MESSAGE",
     "Welcome to the room, @{username}! Type !help for commands."

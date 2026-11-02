@@ -12,6 +12,7 @@ from music import music_manager
 from broadcaster import broadcaster
 import position
 import tips
+import db
 
 logger = logging.getLogger("WebServer")
 start_time = time.time()
@@ -70,7 +71,17 @@ async def run_master_pinger_loop():
     await asyncio.sleep(45)  # Initial grace delay after server startup
     while True:
         try:
-            bots = get_registered_bots()
+            bots = list(set(get_registered_bots()))
+            # Also combine with bots stored in Supabase
+            try:
+                db_bots = await db.get_all_active_bots_from_db()
+                for b_url in db_bots:
+                    base = b_url.replace("/health", "").rstrip("/")
+                    if base and base not in bots:
+                        bots.append(base)
+            except Exception as dbe:
+                logger.debug(f"[Pinger] Supabase bots lookup notice: {dbe}")
+
             if bots:
                 logger.info(f"[Pinger] Starting 10-minute keep-alive ping cycle for {len(bots)} registered bot(s)...")
                 async with aiohttp.ClientSession() as session:
@@ -631,6 +642,8 @@ PORTAL_HTML = """<!DOCTYPE html>
   <title>ZevRay &bull; Highrise 24/7 DJ Bot Cloud Deployer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Supabase JS Client v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -641,11 +654,100 @@ PORTAL_HTML = """<!DOCTYPE html>
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 36px 16px 64px;
+      padding: 20px 16px 64px;
+    }
+    .top-nav {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      margin-bottom: 24px;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: #fff;
+    }
+    .brand-logo {
+      font-size: 22px;
+      background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-title {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-nav-outline {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e5e7eb;
+      padding: 7px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+    .btn-nav-outline:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .btn-nav-primary {
+      background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+      border: none;
+      color: #fff;
+      padding: 7px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+      transition: all 0.2s ease;
+    }
+    .btn-nav-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    .user-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      color: #c084fc;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+      max-width: 190px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .container {
       width: 100%;
-      max-width: 640px;
+      max-width: 720px;
     }
     .header {
       text-align: center;
@@ -688,6 +790,7 @@ PORTAL_HTML = """<!DOCTYPE html>
     }
     @media (max-width: 520px) {
       .features-grid { grid-template-columns: 1fr; }
+      .top-nav { flex-direction: column; gap: 12px; }
     }
     .feature-item {
       background: rgba(255, 255, 255, 0.03);
@@ -709,6 +812,70 @@ PORTAL_HTML = """<!DOCTYPE html>
       padding: 26px;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
       margin-bottom: 20px;
+    }
+    .dashboard-card {
+      background: rgba(20, 15, 38, 0.7);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 20px;
+      padding: 22px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .dashboard-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #f3f4f6;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .bot-item-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      transition: border-color 0.2s ease;
+    }
+    .bot-item-card:hover {
+      border-color: rgba(168, 85, 247, 0.4);
+    }
+    .bot-item-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .bot-item-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .status-active-pill {
+      font-size: 11px;
+      font-weight: 700;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      padding: 3px 8px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .bot-links-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
     }
     .form-group {
       margin-bottom: 18px;
@@ -922,14 +1089,113 @@ PORTAL_HTML = """<!DOCTYPE html>
       display: inline-block;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Auth Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-card {
+      background: #15102a;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 400px;
+      padding: 24px;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
+      position: relative;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-tabs {
+      display: flex;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px;
+      border-radius: 12px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+    .tab-btn.active {
+      background: rgba(139, 92, 246, 0.3);
+      color: #fff;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+    }
+    .modal-close:hover { color: #fff; }
   </style>
 </head>
 <body>
+  <!-- Top Navigation with Supabase Auth Status -->
+  <header class="top-nav">
+    <div class="nav-brand">
+      <span class="brand-logo">⚡</span>
+      <div>
+        <div class="brand-title">ZevRay</div>
+        <div class="brand-sub">Cloud Highrise SaaS</div>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <div id="nav-auth-logged-out" style="display: flex; gap: 8px;">
+        <button class="btn-nav-outline" onclick="openAuthModal('login')">Sign In</button>
+        <button class="btn-nav-primary" onclick="openAuthModal('signup')">Create Account</button>
+      </div>
+      <div id="nav-auth-logged-in" style="display: none; align-items: center; gap: 10px;">
+        <span class="user-pill" id="user-email-display">👤 user</span>
+        <button class="btn-nav-outline" onclick="toggleDashboard()">🤖 My Bots (<span id="my-bots-count">0</span>)</button>
+        <button class="btn-nav-outline" onclick="handleLogout()" style="color:#f87171;">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
   <div class="container">
     <div class="header">
       <div class="badge">🚀 Automated 1-Click Deployer</div>
       <h1>ZevRay 24/7 Highrise DJ Bot Cloud Deployer</h1>
       <p class="subtitle">Deploy your own 24/7 Music DJ, Multi-Floor Spawner, Tip Leaderboard & Room Assistant directly to your Render account in 60 seconds with zero coding.</p>
+    </div>
+
+    <!-- Authenticated User Bots Dashboard -->
+    <div class="dashboard-card" id="user-dashboard" style="display: none;">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <span>🤖</span> <span>My Deployed Bots</span>
+        </div>
+        <button class="copy-btn" onclick="loadUserBots()">🔄 Refresh</button>
+      </div>
+      <div id="bots-list-container">
+        <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 16px 0;">
+          Loading your deployed bots...
+        </div>
+      </div>
     </div>
 
     <div class="features-grid">
@@ -1065,7 +1331,241 @@ PORTAL_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Supabase Auth Modal -->
+  <div class="modal-overlay" id="auth-modal" style="display: none;" onclick="handleModalBackdropClick(event)">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-tabs">
+          <button type="button" class="tab-btn active" id="tab-login" onclick="switchAuthTab('login')">Sign In</button>
+          <button type="button" class="tab-btn" id="tab-signup" onclick="switchAuthTab('signup')">Create Account</button>
+        </div>
+        <button type="button" class="modal-close" onclick="closeAuthModal()">✕</button>
+      </div>
+
+      <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="auth-email" class="form-input" placeholder="you@example.com" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="auth-password" class="form-input" placeholder="••••••••" required minlength="6">
+        </div>
+
+        <div class="form-group" id="group-hr-username" style="display: none;">
+          <label class="form-label">Highrise Username <span style="font-size:11px;color:#9ca3af;font-weight:normal;">(Optional)</span></label>
+          <input type="text" id="auth-hr-username" class="form-input" placeholder="e.g. Sarah">
+        </div>
+
+        <div id="auth-error" class="error-box" style="display: none; margin-bottom: 14px;"></div>
+        <div id="auth-success" class="status-box" style="display: none; margin-bottom: 14px; background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.4); color: #34d399;"></div>
+
+        <button type="submit" id="auth-submit-btn" class="btn-deploy" style="margin-top: 8px;">
+          <span id="auth-submit-text">Sign In</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <script>
+    // ---------------- SUPABASE AUTH INTEGRATION ----------------
+    const SUPABASE_URL = "__SUPABASE_URL__";
+    const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
+    const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+    let currentUser = null;
+    let authMode = 'login'; // 'login' or 'signup'
+
+    async function initAuth() {
+      if (!sb) return;
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        updateAuthUI(session ? session.user : null);
+
+        sb.auth.onAuthStateChange((_event, session) => {
+          updateAuthUI(session ? session.user : null);
+        });
+      } catch (err) {
+        console.error("Auth init error:", err);
+      }
+    }
+
+    function updateAuthUI(user) {
+      currentUser = user;
+      const loggedOutNav = document.getElementById('nav-auth-logged-out');
+      const loggedInNav = document.getElementById('nav-auth-logged-in');
+      const emailDisplay = document.getElementById('user-email-display');
+      const dashboard = document.getElementById('user-dashboard');
+
+      if (user) {
+        loggedOutNav.style.display = 'none';
+        loggedInNav.style.display = 'flex';
+        emailDisplay.innerText = "👤 " + (user.email || "Account");
+        dashboard.style.display = 'block';
+        loadUserBots();
+      } else {
+        loggedOutNav.style.display = 'flex';
+        loggedInNav.style.display = 'none';
+        dashboard.style.display = 'none';
+      }
+    }
+
+    function openAuthModal(mode = 'login') {
+      authMode = mode;
+      switchAuthTab(mode);
+      document.getElementById('auth-error').style.display = 'none';
+      document.getElementById('auth-success').style.display = 'none';
+      document.getElementById('auth-modal').style.display = 'flex';
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal').style.display = 'none';
+    }
+
+    function handleModalBackdropClick(e) {
+      if (e.target.id === 'auth-modal') {
+        closeAuthModal();
+      }
+    }
+
+    function switchAuthTab(mode) {
+      authMode = mode;
+      const tabLogin = document.getElementById('tab-login');
+      const tabSignup = document.getElementById('tab-signup');
+      const groupHr = document.getElementById('group-hr-username');
+      const submitText = document.getElementById('auth-submit-text');
+
+      if (mode === 'signup') {
+        tabLogin.classList.remove('active');
+        tabSignup.classList.add('active');
+        groupHr.style.display = 'block';
+        submitText.innerText = 'Create Account';
+      } else {
+        tabSignup.classList.remove('active');
+        tabLogin.classList.add('active');
+        groupHr.style.display = 'none';
+        submitText.innerText = 'Sign In';
+      }
+      document.getElementById('auth-error').style.display = 'none';
+      document.getElementById('auth-success').style.display = 'none';
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      if (!sb) return;
+
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const hrUsername = document.getElementById('auth-hr-username').value.trim();
+      const errBox = document.getElementById('auth-error');
+      const succBox = document.getElementById('auth-success');
+      const submitBtn = document.getElementById('auth-submit-btn');
+
+      errBox.style.display = 'none';
+      succBox.style.display = 'none';
+      submitBtn.disabled = true;
+
+      try {
+        if (authMode === 'signup') {
+          const { data, error } = await sb.auth.signUp({
+            email,
+            password,
+            options: {
+              data: { highrise_username: hrUsername }
+            }
+          });
+          if (error) throw error;
+          if (data.session) {
+            closeAuthModal();
+          } else {
+            succBox.innerText = "Check your email for confirmation link to complete registration!";
+            succBox.style.display = 'block';
+          }
+        } else {
+          const { error } = await sb.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          closeAuthModal();
+        }
+      } catch (err) {
+        errBox.innerText = err.message || "Authentication failed.";
+        errBox.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function handleLogout() {
+      if (sb) {
+        await sb.auth.signOut();
+      }
+      updateAuthUI(null);
+    }
+
+    function toggleDashboard() {
+      const dash = document.getElementById('user-dashboard');
+      if (dash.style.display === 'none') {
+        dash.style.display = 'block';
+        dash.scrollIntoView({ behavior: 'smooth' });
+        loadUserBots();
+      } else {
+        dash.style.display = 'none';
+      }
+    }
+
+    async function loadUserBots() {
+      if (!currentUser) return;
+      const container = document.getElementById('bots-list-container');
+      const countBadge = document.getElementById('my-bots-count');
+
+      try {
+        const res = await fetch(`/api/user-bots?user_id=${currentUser.id}`);
+        const data = await res.json();
+        if (!data.success || !data.bots || data.bots.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 18px 0;">
+              You have no active bots deployed yet. Fill the deployer form below to launch your first bot in 60s!
+            </div>
+          `;
+          countBadge.innerText = '0';
+          return;
+        }
+
+        countBadge.innerText = data.bots.length;
+        let html = '';
+        data.bots.forEach(bot => {
+          const streamUrl = bot.radio_stream_url || `${bot.render_service_url}/radio.mp3`;
+          const playerUrl = `${bot.render_service_url}/player`;
+          html += `
+            <div class="bot-item-card">
+              <div class="bot-item-top">
+                <div>
+                  <span class="bot-item-title">${bot.room_title || 'Highrise Bot'}</span>
+                  <span style="font-size: 12px; color: #9ca3af; margin-left: 8px;">Room: <code>${bot.room_id}</code></span>
+                </div>
+                <span class="status-active-pill">🟢 24/7 Active</span>
+              </div>
+              <div style="font-size: 12px; color: #c084fc; margin-bottom: 6px;">
+                Owner: <b>@${bot.room_owner}</b> &bull; Service: <code>${bot.render_service_name || 'render-bot'}</code>
+              </div>
+              <div class="bot-links-row">
+                <button class="copy-btn" onclick="navigator.clipboard.writeText('${streamUrl}'); alert('Copied .mp3 stream link!');">
+                  📻 Copy In-Room .mp3 Link
+                </button>
+                <a href="${playerUrl}" target="_blank" class="copy-btn" style="text-decoration: none;">
+                  🌐 Open Player Dashboard
+                </a>
+              </div>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = `<div style="color: #f87171; font-size: 12px; padding: 10px 0;">Failed to load bots: ${err.message}</div>`;
+      }
+    }
+
+    // ---------------- DEPLOY FORM LOGIC ----------------
     const form = document.getElementById('deploy-form');
     const submitBtn = document.getElementById('submit-btn');
     const statusBox = document.getElementById('status-box');
@@ -1091,7 +1591,8 @@ PORTAL_HTML = """<!DOCTYPE html>
         room_owner: document.getElementById('room-owner').value.trim(),
         room_title: document.getElementById('room-title').value.trim(),
         render_api_key: document.getElementById('render-key').value.trim(),
-        cron_api_key: document.getElementById('cron-key') ? document.getElementById('cron-key').value.trim() : ''
+        cron_api_key: document.getElementById('cron-key') ? document.getElementById('cron-key').value.trim() : '',
+        user_id: currentUser ? currentUser.id : ''
       };
 
       try {
@@ -1135,6 +1636,12 @@ PORTAL_HTML = """<!DOCTYPE html>
 
         successCard.style.display = 'block';
         successCard.scrollIntoView({ behavior: 'smooth' });
+
+        // If user logged in, refresh dashboard
+        if (currentUser) {
+          loadUserBots();
+          document.getElementById('user-dashboard').style.display = 'block';
+        }
       } catch (err) {
         submitBtn.disabled = false;
         statusBox.style.display = 'none';
@@ -1166,6 +1673,9 @@ PORTAL_HTML = """<!DOCTYPE html>
         });
       }
     });
+
+    // Start auth check
+    initAuth();
   </script>
 </body>
 </html>
@@ -1173,9 +1683,10 @@ PORTAL_HTML = """<!DOCTYPE html>
 
 
 async def handle_portal_page(request: web.Request) -> web.Response:
-    """Serve the 1-click Render automated cloud deployer portal."""
+    """Serve the 1-click Render automated cloud deployer portal with Supabase Auth."""
+    rendered_html = PORTAL_HTML.replace("__SUPABASE_URL__", config.SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", config.SUPABASE_ANON_KEY)
     return web.Response(
-        text=PORTAL_HTML,
+        text=rendered_html,
         content_type="text/html",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -1183,6 +1694,19 @@ async def handle_portal_page(request: web.Request) -> web.Response:
             "Expires": "0",
         },
     )
+
+
+async def handle_user_bots_api(request: web.Request) -> web.Response:
+    """Fetch all bots deployed by a specific authenticated user from Supabase."""
+    user_id = request.query.get("user_id", "").strip()
+    if not user_id:
+        return web.json_response({"success": False, "error": "user_id parameter is required"}, status=400)
+    try:
+        bots = await db.get_user_bots_from_db(user_id)
+        return web.json_response({"success": True, "bots": bots})
+    except Exception as e:
+        logger.error(f"[API] Failed to fetch user bots: {e}")
+        return web.json_response({"success": False, "error": str(e)}, status=500)
 
 
 async def handle_deploy_render(request: web.Request) -> web.Response:
@@ -1199,6 +1723,7 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
     room_owner = str(data.get("room_owner", "")).strip().lstrip("@")
     room_title = str(data.get("room_title", "the room")).strip() or "the room"
     bot_name = str(data.get("bot_name", "")).strip()
+    user_id = str(data.get("user_id", "")).strip() or None
 
     if not render_key:
         return web.json_response({"success": False, "error": "Render API Key is required."}, status=400)
@@ -1263,6 +1788,9 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
             {"key": "ROOM_TITLE", "value": room_title},
             {"key": "BOT_PREFIX", "value": "!"},
             {"key": "AUTOPLAY_ENABLED", "value": "true"},
+            {"key": "SUPABASE_URL", "value": config.SUPABASE_URL},
+            {"key": "SUPABASE_KEY", "value": config.SUPABASE_KEY},
+            {"key": "SUPABASE_ANON_KEY", "value": config.SUPABASE_ANON_KEY},
         ]
 
         create_payload = {
@@ -1314,6 +1842,25 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
 
                 # Step 4: Automatically enroll in 10-minute master keep-alive network
                 register_bot_url(srv_url)
+
+                # Step 4b: Record bot deployment in Supabase bots table
+                try:
+                    bot_record = {
+                        "room_id": room_id,
+                        "room_owner": room_owner or "owner",
+                        "room_title": room_title,
+                        "render_service_id": srv_id,
+                        "render_service_name": srv_name,
+                        "render_service_url": srv_url,
+                        "radio_stream_url": f"{srv_url}/radio.mp3",
+                        "health_url": f"{srv_url}/health",
+                        "is_active": True,
+                    }
+                    if user_id:
+                        bot_record["user_id"] = user_id
+                    asyncio.create_task(db.register_bot_in_db(bot_record))
+                except Exception as db_err:
+                    logger.warning(f"Failed to queue db.register_bot_in_db: {db_err}")
 
                 # Step 5: If buyer provided personal cron-job.org API key, automatically create the 10-min job
                 cron_job_created = False
@@ -1384,6 +1931,7 @@ def create_app() -> web.Application:
     app.router.add_get("/portal", handle_portal_page)
     app.router.add_get("/deploy", handle_portal_page)
     app.router.add_post("/api/deploy-render", handle_deploy_render)
+    app.router.add_get("/api/user-bots", handle_user_bots_api)
     app.router.add_get("/api/player-state", handle_player_state)
     app.router.add_get("/audio/current.mp3", handle_audio_current)
     app.router.add_get("/audio/current", handle_audio_current)

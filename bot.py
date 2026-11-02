@@ -51,6 +51,13 @@ def set_custom_welcome(room_id: str, text: str) -> None:
             json.dump(data, f, indent=2)
     except Exception as e:
         logger.error(f"Error saving welcome message: {e}")
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import db
+            asyncio.create_task(db.save_room_attribute(room_id, "custom_welcome", text.strip()))
+    except Exception:
+        pass
 
 
 def delete_custom_welcome(room_id: str) -> bool:
@@ -218,6 +225,34 @@ class HighriseBot(BaseBot):
 
         # Start the music queue runner with this bot instance for room announcements
         music_manager.start(self)
+
+        # Hydrate persistent room state from Supabase if available
+        try:
+            import db
+            cloud_state = await db.load_room_state(config.ROOM_ID)
+            if cloud_state:
+                # 1. Position
+                if cloud_state.get("saved_position") and isinstance(cloud_state["saved_position"], dict):
+                    p_data = cloud_state["saved_position"]
+                    if p_data.get("type") == "position":
+                        all_pos = position.load_all_positions()
+                        all_pos[config.ROOM_ID] = p_data
+                        position.save_all_positions(all_pos)
+                # 2. Floors
+                if cloud_state.get("floors") and isinstance(cloud_state["floors"], dict):
+                    all_fl = position.load_all_floors()
+                    all_fl[config.ROOM_ID] = cloud_state["floors"]
+                    position.save_all_floors(all_fl)
+                # 3. Custom Welcome
+                if cloud_state.get("custom_welcome"):
+                    set_custom_welcome(config.ROOM_ID, str(cloud_state["custom_welcome"]))
+                # 4. Outfit
+                if cloud_state.get("active_outfit") and isinstance(cloud_state["active_outfit"], list):
+                    outfit_data = outfit._load_data()
+                    outfit_data["active"] = cloud_state["active_outfit"]
+                    outfit._save_data(outfit_data)
+        except Exception as hyd_err:
+            logger.debug(f"[DB] Hydration notice: {hyd_err}")
 
         # Restore saved active outfit on connect (ensures !fit and !copyfit persist across room reloads)
         saved_outfit = outfit.get_active_outfit()

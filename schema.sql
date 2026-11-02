@@ -1,0 +1,95 @@
+-- =============================================================================
+-- ZevRay Highrise DJ Bot SaaS Database Schema
+-- Supabase Project: ahvvanhxbqtcbtuwfxtm
+-- =============================================================================
+
+-- 1. Room State Persistence (Position, Floors, Outfit, Welcome, Tips)
+CREATE TABLE IF NOT EXISTS public.room_state (
+    room_id TEXT PRIMARY KEY,
+    saved_position JSONB DEFAULT '{}'::jsonb,
+    floors JSONB DEFAULT '{}'::jsonb,
+    active_outfit JSONB DEFAULT '[]'::jsonb,
+    custom_welcome TEXT DEFAULT '',
+    top_tipper JSONB DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.room_state ENABLE ROW LEVEL SECURITY;
+
+-- Allow public read of room state
+CREATE POLICY "Public read room_state"
+    ON public.room_state FOR SELECT
+    USING (true);
+
+-- Allow full access to service_role
+CREATE POLICY "Service role full access room_state"
+    ON public.room_state FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+
+-- 2. Deployed Bots Registry
+CREATE TABLE IF NOT EXISTS public.bots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    room_id TEXT NOT NULL,
+    room_owner TEXT NOT NULL,
+    room_title TEXT DEFAULT 'My Lounge',
+    render_service_id TEXT,
+    render_service_name TEXT,
+    render_service_url TEXT,
+    radio_stream_url TEXT,
+    health_url TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.bots ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users read own bots"
+    ON public.bots FOR SELECT
+    USING (auth.uid() = user_id OR auth.role() = 'service_role');
+
+CREATE POLICY "Service role full access bots"
+    ON public.bots FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+
+-- 3. Customer Profiles & Subscription Status
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT,
+    highrise_username TEXT,
+    subscription_status TEXT DEFAULT 'free',
+    razorpay_customer_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users read own profile"
+    ON public.profiles FOR SELECT
+    USING (auth.uid() = id OR auth.role() = 'service_role');
+
+CREATE POLICY "Service role full access profiles"
+    ON public.profiles FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+-- Auto-create profile trigger on Supabase Auth signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, highrise_username)
+    VALUES (new.id, new.email, new.raw_user_meta_data->>'highrise_username');
+    RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

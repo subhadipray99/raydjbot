@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import logging
 from highrise import Position, AnchorPosition
 import config
@@ -117,6 +118,13 @@ def save_room_position(room_id: str, pos: Position | AnchorPosition) -> bool:
 
     save_all_positions(data)
     logger.info(f"Saved bot position for room {room_id}: {data[room_id]}")
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import db
+            asyncio.create_task(db.save_room_attribute(room_id, "saved_position", data[room_id]))
+    except Exception:
+        pass
     return True
 
 
@@ -256,6 +264,13 @@ def save_floor_position(room_id: str, floor_key: str, pos: Position) -> bool:
     }
     save_all_floors(data)
     logger.info(f"Saved floor {norm_key} for room {room_id}: {data[room_id][norm_key]}")
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import db
+            asyncio.create_task(db.save_room_attribute(room_id, "floors", data[room_id]))
+    except Exception:
+        pass
     return True
 
 
@@ -276,5 +291,12 @@ def delete_floor_position(room_id: str, floor_key: str) -> bool:
         del data[room_id][norm_key]
         save_all_floors(data)
         logger.info(f"Deleted floor {norm_key} for room {room_id}")
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import db
+                asyncio.create_task(db.save_room_attribute(room_id, "floors", data[room_id]))
+        except Exception:
+            pass
         return True
     return False
