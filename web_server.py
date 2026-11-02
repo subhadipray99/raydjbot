@@ -639,816 +639,1610 @@ PORTAL_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ZevRay &bull; Highrise 24/7 DJ Bot Cloud Deployer</title>
+  <title>ZevRay &bull; The Autonomous 24/7 Highrise DJ & Butler Platform</title>
+  
+  <!-- Premium Apple-style Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=SF+Pro+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
   <!-- Supabase JS Client v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
+    :root {
+      --bg-page: #fbfbfd;
+      --bg-surface: #ffffff;
+      --bg-secondary: #f5f5f7;
+      --bg-tertiary: #eef0f4;
+      --border-subtle: rgba(0, 0, 0, 0.08);
+      --border-medium: rgba(0, 0, 0, 0.14);
+      --text-primary: #1d1d1f;
+      --text-secondary: #515154;
+      --text-tertiary: #86868b;
+      --accent-blue: #0071e3;
+      --accent-blue-hover: #0077ed;
+      --accent-indigo: #4f46e5;
+      --accent-purple: #7c3aed;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 10px 30px -4px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
+      --shadow-lg: 0 20px 45px -8px rgba(0, 0, 0, 0.09), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-full: 9999px;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
     body {
-      background: radial-gradient(circle at top, #1f1235 0%, #0d0a1a 100%);
-      color: #f3f4f6;
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Plus Jakarta Sans", "Inter", sans-serif;
+      line-height: 1.5;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 20px 16px 64px;
+      overflow-x: hidden;
     }
-    .top-nav {
-      width: 100%;
-      max-width: 720px;
+
+    /* ---------------- HEADER & STICKY NAV ---------------- */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(251, 251, 253, 0.82);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-subtle);
+      transition: all 0.2s ease;
+    }
+    .header-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 12px 24px;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 12px 18px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(12px);
-      border-radius: 16px;
-      margin-bottom: 24px;
+      justify-content: space-between;
     }
-    .nav-brand {
+    .brand-wrap {
       display: flex;
       align-items: center;
       gap: 10px;
       text-decoration: none;
+      color: var(--text-primary);
+    }
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #0071e3 0%, #7c3aed 100%);
       color: #fff;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
     }
-    .brand-logo {
-      font-size: 22px;
-      background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .brand-title {
-      font-size: 17px;
+    .brand-name {
+      font-size: 19px;
       font-weight: 800;
       letter-spacing: -0.02em;
     }
-    .brand-sub {
+    .brand-tag {
       font-size: 11px;
-      color: #9ca3af;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      margin-left: 4px;
     }
+    .nav-menu {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+    .nav-link {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    .nav-link:hover { color: var(--accent-blue); }
     .nav-actions {
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    .btn-nav-outline {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #e5e7eb;
-      padding: 7px 14px;
-      border-radius: 10px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
+
+    /* Modern Apple Buttons */
+    .btn {
       font-family: inherit;
-      transition: all 0.2s ease;
-    }
-    .btn-nav-outline:hover {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.25);
-    }
-    .btn-nav-primary {
-      background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
-      border: none;
-      color: #fff;
-      padding: 7px 14px;
-      border-radius: 10px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      font-family: inherit;
-      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
-      transition: all 0.2s ease;
-    }
-    .btn-nav-primary:hover {
-      opacity: 0.9;
-      transform: translateY(-1px);
-    }
-    .user-pill {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      background: rgba(139, 92, 246, 0.15);
-      border: 1px solid rgba(139, 92, 246, 0.35);
-      color: #c084fc;
-      padding: 5px 12px;
-      border-radius: 9999px;
-      font-size: 12px;
-      font-weight: 700;
-      max-width: 190px;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      border: 1px solid transparent;
+      outline: none;
       white-space: nowrap;
     }
-    .container {
-      width: 100%;
-      max-width: 720px;
+    .btn:active { transform: scale(0.97); }
+    .btn-secondary {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border-color: var(--border-medium);
+      box-shadow: var(--shadow-sm);
     }
-    .header {
+    .btn-secondary:hover {
+      background: var(--bg-secondary);
+      border-color: rgba(0, 0, 0, 0.2);
+    }
+    .btn-primary {
+      background: var(--accent-blue);
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(0, 113, 227, 0.28);
+    }
+    .btn-primary:hover {
+      background: var(--accent-blue-hover);
+      box-shadow: 0 6px 18px rgba(0, 113, 227, 0.36);
+      transform: translateY(-1px);
+    }
+    .btn-cta-large {
+      padding: 14px 28px;
+      font-size: 16px;
+      font-weight: 700;
+      border-radius: var(--radius-full);
+    }
+
+    /* ---------------- HERO SECTION ---------------- */
+    .hero-section {
+      padding: 72px 24px 48px;
       text-align: center;
-      margin-bottom: 24px;
+      max-width: 900px;
+      margin: 0 auto;
     }
-    .badge {
+    .hero-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      background: rgba(139, 92, 246, 0.2);
-      border: 1px solid rgba(139, 92, 246, 0.4);
-      color: #c084fc;
-      padding: 6px 14px;
-      border-radius: 9999px;
+      gap: 8px;
+      background: rgba(0, 113, 227, 0.08);
+      border: 1px solid rgba(0, 113, 227, 0.2);
+      color: var(--accent-blue);
+      padding: 6px 16px;
+      border-radius: var(--radius-full);
       font-size: 12px;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 12px;
+      letter-spacing: 0.02em;
+      margin-bottom: 24px;
     }
-    h1 {
-      font-size: 26px;
+    .hero-title {
+      font-size: 54px;
+      line-height: 1.08;
       font-weight: 800;
-      line-height: 1.25;
-      margin-bottom: 10px;
-      background: linear-gradient(135deg, #ffffff 0%, #c084fc 100%);
+      letter-spacing: -0.035em;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+    }
+    .hero-title-highlight {
+      background: linear-gradient(135deg, #0071e3 0%, #7c3aed 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-    .subtitle {
-      font-size: 14px;
-      color: #9ca3af;
-      line-height: 1.5;
+    .hero-desc {
+      font-size: 19px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+      max-width: 680px;
+      margin: 0 auto 32px;
+      font-weight: 400;
+    }
+    .hero-cta-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+
+    /* ---------------- INTERACTIVE LIVE PREVIEW CARD ---------------- */
+    .preview-card-wrap {
+      max-width: 820px;
+      margin: 0 auto 80px;
+      padding: 0 16px;
+    }
+    .preview-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 16px;
+    }
+    .preview-live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-green);
+      background: rgba(16, 185, 129, 0.1);
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-green);
+      border-radius: 50%;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+      70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .preview-player-body {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 18px;
+      align-items: center;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+    .player-visualizer {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 32px;
+      padding-bottom: 4px;
+    }
+    .visualizer-bar {
+      width: 4px;
+      background: var(--accent-blue);
+      border-radius: 2px;
+      animation: wave 1.2s ease-in-out infinite alternate;
+    }
+    .visualizer-bar:nth-child(1) { height: 16px; animation-delay: 0.1s; }
+    .visualizer-bar:nth-child(2) { height: 28px; animation-delay: 0.3s; }
+    .visualizer-bar:nth-child(3) { height: 10px; animation-delay: 0.2s; }
+    .visualizer-bar:nth-child(4) { height: 24px; animation-delay: 0.4s; }
+    .visualizer-bar:nth-child(5) { height: 18px; animation-delay: 0.15s; }
+    @keyframes wave {
+      0% { transform: scaleY(0.4); }
+      100% { transform: scaleY(1); }
+    }
+    .player-meta {
+      text-align: left;
+    }
+    .player-track-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .player-track-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .preview-commands-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .command-tag {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-indigo);
+    }
+
+    /* ---------------- FEATURES PILLARS ---------------- */
+    .section-wrap {
+      max-width: 1120px;
+      margin: 0 auto 96px;
+      padding: 0 24px;
+    }
+    .section-header {
+      text-align: center;
+      max-width: 640px;
+      margin: 0 auto 48px;
+    }
+    .section-subtitle {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+      color: var(--accent-blue);
+      margin-bottom: 8px;
+    }
+    .section-title {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: var(--text-primary);
+      line-height: 1.16;
     }
     .features-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      margin-bottom: 24px;
+      gap: 24px;
     }
-    @media (max-width: 520px) {
+    @media (max-width: 768px) {
       .features-grid { grid-template-columns: 1fr; }
-      .top-nav { flex-direction: column; gap: 12px; }
+      .hero-title { font-size: 38px; }
+      .nav-menu { display: none; }
     }
-    .feature-item {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 10px 14px;
+    .feature-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #e5e7eb;
+      flex-direction: column;
+      gap: 16px;
     }
-    .card {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(16px);
-      border-radius: 20px;
-      padding: 26px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-      margin-bottom: 20px;
+    .feature-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+      border-color: rgba(0, 0, 0, 0.12);
     }
-    .dashboard-card {
-      background: rgba(20, 15, 38, 0.7);
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      border-radius: 20px;
-      padding: 22px;
-      margin-bottom: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
-    .dashboard-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-    }
-    .dashboard-title {
-      font-size: 16px;
-      font-weight: 800;
-      color: #f3f4f6;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .bot-item-card {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.09);
+    .feature-icon-box {
+      width: 48px;
+      height: 48px;
       border-radius: 14px;
-      padding: 14px 16px;
-      margin-bottom: 10px;
-      transition: border-color 0.2s ease;
-    }
-    .bot-item-card:hover {
-      border-color: rgba(168, 85, 247, 0.4);
-    }
-    .bot-item-top {
+      background: var(--bg-secondary);
+      color: var(--accent-blue);
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: center;
+    }
+    .feature-card-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.015em;
+    }
+    .feature-card-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ---------------- DEPLOYER CORE FORM (APPLE CARD) ---------------- */
+    .deploy-section {
+      max-width: 760px;
+      margin: 0 auto 96px;
+      padding: 0 20px;
+    }
+    .deploy-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 36px 40px;
+      box-shadow: var(--shadow-lg);
+    }
+    @media (max-width: 600px) {
+      .deploy-card { padding: 24px 20px; }
+    }
+    .deploy-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .deploy-title {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
       margin-bottom: 8px;
     }
-    .bot-item-title {
+    .deploy-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* Interactive Form Groups & Tutorials */
+    .form-step {
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 24px;
+    }
+    .form-step:last-of-type {
+      border-bottom: none;
+      padding-bottom: 12px;
+    }
+    .step-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .field-label {
       font-size: 14px;
       font-weight: 700;
-      color: #fff;
-    }
-    .status-active-pill {
-      font-size: 11px;
-      font-weight: 700;
-      color: #34d399;
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      padding: 3px 8px;
-      border-radius: 9999px;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .bot-links-row {
+      color: var(--text-primary);
       display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 10px;
+      align-items: center;
+      gap: 6px;
     }
-    .form-group {
-      margin-bottom: 18px;
-    }
-    .form-label {
-      display: block;
-      font-size: 13px;
+    .badge-required {
+      font-size: 10px;
       font-weight: 700;
-      color: #e5e7eb;
+      color: var(--accent-blue);
+      background: rgba(0, 113, 227, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .badge-optional {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-tertiary);
+      background: var(--bg-secondary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    /* Input wrapper with Hide/Reveal Icon */
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .app-input {
+      width: 100%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius-md);
+      padding: 13px 44px 13px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--text-primary);
+      outline: none;
+      transition: all 0.15s ease;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+    }
+    .app-input:focus {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+    }
+    .app-input.no-reveal {
+      padding-right: 14px;
+    }
+    .btn-reveal-toggle {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      transition: color 0.15s ease;
+    }
+    .btn-reveal-toggle:hover { color: var(--text-primary); }
+
+    /* Interactive Tutorial Box */
+    .tutorial-box {
+      margin-top: 10px;
+      background: var(--bg-secondary);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+    }
+    .tutorial-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-blue);
       margin-bottom: 6px;
     }
-    .form-hint {
-      font-size: 11px;
-      color: #9ca3af;
-      margin-top: 5px;
-      line-height: 1.4;
+    .tutorial-text {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-secondary);
     }
-    .form-hint a {
-      color: #c084fc;
+    .tutorial-text a {
+      color: var(--accent-blue);
       text-decoration: underline;
+      font-weight: 600;
     }
-    .form-input {
+    .example-code {
+      display: inline-block;
+      margin-top: 6px;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+      font-size: 11px;
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 4px 8px;
+      color: #b91c1c;
+      word-break: break-all;
+    }
+
+    /* Save preferences switch */
+    .pref-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      margin-bottom: 16px;
+    }
+    .pref-label-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    .pref-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .pref-sub {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: #e5e5ea;
+      transition: .2s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    input:checked + .slider {
+      background-color: var(--accent-green);
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    /* Submit & Status */
+    .btn-submit-deploy {
       width: 100%;
-      background: rgba(13, 10, 26, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      padding: 12px 14px;
-      color: #ffffff;
-      font-family: inherit;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-    .form-input:focus {
-      border-color: #a855f7;
-      box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25);
-    }
-    .btn-deploy {
-      width: 100%;
-      background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-      color: #ffffff;
-      border: none;
-      border-radius: 14px;
       padding: 16px;
-      font-family: inherit;
       font-size: 16px;
-      font-weight: 800;
+      font-weight: 700;
+      background: linear-gradient(135deg, #0071e3 0%, #7c3aed 100%);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-full);
+      box-shadow: 0 8px 24px rgba(0, 113, 227, 0.3);
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4);
-      transition: all 0.2s ease;
-      margin-top: 8px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .btn-deploy:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 14px 30px rgba(139, 92, 246, 0.5);
+    .btn-submit-deploy:hover {
+      box-shadow: 0 12px 28px rgba(0, 113, 227, 0.4);
+      transform: translateY(-1px);
     }
-    .btn-deploy:active {
-      transform: translateY(0);
-    }
-    .btn-deploy:disabled {
+    .btn-submit-deploy:disabled {
       opacity: 0.6;
       cursor: not-allowed;
       transform: none;
     }
-    .status-box {
+
+    /* Status and Error banners */
+    .status-alert {
       display: none;
-      background: rgba(139, 92, 246, 0.15);
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      color: #c084fc;
-      border-radius: 14px;
-      padding: 16px;
-      margin-top: 18px;
-      text-align: center;
-      font-size: 14px;
+      margin-top: 20px;
+      padding: 14px 18px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
       font-weight: 600;
-      gap: 10px;
-      align-items: center;
-      justify-content: center;
-    }
-    .error-box {
-      display: none;
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #f87171;
-      border-radius: 12px;
-      padding: 14px;
-      margin-top: 16px;
-      font-size: 13px;
-      line-height: 1.4;
-    }
-    .success-card {
-      display: none;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      border-radius: 20px;
-      padding: 24px;
-      margin-top: 24px;
-    }
-    .success-title {
-      color: #34d399;
-      font-size: 18px;
-      font-weight: 800;
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 13px;
       gap: 12px;
     }
-    .info-label { color: #9ca3af; font-weight: 600; flex-shrink: 0; }
-    .info-val a { color: #38bdf8; text-decoration: none; font-weight: 700; word-break: break-all; }
-    .info-val a:hover { text-decoration: underline; }
-    .copy-btn {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 8px;
-      padding: 4px 10px;
-      font-size: 12px;
-      color: #f3f4f6;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      transition: all 0.2s ease;
-      font-family: inherit;
+    .status-loading {
+      background: rgba(0, 113, 227, 0.08);
+      border: 1px solid rgba(0, 113, 227, 0.2);
+      color: var(--accent-blue);
     }
-    .copy-btn:hover {
-      background: rgba(255, 255, 255, 0.15);
+    .status-error {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #dc2626;
     }
-    .stream-card {
-      background: rgba(168, 85, 247, 0.12);
-      border: 1.5px solid rgba(168, 85, 247, 0.4);
-      border-radius: 14px;
-      padding: 16px;
-      margin: 16px 0;
+
+    /* ---------------- SUCCESS RESULT CARD ---------------- */
+    .result-card {
+      display: none;
+      margin-top: 32px;
+      background: var(--bg-surface);
+      border: 2px solid rgba(16, 185, 129, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: var(--shadow-lg);
     }
-    .url-input-group {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-      align-items: center;
-    }
-    .url-input {
-      flex: 1;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      border-radius: 10px;
-      padding: 10px 14px;
-      color: #38bdf8;
-      font-family: monospace;
-      font-size: 13px;
-      font-weight: 700;
-      outline: none;
-      word-break: break-all;
-    }
-    .btn-action-copy {
-      background: linear-gradient(135deg, #9333ea 0%, #c026d3 100%);
-      color: white;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 10px;
-      padding: 10px 16px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
+    .result-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      white-space: nowrap;
-      transition: all 0.2s ease;
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent-green);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      margin-bottom: 12px;
     }
-    .btn-action-copy:hover {
-      opacity: 0.9;
-      transform: translateY(-1px);
+    .result-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
     }
-    .setup-steps {
-      margin-top: 18px;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 14px;
-      padding: 16px 18px;
+    .result-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
     }
-    .setup-steps h4 {
+
+    /* Prominent MP3 Stream Container */
+    .radio-stream-box {
+      background: linear-gradient(135deg, rgba(0, 113, 227, 0.04) 0%, rgba(124, 58, 237, 0.05) 100%);
+      border: 1.5px solid rgba(0, 113, 227, 0.2);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .radio-stream-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .radio-stream-label {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .stream-input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .stream-url-field {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-blue);
+      outline: none;
+    }
+
+    /* ---------------- AUTH MODAL (NATIVE DIALOG COMPLIANT) ---------------- */
+    dialog:modal {
+      border: none;
+      padding: 0;
+      background: transparent;
+      max-width: 420px;
+      width: calc(100% - 32px);
+      margin: auto;
+      overscroll-behavior: contain;
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      overflow: hidden;
+      overscroll-behavior: contain;
+    }
+    .auth-dialog-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: var(--shadow-lg);
+    }
+    .auth-tabs {
+      display: flex;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-full);
+      padding: 4px;
+      margin-bottom: 24px;
+    }
+    .auth-tab-btn {
+      flex: 1;
+      border: none;
+      background: none;
+      padding: 8px 16px;
+      border-radius: var(--radius-full);
       font-size: 13px;
       font-weight: 700;
-      margin-bottom: 8px;
-      color: #e5e7eb;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s ease;
     }
-    .setup-steps ol {
-      margin-left: 20px;
-      font-size: 12px;
-      color: #9ca3af;
-      line-height: 1.6;
+    .auth-tab-btn.active {
+      background: #ffffff;
+      color: var(--text-primary);
+      box-shadow: var(--shadow-sm);
     }
-    .spinner {
-      width: 18px;
-      height: 18px;
-      border: 3px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: #fff;
-      animation: spin 0.8s linear infinite;
-      display: inline-block;
+    .auth-dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Auth Modal */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(8px);
+    .auth-close-btn {
+      background: none;
+      border: none;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
-      padding: 16px;
     }
-    .modal-card {
-      background: #15102a;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 20px;
-      width: 100%;
-      max-width: 400px;
-      padding: 24px;
-      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
-      position: relative;
+    .auth-close-btn:hover { color: var(--text-primary); }
+
+    /* ---------------- USER BOT FLEET (DASHBOARD) ---------------- */
+    .dashboard-panel {
+      display: none;
+      max-width: 760px;
+      margin: 0 auto 48px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 28px 32px;
+      box-shadow: var(--shadow-md);
     }
-    .modal-header {
+    .dash-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-subtle);
     }
-    .modal-tabs {
-      display: flex;
-      gap: 6px;
-      background: rgba(255, 255, 255, 0.05);
-      padding: 4px;
-      border-radius: 12px;
-    }
-    .tab-btn {
-      background: none;
-      border: none;
-      color: #9ca3af;
-      padding: 6px 14px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      font-family: inherit;
-      transition: all 0.2s ease;
-    }
-    .tab-btn.active {
-      background: rgba(139, 92, 246, 0.3);
-      color: #fff;
-    }
-    .modal-close {
-      background: none;
-      border: none;
-      color: #9ca3af;
+    .dash-title {
       font-size: 18px;
-      cursor: pointer;
-      padding: 4px;
-      line-height: 1;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    .modal-close:hover { color: #fff; }
+    .bot-card-item {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 12px;
+    }
+    .bot-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .bot-card-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .bot-card-links {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* ---------------- FOOTER ---------------- */
+    .site-footer {
+      margin-top: auto;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--bg-secondary);
+      padding: 48px 24px;
+    }
+    .footer-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    .footer-links a:hover { color: var(--accent-blue); }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <!-- Top Navigation with Supabase Auth Status -->
-  <header class="top-nav">
-    <div class="nav-brand">
-      <span class="brand-logo">⚡</span>
-      <div>
-        <div class="brand-title">ZevRay</div>
-        <div class="brand-sub">Cloud Highrise SaaS</div>
-      </div>
-    </div>
-    <div class="nav-actions">
-      <div id="nav-auth-logged-out" style="display: flex; gap: 8px;">
-        <button class="btn-nav-outline" onclick="openAuthModal('login')">Sign In</button>
-        <button class="btn-nav-primary" onclick="openAuthModal('signup')">Create Account</button>
-      </div>
-      <div id="nav-auth-logged-in" style="display: none; align-items: center; gap: 10px;">
-        <span class="user-pill" id="user-email-display">👤 user</span>
-        <button class="btn-nav-outline" onclick="toggleDashboard()">🤖 My Bots (<span id="my-bots-count">0</span>)</button>
-        <button class="btn-nav-outline" onclick="handleLogout()" style="color:#f87171;">Sign Out</button>
+
+  <!-- ---------------- NAVIGATION BAR ---------------- -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="#" class="brand-wrap">
+        <div class="brand-icon">
+          <!-- Vector Bolt Icon -->
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <span class="brand-name">ZevRay</span>
+        <span class="brand-tag">Highrise Cloud</span>
+      </a>
+
+      <nav class="nav-menu">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#deploy" class="nav-link">Deployer</a>
+        <a href="/player" target="_blank" class="nav-link">Live Jukebox</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+      </nav>
+
+      <div class="nav-actions">
+        <!-- Logged Out State -->
+        <div id="nav-logged-out" style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="openAuthDialog('login')">Sign In</button>
+          <button class="btn btn-primary" onclick="openAuthDialog('signup')">Create Account</button>
+        </div>
+
+        <!-- Logged In State -->
+        <div id="nav-logged-in" style="display: none; align-items: center; gap: 8px;">
+          <button class="btn btn-secondary" onclick="toggleUserDashboard()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            <span>My Bots (<span id="user-bots-badge">0</span>)</span>
+          </button>
+          <button class="btn btn-secondary" onclick="handleSignOut()" title="Sign Out">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   </header>
 
-  <div class="container">
-    <div class="header">
-      <div class="badge">🚀 Automated 1-Click Deployer</div>
-      <h1>ZevRay 24/7 Highrise DJ Bot Cloud Deployer</h1>
-      <p class="subtitle">Deploy your own 24/7 Music DJ, Multi-Floor Spawner, Tip Leaderboard & Room Assistant directly to your Render account in 60 seconds with zero coding.</p>
-    </div>
-
-    <!-- Authenticated User Bots Dashboard -->
-    <div class="dashboard-card" id="user-dashboard" style="display: none;">
-      <div class="dashboard-header">
-        <div class="dashboard-title">
-          <span>🤖</span> <span>My Deployed Bots</span>
-        </div>
-        <button class="copy-btn" onclick="loadUserBots()">🔄 Refresh</button>
+  <!-- ---------------- USER FLEET DASHBOARD ---------------- -->
+  <section class="dashboard-panel" id="user-dashboard-panel">
+    <div class="dash-top">
+      <div class="dash-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
+          <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h6"/>
+        </svg>
+        <span>Your Active Bot Fleet</span>
       </div>
-      <div id="bots-list-container">
-        <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 16px 0;">
-          Loading your deployed bots...
+      <button class="btn btn-secondary" onclick="fetchUserBots()">Refresh</button>
+    </div>
+    <div id="user-bots-list">
+      <p style="font-size: 13px; color: var(--text-tertiary); text-align: center; padding: 20px 0;">Loading your deployed bots...</p>
+    </div>
+  </section>
+
+  <!-- ---------------- HERO ---------------- -->
+  <main>
+    <section class="hero-section">
+      <div class="hero-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+        <span>The Autonomous Highrise Butler Engine</span>
+      </div>
+
+      <h1 class="hero-title">
+        The 24/7 AI DJ & Butler for <br>
+        <span class="hero-title-highlight">Your Highrise Lounge.</span>
+      </h1>
+
+      <p class="hero-desc">
+        Effortless in-room live music streams, instant multi-floor teleportation, permanent outfit memory, and live tip leaderboards. Deployed directly to the cloud in under 60 seconds.
+      </p>
+
+      <div class="hero-cta-group">
+        <a href="#deploy" class="btn btn-primary btn-cta-large">
+          <span>Deploy Your Bot in 60s</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </a>
+        <a href="/player" target="_blank" class="btn btn-secondary btn-cta-large">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          <span>Live Music Demo</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- ---------------- INTERACTIVE LIVE PREVIEW ---------------- -->
+    <div class="preview-card-wrap">
+      <div class="preview-card">
+        <div class="preview-header">
+          <div style="text-align: left;">
+            <div style="font-size: 14px; font-weight: 800; color: var(--text-primary);">Simulated Room Experience</div>
+            <div style="font-size: 12px; color: var(--text-tertiary);">Autonomous Bot Status &bull; Connected 24/7</div>
+          </div>
+          <div class="preview-live-indicator">
+            <span class="live-dot"></span>
+            <span>Online & Broadcasting</span>
+          </div>
+        </div>
+
+        <div class="preview-player-body">
+          <div class="player-visualizer">
+            <div class="visualizer-bar"></div>
+            <div class="visualizer-bar"></div>
+            <div class="visualizer-bar"></div>
+            <div class="visualizer-bar"></div>
+            <div class="visualizer-bar"></div>
+          </div>
+          <div class="player-meta">
+            <div class="player-track-title">24/7 Highrise Autonomous Radio</div>
+            <div class="player-track-sub">Zero-latency synchronous stream &bull; Highrise Room Audio Ready</div>
+          </div>
+          <a href="/player" target="_blank" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">Open Player</a>
+        </div>
+
+        <div class="preview-commands-row">
+          <span class="command-tag">/play &lt;song&gt;</span>
+          <span class="command-tag">/skip</span>
+          <span class="command-tag">/f1 ... /f4</span>
+          <span class="command-tag">!fit</span>
+          <span class="command-tag">!setpos</span>
+          <span class="command-tag">!setwelcome</span>
         </div>
       </div>
     </div>
 
-    <div class="features-grid">
-      <div class="feature-item"><span class="feature-icon">📻</span> 24/7 Music with /play takeover</div>
-      <div class="feature-item"><span class="feature-icon">🏢</span> 4-Floor Spawner (/f1 to /f4)</div>
-      <div class="feature-item"><span class="feature-icon">🏆</span> Live Tip Tracker & Leaderboard</div>
-      <div class="feature-item"><span class="feature-icon">👗</span> Wardrobe & Presets (!fit)</div>
-    </div>
+    <!-- ---------------- 4 PILLARS FEATURES ---------------- -->
+    <section class="section-wrap" id="features">
+      <div class="section-header">
+        <div class="section-subtitle">Engineered with Precision</div>
+        <h2 class="section-title">Everything your Highrise lounge needs to run completely on autopilot.</h2>
+      </div>
 
-    <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #e9d5ff; display: flex; align-items: center; gap: 10px;">
-      <span style="font-size: 20px;">📻</span>
-      <span><b>In-Room Audio:</b> Once deployed, this portal gives you a direct <b>.mp3 Stream URL</b> (<code>https://...onrender.com/radio.mp3</code>) to paste directly into Highrise <b>Room Settings &rarr; Custom Radio Station</b>!</span>
-    </div>
-
-    <div class="card">
-      <form id="deploy-form">
-        <div class="form-group">
-          <label class="form-label">Highrise Bot API Token</label>
-          <input type="password" id="highrise-token" class="form-input" placeholder="e.g. 5928a3f890b..." required autocomplete="off">
-          <div class="form-hint">Get your token from <a href="https://create.highrise.game" target="_blank">create.highrise.game</a> &rarr; Dashboard &rarr; Bots & API Keys &rarr; Create Bot.</div>
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card">
+          <div class="feature-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">24/7 Radio & Music Takeover</h3>
+          <p class="feature-card-desc">
+            Plays music directly through your in-game room speakers. Guests type <code>/play &lt;song&gt;</code> in chat to instantly queue their favorite tracks, while the bot automatically falls back to curated tunes when the queue clears.
+          </p>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Highrise Room ID or URL</label>
-          <input type="text" id="room-id" class="form-input" placeholder="e.g. 64005ecfb3d3644258e0040e or paste Room Link" required>
-          <div class="form-hint">Open Highrise app &rarr; Room info panel &rarr; Tap "Share this Room" &rarr; Copy Link.</div>
+        <!-- Feature 2 -->
+        <div class="feature-card">
+          <div class="feature-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="22" x2="9" y2="22.01"/><line x1="15" y1="22" x2="15" y2="22.01"/><line x1="8" y1="6" x2="8.01" y2="6"/><line x1="12" y1="6" x2="12.01" y2="6"/><line x1="16" y1="6" x2="16.01" y2="6"/><line x1="8" y1="10" x2="8.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="16" y1="10" x2="16.01" y2="10"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Dynamic Multi-Floor Elevator</h3>
+          <p class="feature-card-desc">
+            Whether your venue has 2 floors or 5 floors, stand where you want each landing spot to be and type <code>!setfloor f1</code>, <code>!setfloor f2</code>, etc. Guests can teleport smoothly across levels simply by typing <code>/f1</code> to <code>/f4</code>.
+          </p>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Your Highrise Username</label>
-          <input type="text" id="room-owner" class="form-input" placeholder="e.g. Sarah" required>
-          <div class="form-hint">Your exact handle. Gives you full admin rights in-game for <code>!fit</code>, <code>!setpos</code>, and <code>!setfloor</code>.</div>
+        <!-- Feature 3 -->
+        <div class="feature-card">
+          <div class="feature-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v1h10v-1c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34"/><path d="M6 4h12v7a6 6 0 0 1-12 0V4Z"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Live Tip Leaderboard</h3>
+          <p class="feature-card-desc">
+            Celebrate your room's supporters in real time. The bot tracks every tip, plays custom celebration sound bites, crowns your Top Tipper, and broadcasts celebratory whispers to inspire your community.
+          </p>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Room Display Name</label>
-          <input type="text" id="room-title" class="form-input" placeholder="e.g. Club Neon or Chill Lounge" value="My Lounge">
-          <div class="form-hint">Used in automated welcome whisper messages when players enter your room.</div>
+        <!-- Feature 4 -->
+        <div class="feature-card">
+          <div class="feature-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Permanent Outfits & State Memory</h3>
+          <p class="feature-card-desc">
+            Backed by cloud persistence, your bot never forgets its wardrobe, DJ booth anchor, custom welcome messages, or floors when the cloud container updates or restarts. Simply wear an outfit and type <code>!fit</code> to lock it forever.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- CLOUD DEPLOYER INTERACTIVE SECTION ---------------- -->
+    <section class="deploy-section" id="deploy">
+      <div class="deploy-card">
+        <div class="deploy-header">
+          <div class="section-subtitle">60-Second Setup</div>
+          <h2 class="deploy-title">Launch Your 24/7 Cloud Bot</h2>
+          <p class="deploy-subtitle">Deploy directly to your free Render cloud account. Follow each step below with our simple, playful tutorials.</p>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Render API Key</label>
-          <input type="password" id="render-key" class="form-input" placeholder="e.g. rnd_xxxx..." required autocomplete="off">
-          <div class="form-hint">Log into <a href="https://dashboard.render.com" target="_blank">Render Dashboard</a> &rarr; Account Settings &rarr; API Keys &rarr; Create API Key. (Deploys directly on your account).</div>
+        <form id="deployer-form">
+          <!-- Step 1: Highrise Bot Token -->
+          <div class="form-step">
+            <div class="step-label-row">
+              <label class="field-label" for="highrise-token">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
+                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <span>Highrise Bot API Token</span>
+              </label>
+              <span class="badge-required">Required</span>
+            </div>
+            
+            <div class="input-wrapper">
+              <input type="password" id="highrise-token" class="app-input" placeholder="e.g. 20d06551e88098d0b7c6..." required autocomplete="off">
+              <button type="button" class="btn-reveal-toggle" onclick="toggleInputVisibility('highrise-token', this)" aria-label="Toggle password visibility">
+                <!-- Eye Icon -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+
+            <!-- Tutorial Box for Token -->
+            <div class="tutorial-box">
+              <div class="tutorial-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <span>How to grab your Bot Token in 3 clicks:</span>
+              </div>
+              <div class="tutorial-text">
+                1. Visit the official portal <a href="https://create.highrise.game" target="_blank">create.highrise.game</a> and sign in with your Highrise account.<br>
+                2. In the left menu, click <b>Bots & API Keys</b> &rarr; tap <b>Create Bot</b>.<br>
+                3. Name your bot (e.g. <i>NeonDJ</i>) and copy the generated 64-character token.<br>
+                <span class="example-code">Example format: 20d06551e88098d0b7c6a084de450abf...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Room ID or URL -->
+          <div class="form-step">
+            <div class="step-label-row">
+              <label class="field-label" for="room-id">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
+                  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                <span>Highrise Room ID or Share Link</span>
+              </label>
+              <span class="badge-required">Required</span>
+            </div>
+
+            <div class="input-wrapper">
+              <input type="text" id="room-id" class="app-input no-reveal" placeholder="e.g. 64005ecfb3d3644258e0040e or paste Room Link" required>
+            </div>
+
+            <!-- Tutorial Box for Room -->
+            <div class="tutorial-box">
+              <div class="tutorial-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <span>Super easy: Just paste your room share link!</span>
+              </div>
+              <div class="tutorial-text">
+                In the Highrise app, walk into your room &rarr; tap the top Room Info &rarr; tap <b>Share Room</b> &rarr; <b>Copy Link</b>.<br>
+                Paste the entire link right here. Our parser automatically extracts the 24-character hexadecimal room ID for you!<br>
+                <span class="example-code">Example: https://highrise.game/room/64005ecfb3d3644258e0040e &rarr; 64005ecfb3d3644258e0040e</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Room Owner Username -->
+          <div class="form-step">
+            <div class="step-label-row">
+              <label class="field-label" for="room-owner">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
+                  <circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>
+                </svg>
+                <span>Your Highrise Username (Bot Administrator)</span>
+              </label>
+              <span class="badge-required">Required</span>
+            </div>
+
+            <div class="input-wrapper">
+              <input type="text" id="room-owner" class="app-input no-reveal" placeholder="e.g. Sarah (without @)" required>
+            </div>
+
+            <!-- Tutorial Box for Owner -->
+            <div class="tutorial-box">
+              <div class="tutorial-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <span>Why this is crucial:</span>
+              </div>
+              <div class="tutorial-text">
+                This grants you Master Admin privileges inside your room. Only you will be able to lock the DJ booth location (<code>!setpos</code>), change outfits (<code>!fit</code>), and set floors (<code>!setfloor</code>).<br>
+                <span class="example-code">Example: Sarah or JayShah</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Room Display Title -->
+          <div class="form-step">
+            <div class="step-label-row">
+              <label class="field-label" for="room-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
+                  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
+                </svg>
+                <span>Venue Display Name</span>
+              </label>
+              <span class="badge-optional">Optional</span>
+            </div>
+
+            <div class="input-wrapper">
+              <input type="text" id="room-title" class="app-input no-reveal" placeholder="e.g. Neon Rooftop or Chill Lounge" value="My Lounge">
+            </div>
+
+            <!-- Tutorial Box for Room Name -->
+            <div class="tutorial-box">
+              <div class="tutorial-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <span>Playful room customization:</span>
+              </div>
+              <div class="tutorial-text">
+                Your bot uses this name in automated welcome whispers when players step into your room! (e.g. <i>"Welcome to Neon Rooftop, @player! Enjoy the music!"</i>).
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 5: Render API Key -->
+          <div class="form-step">
+            <div class="step-label-row">
+              <label class="field-label" for="render-key">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
+                  <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                </svg>
+                <span>Render.com API Key</span>
+              </label>
+              <span class="badge-required">Required</span>
+            </div>
+
+            <div class="input-wrapper">
+              <input type="password" id="render-key" class="app-input" placeholder="e.g. rnd_xxxxxxxxxxxxxxxxxxxx" required autocomplete="off">
+              <button type="button" class="btn-reveal-toggle" onclick="toggleInputVisibility('render-key', this)" aria-label="Toggle Render key visibility">
+                <!-- Eye Icon -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+
+            <!-- Tutorial Box for Render -->
+            <div class="tutorial-box">
+              <div class="tutorial-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <span>How to get your free Render API key:</span>
+              </div>
+              <div class="tutorial-text">
+                1. Sign up or log into <a href="https://dashboard.render.com" target="_blank">dashboard.render.com</a> (100% free, zero credit card needed).<br>
+                2. Click your avatar icon (bottom-left) &rarr; <b>Account Settings</b>.<br>
+                3. Click <b>API Keys</b> &rarr; <b>Create API Key</b>.<br>
+                4. Copy the key starting with <code>rnd_</code> and paste it above.<br>
+                <span class="example-code">Example format: rnd_3a4b5c6d7e8f90123456789...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 6: 24/7 Keep-Alive & Auto-Pinger -->
+          <div class="form-step">
+            <div class="step-label-row">
+              <label class="field-label" for="cron-key">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>cron-job.org API Key</span>
+              </label>
+              <span class="badge-optional">Optional</span>
+            </div>
+
+            <div class="input-wrapper">
+              <input type="password" id="cron-key" class="app-input" placeholder="e.g. crons_xxxx... (leave blank for Zero-Setup Auto-Pinger)" autocomplete="off">
+              <button type="button" class="btn-reveal-toggle" onclick="toggleInputVisibility('cron-key', this)" aria-label="Toggle cron key visibility">
+                <!-- Eye Icon -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+
+            <!-- Tutorial Box for 24/7 keep alive -->
+            <div class="tutorial-box">
+              <div class="tutorial-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <span>Zero-setup 24/7 keep-alive:</span>
+              </div>
+              <div class="tutorial-text">
+                Leave this blank! Our Master Keep-Alive network automatically enrolls your bot and pings it every 10 minutes so Render never sleeps. If you have your own personal cron-job.org key, you can optionally paste it here.
+              </div>
+            </div>
+          </div>
+
+          <!-- Save Preferences Switch -->
+          <div class="pref-row">
+            <div class="pref-label-wrap">
+              <span class="pref-title">Remember details in this browser</span>
+              <span class="pref-sub">Securely saves your non-sensitive tokens locally so you can redeploy with one click.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="save-local-pref" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" id="btn-deploy-submit" class="btn-submit-deploy">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            <span id="deploy-btn-text">Launch Autonomous Bot in Cloud</span>
+          </button>
+        </form>
+
+        <!-- Loading State Indicator -->
+        <div id="deploy-loading" class="status-alert status-loading" style="display: none;">
+          <div class="spinner" style="border-color: rgba(0, 113, 227, 0.3); border-top-color: var(--accent-blue);"></div>
+          <span id="deploy-loading-text">Connecting to Render cloud & provisioning container...</span>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">cron-job.org API Key <span style="font-size: 11px; color: #c084fc; font-weight: normal; margin-left: 4px;">(Optional &mdash; Automatic 10-Min Setup)</span></label>
-          <input type="password" id="cron-key" class="form-input" placeholder="e.g. crons_xxxx... (leave blank for Auto-Pinger)" autocomplete="off">
-          <div class="form-hint">Optional: If provided, a 10-minute keep-alive ping is automatically created on your cron-job.org account. If left blank, our master network automatically keeps your bot awake every 10 minutes!</div>
+        <!-- Error Banner -->
+        <div id="deploy-error" class="status-alert status-error" style="display: none;"></div>
+
+        <!-- ---------------- RESULT CARD ---------------- -->
+        <div id="deploy-result" class="result-card">
+          <div class="result-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span>Cloud Service Created Successfully!</span>
+          </div>
+
+          <h3 class="result-title">Your 24/7 DJ Bot is Building</h3>
+          <p class="result-desc">Render is compiling your bot. It will join your room automatically in approximately 60-90 seconds.</p>
+
+          <!-- MP3 Stream URL Box -->
+          <div class="radio-stream-box">
+            <div class="radio-stream-header">
+              <span class="radio-stream-label">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
+                  <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                </svg>
+                <span>Highrise In-Room Custom Radio (.mp3 Stream)</span>
+              </span>
+              <span style="font-size: 11px; background: rgba(0, 113, 227, 0.1); color: var(--accent-blue); padding: 2px 8px; border-radius: 6px; font-weight: 700;">Paste into Room Settings</span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
+              Paste this URL into Highrise <b>Room Settings &rarr; Custom Radio Station</b> so that music plays through your room speakers for everyone:
+            </p>
+            <div class="stream-input-group">
+              <input type="text" id="res-radio-field" class="stream-url-field" readonly value="" placeholder="https://...onrender.com/radio.mp3">
+              <button type="button" class="btn btn-primary" id="btn-copy-radio" onclick="copyStreamUrl()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                </svg>
+                <span id="copy-radio-text">Copy .mp3 Link</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Secondary Links -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13px;">
+            <span style="font-weight: 600; color: var(--text-secondary);">Web Jukebox Dashboard:</span>
+            <a id="res-player-link" href="#" target="_blank" style="color: var(--accent-blue); font-weight: 700; text-decoration: none;">Open /player &rarr;</a>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13px;">
+            <span style="font-weight: 600; color: var(--text-secondary);">24/7 Keep-Alive:</span>
+            <span id="res-cron-badge" style="font-weight: 700; color: var(--accent-green);">Auto-Pinger Active (10m)</span>
+          </div>
+
+          <div style="margin-top: 20px; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 16px;">
+            <h4 style="font-size: 13px; font-weight: 800; margin-bottom: 8px;">Next: In-Room 30-Second Checklist</h4>
+            <ol style="margin-left: 20px; font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+              <li>Invite your bot into your Highrise room.</li>
+              <li>Go to <b>Room Settings &rarr; Privileges</b> and give your bot <b>Designer</b> rights (needed to teleport players).</li>
+              <li>Paste your copied <b>.mp3 Stream URL</b> into <b>Room Settings &rarr; Custom Radio Station</b> and hit Save!</li>
+              <li>Walk into your DJ booth and type <code>!setpos</code> in chat.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- FAQ SECTION ---------------- -->
+    <section class="section-wrap" id="faq">
+      <div class="section-header">
+        <div class="section-subtitle">Got Questions?</div>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+      </div>
+
+      <div style="max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px;">
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px 24px;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">Does my PC or phone need to stay on?</h3>
+          <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
+            No! Your bot runs 100% inside a high-speed cloud container on Render. You can turn off your computer, close your phone, or go to sleep — your bot stays online playing music and greeting visitors 24/7.
+          </p>
         </div>
 
-        <button type="submit" id="submit-btn" class="btn-deploy">
-          <span>🚀 Deploy 24/7 Bot to Render</span>
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px 24px;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">How does in-room audio work?</h3>
+          <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
+            When deployed, our platform gives you a direct synchronous <code>/radio.mp3</code> audio stream link. Highrise has a built-in Custom Radio feature in Room Settings &mdash; paste the link there, and all players in the room will hear the music simultaneously!
+          </p>
+        </div>
+
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px 24px;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">Can anyone else change my bot's settings?</h3>
+          <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
+            Never. When you specify your Highrise username, you are locked in as the Master Administrator. Admin commands like <code>!setpos</code>, <code>!setfloor</code>, <code>!fit</code>, and <code>!setwelcome</code> strictly respond only to you.
+          </p>
+        </div>
+
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px 24px;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">Is Render really free?</h3>
+          <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
+            Yes. Render provides 750 free web service hours each month, which covers a full 24/7 month with zero charges. No credit card is required to sign up.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ---------------- PLAYFUL AUTH DIALOG (NATIVE <DIALOG>) ---------------- -->
+  <dialog id="auth-dialog" closedby="any" aria-labelledby="auth-dialog-title">
+    <div class="auth-dialog-card">
+      <div class="auth-dialog-header">
+        <div class="brand-wrap">
+          <div class="brand-icon" style="width:26px; height:26px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <span style="font-size: 16px; font-weight: 800;" id="auth-dialog-title">ZevRay Account</span>
+        </div>
+        <button type="button" class="auth-close-btn" onclick="closeAuthDialog()" aria-label="Close dialog">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
-      </form>
-
-      <div id="status-box" class="status-box">
-        <span class="spinner"></span>
-        <span id="status-text">Validating credentials & deploying to Render...</span>
       </div>
 
-      <div id="error-box" class="error-box"></div>
-    </div>
-
-    <div id="success-card" class="success-card">
-      <div class="success-title">
-        <span>🎉</span> <span>Deployment Initiated Successfully!</span>
-      </div>
-      <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">Render is now building and deploying your bot container. It will connect to your room automatically in about 1-2 minutes!</p>
-
-      <!-- Prominent Highrise In-Room Radio (.mp3) Section -->
-      <div class="stream-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 13px; font-weight: 800; color: #f3f4f6; display: flex; align-items: center; gap: 6px;">
-            <span>📻</span> <span>Highrise In-Room Custom Radio (.mp3 URL)</span>
-          </span>
-          <span style="font-size: 11px; background: rgba(168, 85, 247, 0.25); color: #d8b4fe; padding: 2px 8px; border-radius: 6px; font-weight: 700;">Paste into Room Radio</span>
-        </div>
-        <p style="font-size: 12px; color: #c084fc; line-height: 1.4;">
-          This is your direct <b>.mp3 audio stream link</b>. Paste this into Highrise <b>Room Settings &rarr; Custom Radio Station</b> so music plays through your room speakers:
-        </p>
-        <div class="url-input-group">
-          <input type="text" id="res-radio-input" class="url-input" readonly value="" placeholder="https://...onrender.com/radio.mp3">
-          <button type="button" class="btn-action-copy" id="copy-radio-btn">📋 Copy .mp3 URL</button>
-        </div>
-      </div>
-
-      <div class="info-row" style="flex-wrap: wrap;">
-        <span class="info-label">⏱️ 24/7 Keep-Alive (10-Min):</span>
-        <div style="display: flex; gap: 6px; align-items: center; flex: 1; justify-content: flex-end; min-width: 260px;">
-          <input type="text" id="res-health-input" class="url-input" style="padding: 6px 10px; font-size: 12px;" readonly value="" placeholder="https://...onrender.com/health">
-          <button type="button" class="copy-btn" id="copy-health-btn">📋 Copy</button>
-        </div>
-      </div>
-      <div id="cron-status-badge" style="font-size: 12px; margin-top: -4px; margin-bottom: 12px; padding: 8px 12px; border-radius: 8px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #7dd3fc; line-height: 1.4;">
-        ⚡ <b>Master Auto-Pinger Active:</b> This bot is automatically enrolled in our 10-minute master keep-alive network so Render never sleeps.
-      </div>
-
-      <div class="info-row">
-        <span class="info-label">🌐 Web Jukebox Dashboard:</span>
-        <div style="text-align: right;">
-          <a id="res-player-url" href="#" target="_blank">Open /player Dashboard &rarr;</a>
-          <div style="font-size: 11px; color: #6b7280; font-weight: normal; margin-top: 2px;">(Optional browser visualizer & queue viewer &mdash; do not paste this into room radio)</div>
-        </div>
-      </div>
-
-      <div class="info-row">
-        <span class="info-label">Render Service:</span>
-        <span id="res-name" class="info-val" style="font-weight:700; color:#fff;"></span>
-      </div>
-
-      <div class="setup-steps">
-        <h4>⚡ 2-Minute In-Room Setup Checklist:</h4>
-        <ol>
-          <li><b>Invite Bot:</b> Go to your room in Highrise and invite your bot account.</li>
-          <li><b>Give Permissions:</b> Room Settings &rarr; Privileges &rarr; Give your bot <b>Designer</b> rights (required for teleporting players).</li>
-          <li><b>Enable Room Audio:</b> In Highrise Room Settings &rarr; Custom Radio Station &rarr; Paste your copied <b>.mp3 Stream URL</b> (ends in <code>/radio.mp3</code>) and tap Save!</li>
-          <li><b>Lock DJ Booth:</b> Walk into your DJ booth and type <code>!setpos</code> in chat.</li>
-          <li><b>Set Floor Spawns:</b> Walk to each floor and type <code>!setfloor f1</code>, <code>!setfloor f2</code>, etc.</li>
-          <li><b>24/7 Keep-Alive:</b> Your bot is already pinged every 10 minutes automatically by our network! If using your own cron-job account, run it every 10 mins.</li>
-        </ol>
-      </div>
-    </div>
-
-    <div style="text-align: center; margin-top: 36px; padding: 20px 0; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: #6b7280;">
-      <div>&copy; 2026 <b>ZevRay</b> (zevray.com). All rights reserved.</div>
-      <div style="margin-top: 8px; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-        <a href="https://zevray.com" style="color: #9ca3af; text-decoration: none;">Home</a>
-        <a href="mailto:support@zevray.com" style="color: #9ca3af; text-decoration: none;">Contact Support</a>
-        <a href="https://create.highrise.game" target="_blank" style="color: #9ca3af; text-decoration: none;">Highrise Developer Hub</a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Supabase Auth Modal -->
-  <div class="modal-overlay" id="auth-modal" style="display: none;" onclick="handleModalBackdropClick(event)">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-tabs">
-          <button type="button" class="tab-btn active" id="tab-login" onclick="switchAuthTab('login')">Sign In</button>
-          <button type="button" class="tab-btn" id="tab-signup" onclick="switchAuthTab('signup')">Create Account</button>
-        </div>
-        <button type="button" class="modal-close" onclick="closeAuthModal()">✕</button>
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab-btn active" id="btn-tab-login" onclick="switchAuthTab('login')">Sign In</button>
+        <button type="button" class="auth-tab-btn" id="btn-tab-signup" onclick="switchAuthTab('signup')">Create Account</button>
       </div>
 
       <form id="auth-form" onsubmit="handleAuthSubmit(event)">
-        <div class="form-group">
-          <label class="form-label">Email Address</label>
-          <input type="email" id="auth-email" class="form-input" placeholder="you@example.com" required>
+        <div style="margin-bottom: 16px;">
+          <label style="display:block; font-size:13px; font-weight:700; margin-bottom:6px;" for="auth-email">Email Address</label>
+          <input type="email" id="auth-email" class="app-input no-reveal" placeholder="you@example.com" required>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input type="password" id="auth-password" class="form-input" placeholder="••••••••" required minlength="6">
+        <div style="margin-bottom: 16px;">
+          <label style="display:block; font-size:13px; font-weight:700; margin-bottom:6px;" for="auth-password">Password</label>
+          <div class="input-wrapper">
+            <input type="password" id="auth-password" class="app-input" placeholder="••••••••" required minlength="6">
+            <button type="button" class="btn-reveal-toggle" onclick="toggleInputVisibility('auth-password', this)" aria-label="Toggle password visibility">
+              <!-- Eye Icon -->
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
         </div>
 
-        <div class="form-group" id="group-hr-username" style="display: none;">
-          <label class="form-label">Highrise Username <span style="font-size:11px;color:#9ca3af;font-weight:normal;">(Optional)</span></label>
-          <input type="text" id="auth-hr-username" class="form-input" placeholder="e.g. Sarah">
+        <div id="signup-extra-fields" style="display: none; margin-bottom: 16px;">
+          <label style="display:block; font-size:13px; font-weight:700; margin-bottom:6px;" for="auth-highrise-user">
+            Highrise Username <span style="font-size:11px; color:var(--text-tertiary); font-weight:normal;">(Optional)</span>
+          </label>
+          <input type="text" id="auth-highrise-user" class="app-input no-reveal" placeholder="e.g. Sarah">
         </div>
 
-        <div id="auth-error" class="error-box" style="display: none; margin-bottom: 14px;"></div>
-        <div id="auth-success" class="status-box" style="display: none; margin-bottom: 14px; background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.4); color: #34d399;"></div>
+        <div id="auth-msg-box" class="status-alert" style="display: none; margin-bottom: 16px;"></div>
 
-        <button type="submit" id="auth-submit-btn" class="btn-deploy" style="margin-top: 8px;">
-          <span id="auth-submit-text">Sign In</span>
+        <button type="submit" id="btn-auth-submit" class="btn btn-primary" style="width:100%; padding:12px; font-size:14px; font-weight:700;">
+          <span id="auth-submit-label">Sign In to ZevRay</span>
         </button>
       </form>
     </div>
-  </div>
+  </dialog>
 
+  <!-- ---------------- FOOTER ---------------- -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="brand-icon" style="width:22px; height:22px; border-radius:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <span>&copy; 2026 <b>ZevRay</b> &bull; zevray.com. All rights reserved.</span>
+      </div>
+
+      <div class="footer-links">
+        <a href="#features">Features</a>
+        <a href="#deploy">Deployer</a>
+        <a href="/player" target="_blank">Jukebox</a>
+        <a href="https://create.highrise.game" target="_blank">Highrise Developer Hub</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ---------------- CLIENT LOGIC ---------------- -->
   <script>
-    // ---------------- SUPABASE AUTH INTEGRATION ----------------
     const SUPABASE_URL = "__SUPABASE_URL__";
     const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
     const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
     let currentUser = null;
     let authMode = 'login'; // 'login' or 'signup'
+    let currentRadioUrl = '';
 
-    async function initAuth() {
-      if (!sb) return;
-      try {
-        const { data: { session } } = await sb.auth.getSession();
-        updateAuthUI(session ? session.user : null);
+    // Eye SVGs for Reveal/Hide toggling
+    const SVG_EYE_OPEN = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    const SVG_EYE_SLASH = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`;
 
-        sb.auth.onAuthStateChange((_event, session) => {
-          updateAuthUI(session ? session.user : null);
-        });
-      } catch (err) {
-        console.error("Auth init error:", err);
-      }
-    }
-
-    function updateAuthUI(user) {
-      currentUser = user;
-      const loggedOutNav = document.getElementById('nav-auth-logged-out');
-      const loggedInNav = document.getElementById('nav-auth-logged-in');
-      const emailDisplay = document.getElementById('user-email-display');
-      const dashboard = document.getElementById('user-dashboard');
-
-      if (user) {
-        loggedOutNav.style.display = 'none';
-        loggedInNav.style.display = 'flex';
-        emailDisplay.innerText = "👤 " + (user.email || "Account");
-        dashboard.style.display = 'block';
-        loadUserBots();
+    function toggleInputVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerHTML = SVG_EYE_SLASH;
       } else {
-        loggedOutNav.style.display = 'flex';
-        loggedInNav.style.display = 'none';
-        dashboard.style.display = 'none';
+        input.type = 'password';
+        btn.innerHTML = SVG_EYE_OPEN;
       }
     }
 
-    function openAuthModal(mode = 'login') {
+    // Modern Dialog Helpers with closedby="any" light-dismiss fallback
+    const authDialog = document.getElementById('auth-dialog');
+    if (!('closedBy' in HTMLDialogElement.prototype)) {
+      const outside = (e, dialog) => {
+        const r = dialog.getBoundingClientRect();
+        return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+      };
+      let pressedOutside = false;
+      authDialog.addEventListener('pointerdown', (e) => { pressedOutside = outside(e, authDialog); });
+      authDialog.addEventListener('pointerup', (e) => { if (pressedOutside && outside(e, authDialog)) authDialog.close(); });
+    }
+
+    function openAuthDialog(mode = 'login') {
       authMode = mode;
       switchAuthTab(mode);
-      document.getElementById('auth-error').style.display = 'none';
-      document.getElementById('auth-success').style.display = 'none';
-      document.getElementById('auth-modal').style.display = 'flex';
-    }
-
-    function closeAuthModal() {
-      document.getElementById('auth-modal').style.display = 'none';
-    }
-
-    function handleModalBackdropClick(e) {
-      if (e.target.id === 'auth-modal') {
-        closeAuthModal();
+      document.getElementById('auth-msg-box').style.display = 'none';
+      if (typeof authDialog.showModal === 'function') {
+        authDialog.showModal();
       }
+    }
+
+    function closeAuthDialog() {
+      if (authDialog.open) authDialog.close();
     }
 
     function switchAuthTab(mode) {
       authMode = mode;
-      const tabLogin = document.getElementById('tab-login');
-      const tabSignup = document.getElementById('tab-signup');
-      const groupHr = document.getElementById('group-hr-username');
-      const submitText = document.getElementById('auth-submit-text');
+      const tabLogin = document.getElementById('btn-tab-login');
+      const tabSignup = document.getElementById('btn-tab-signup');
+      const extra = document.getElementById('signup-extra-fields');
+      const submitLabel = document.getElementById('auth-submit-label');
 
       if (mode === 'signup') {
         tabLogin.classList.remove('active');
         tabSignup.classList.add('active');
-        groupHr.style.display = 'block';
-        submitText.innerText = 'Create Account';
+        extra.style.display = 'block';
+        submitLabel.innerText = 'Create Free Account';
       } else {
         tabSignup.classList.remove('active');
         tabLogin.classList.add('active');
-        groupHr.style.display = 'none';
-        submitText.innerText = 'Sign In';
+        extra.style.display = 'none';
+        submitLabel.innerText = 'Sign In to ZevRay';
       }
-      document.getElementById('auth-error').style.display = 'none';
-      document.getElementById('auth-success').style.display = 'none';
+      document.getElementById('auth-msg-box').style.display = 'none';
+    }
+
+    // ---------------- AUTH OPERATIONS ----------------
+    async function initAuth() {
+      if (!sb) return;
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        applyUserSession(session ? session.user : null);
+
+        sb.auth.onAuthStateChange((_event, session) => {
+          applyUserSession(session ? session.user : null);
+        });
+      } catch (err) {
+        console.error("Auth error:", err);
+      }
+    }
+
+    function applyUserSession(user) {
+      currentUser = user;
+      const loggedOutNav = document.getElementById('nav-logged-out');
+      const loggedInNav = document.getElementById('nav-logged-in');
+      const dash = document.getElementById('user-dashboard-panel');
+
+      if (user) {
+        loggedOutNav.style.display = 'none';
+        loggedInNav.style.display = 'flex';
+        dash.style.display = 'block';
+        fetchUserBots();
+      } else {
+        loggedOutNav.style.display = 'flex';
+        loggedInNav.style.display = 'none';
+        dash.style.display = 'none';
+      }
     }
 
     async function handleAuthSubmit(e) {
@@ -1457,13 +2251,11 @@ PORTAL_HTML = """<!DOCTYPE html>
 
       const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
-      const hrUsername = document.getElementById('auth-hr-username').value.trim();
-      const errBox = document.getElementById('auth-error');
-      const succBox = document.getElementById('auth-success');
-      const submitBtn = document.getElementById('auth-submit-btn');
+      const hrUser = document.getElementById('auth-highrise-user').value.trim();
+      const msgBox = document.getElementById('auth-msg-box');
+      const submitBtn = document.getElementById('btn-auth-submit');
 
-      errBox.style.display = 'none';
-      succBox.style.display = 'none';
+      msgBox.style.display = 'none';
       submitBtn.disabled = true;
 
       try {
@@ -1472,88 +2264,82 @@ PORTAL_HTML = """<!DOCTYPE html>
             email,
             password,
             options: {
-              data: { highrise_username: hrUsername }
+              data: { highrise_username: hrUser }
             }
           });
           if (error) throw error;
           if (data.session) {
-            closeAuthModal();
+            closeAuthDialog();
           } else {
-            succBox.innerText = "Check your email for confirmation link to complete registration!";
-            succBox.style.display = 'block';
+            msgBox.className = 'status-alert status-loading';
+            msgBox.innerText = 'Confirmation link sent! Please check your email to complete registration.';
+            msgBox.style.display = 'block';
           }
         } else {
           const { error } = await sb.auth.signInWithPassword({ email, password });
           if (error) throw error;
-          closeAuthModal();
+          closeAuthDialog();
         }
       } catch (err) {
-        errBox.innerText = err.message || "Authentication failed.";
-        errBox.style.display = 'block';
+        msgBox.className = 'status-alert status-error';
+        msgBox.innerText = err.message || 'Authentication error.';
+        msgBox.style.display = 'block';
       } finally {
         submitBtn.disabled = false;
       }
     }
 
-    async function handleLogout() {
-      if (sb) {
-        await sb.auth.signOut();
-      }
-      updateAuthUI(null);
+    async function handleSignOut() {
+      if (sb) await sb.auth.signOut();
+      applyUserSession(null);
     }
 
-    function toggleDashboard() {
-      const dash = document.getElementById('user-dashboard');
-      if (dash.style.display === 'none') {
-        dash.style.display = 'block';
-        dash.scrollIntoView({ behavior: 'smooth' });
-        loadUserBots();
+    function toggleUserDashboard() {
+      const panel = document.getElementById('user-dashboard-panel');
+      if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        panel.scrollIntoView({ behavior: 'smooth' });
+        fetchUserBots();
       } else {
-        dash.style.display = 'none';
+        panel.style.display = 'none';
       }
     }
 
-    async function loadUserBots() {
+    async function fetchUserBots() {
       if (!currentUser) return;
-      const container = document.getElementById('bots-list-container');
-      const countBadge = document.getElementById('my-bots-count');
+      const container = document.getElementById('user-bots-list');
+      const badge = document.getElementById('user-bots-badge');
 
       try {
         const res = await fetch(`/api/user-bots?user_id=${currentUser.id}`);
         const data = await res.json();
         if (!data.success || !data.bots || data.bots.length === 0) {
-          container.innerHTML = `
-            <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 18px 0;">
-              You have no active bots deployed yet. Fill the deployer form below to launch your first bot in 60s!
-            </div>
-          `;
-          countBadge.innerText = '0';
+          container.innerHTML = `<p style="font-size: 13px; color: var(--text-tertiary); text-align: center; padding: 20px 0;">You haven't deployed any bots yet. Use the form below to launch your first 24/7 bot!</p>`;
+          badge.innerText = '0';
           return;
         }
 
-        countBadge.innerText = data.bots.length;
+        badge.innerText = data.bots.length;
         let html = '';
         data.bots.forEach(bot => {
           const streamUrl = bot.radio_stream_url || `${bot.render_service_url}/radio.mp3`;
           const playerUrl = `${bot.render_service_url}/player`;
           html += `
-            <div class="bot-item-card">
-              <div class="bot-item-top">
-                <div>
-                  <span class="bot-item-title">${bot.room_title || 'Highrise Bot'}</span>
-                  <span style="font-size: 12px; color: #9ca3af; margin-left: 8px;">Room: <code>${bot.room_id}</code></span>
-                </div>
-                <span class="status-active-pill">🟢 24/7 Active</span>
+            <div class="bot-card-item">
+              <div class="bot-card-top">
+                <span class="bot-card-name">${bot.room_title || 'Highrise Bot'}</span>
+                <span class="preview-live-indicator" style="font-size:11px; padding:2px 8px;">Online 24/7</span>
               </div>
-              <div style="font-size: 12px; color: #c084fc; margin-bottom: 6px;">
-                Owner: <b>@${bot.room_owner}</b> &bull; Service: <code>${bot.render_service_name || 'render-bot'}</code>
+              <div style="font-size:12px; color:var(--text-secondary); margin-bottom:6px;">
+                Room ID: <code>${bot.room_id}</code> &bull; Owner: <b>@${bot.room_owner}</b>
               </div>
-              <div class="bot-links-row">
-                <button class="copy-btn" onclick="navigator.clipboard.writeText('${streamUrl}'); alert('Copied .mp3 stream link!');">
-                  📻 Copy In-Room .mp3 Link
+              <div class="bot-card-links">
+                <button class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="copyDirect('${streamUrl}', this)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                  <span>Copy .mp3 Stream URL</span>
                 </button>
-                <a href="${playerUrl}" target="_blank" class="copy-btn" style="text-decoration: none;">
-                  🌐 Open Player Dashboard
+                <a href="${playerUrl}" target="_blank" class="btn btn-secondary" style="font-size:12px; padding:4px 10px;">
+                  <span>Open Player &rarr;</span>
                 </a>
               </div>
             </div>
@@ -1561,29 +2347,55 @@ PORTAL_HTML = """<!DOCTYPE html>
         });
         container.innerHTML = html;
       } catch (err) {
-        container.innerHTML = `<div style="color: #f87171; font-size: 12px; padding: 10px 0;">Failed to load bots: ${err.message}</div>`;
+        container.innerHTML = `<p style="color:var(--accent-red); font-size:12px;">Failed to load bots: ${err.message}</p>`;
       }
     }
 
-    // ---------------- DEPLOY FORM LOGIC ----------------
-    const form = document.getElementById('deploy-form');
-    const submitBtn = document.getElementById('submit-btn');
-    const statusBox = document.getElementById('status-box');
-    const statusText = document.getElementById('status-text');
-    const errorBox = document.getElementById('error-box');
-    const successCard = document.getElementById('success-card');
-    let healthUrl = '';
-    let radioUrl = '';
+    // ---------------- LOCAL CREDENTIAL REMEMBER PREFERENCE ----------------
+    const STORAGE_KEY = 'zevray_bot_saved_creds';
 
-    form.addEventListener('submit', async (e) => {
+    function restoreSavedDetails() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.highrise_token) document.getElementById('highrise-token').value = data.highrise_token;
+          if (data.room_id) document.getElementById('room-id').value = data.room_id;
+          if (data.room_owner) document.getElementById('room-owner').value = data.room_owner;
+          if (data.room_title) document.getElementById('room-title').value = data.room_title;
+          if (data.render_key) document.getElementById('render-key').value = data.render_key;
+          if (data.cron_key) document.getElementById('cron-key').value = data.cron_key;
+        }
+      } catch (e) {
+        console.warn("Could not load saved credentials:", e);
+      }
+    }
+
+    function saveDetailsIfAllowed(payload) {
+      const allowed = document.getElementById('save-local-pref').checked;
+      if (allowed) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch (e) {
+          console.warn("Could not save to localStorage:", e);
+        }
+      }
+    }
+
+    // ---------------- DEPLOY SUBMIT HANDLER ----------------
+    const deployForm = document.getElementById('deployer-form');
+    const submitBtn = document.getElementById('btn-deploy-submit');
+    const submitText = document.getElementById('deploy-btn-text');
+    const loadBox = document.getElementById('deploy-loading');
+    const errBox = document.getElementById('deploy-error');
+    const resCard = document.getElementById('deploy-result');
+
+    deployForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      errorBox.style.display = 'none';
-      errorBox.innerText = '';
-      successCard.style.display = 'none';
-
+      errBox.style.display = 'none';
+      resCard.style.display = 'none';
+      loadBox.style.display = 'flex';
       submitBtn.disabled = true;
-      statusBox.style.display = 'flex';
-      statusText.innerText = "Connecting to Render API & creating service...";
 
       const payload = {
         highrise_token: document.getElementById('highrise-token').value.trim(),
@@ -1591,9 +2403,11 @@ PORTAL_HTML = """<!DOCTYPE html>
         room_owner: document.getElementById('room-owner').value.trim(),
         room_title: document.getElementById('room-title').value.trim(),
         render_api_key: document.getElementById('render-key').value.trim(),
-        cron_api_key: document.getElementById('cron-key') ? document.getElementById('cron-key').value.trim() : '',
+        cron_api_key: document.getElementById('cron-key').value.trim(),
         user_id: currentUser ? currentUser.id : ''
       };
+
+      saveDetailsIfAllowed(payload);
 
       try {
         const res = await fetch('/api/deploy-render', {
@@ -1603,79 +2417,63 @@ PORTAL_HTML = """<!DOCTYPE html>
         });
 
         const data = await res.json();
+        loadBox.style.display = 'none';
         submitBtn.disabled = false;
-        statusBox.style.display = 'none';
 
         if (!res.ok || !data.success) {
-          errorBox.innerText = data.error || "Deployment failed. Please check your credentials.";
-          errorBox.style.display = 'block';
+          errBox.innerText = data.error || "Deployment failed. Please verify your Render and Highrise credentials.";
+          errBox.style.display = 'flex';
           return;
         }
 
-        // Display success card
-        document.getElementById('res-name').innerText = data.service_name;
-        document.getElementById('res-radio-input').value = data.radio_url;
-        document.getElementById('res-health-input').value = data.health_url;
-        document.getElementById('res-player-url').href = data.player_url;
-        document.getElementById('res-player-url').innerText = data.player_url;
-        healthUrl = data.health_url;
-        radioUrl = data.radio_url;
+        // Populate Success Card
+        currentRadioUrl = data.radio_url;
+        document.getElementById('res-radio-field').value = data.radio_url;
+        document.getElementById('res-player-link').href = data.player_url;
 
-        const badge = document.getElementById('cron-status-badge');
+        const cronBadge = document.getElementById('res-cron-badge');
         if (data.cron_job_created) {
-          badge.innerHTML = '✅ <b>Auto-Pinger Created:</b> A 10-minute cron job was automatically configured in your personal cron-job.org account!';
-          badge.style.background = 'rgba(52, 211, 153, 0.15)';
-          badge.style.borderColor = 'rgba(52, 211, 153, 0.4)';
-          badge.style.color = '#6ee7b7';
+          cronBadge.innerText = 'Custom cron-job.org Configured (10m)';
         } else {
-          badge.innerHTML = '⚡ <b>Master Auto-Pinger Active:</b> Enrolled in our 10-minute master keep-alive network so your bot never sleeps! (Or use the copied URL above in your own cron-job account).';
-          badge.style.background = 'rgba(56, 189, 248, 0.12)';
-          badge.style.borderColor = 'rgba(56, 189, 248, 0.3)';
-          badge.style.color = '#7dd3fc';
+          cronBadge.innerText = 'Master Auto-Pinger Active (10m)';
         }
 
-        successCard.style.display = 'block';
-        successCard.scrollIntoView({ behavior: 'smooth' });
+        resCard.style.display = 'block';
+        resCard.scrollIntoView({ behavior: 'smooth' });
 
-        // If user logged in, refresh dashboard
         if (currentUser) {
-          loadUserBots();
-          document.getElementById('user-dashboard').style.display = 'block';
+          fetchUserBots();
+          document.getElementById('user-dashboard-panel').style.display = 'block';
         }
       } catch (err) {
+        loadBox.style.display = 'none';
         submitBtn.disabled = false;
-        statusBox.style.display = 'none';
-        errorBox.innerText = "Network error: " + err.message;
-        errorBox.style.display = 'block';
+        errBox.innerText = "Network error: " + err.message;
+        errBox.style.display = 'flex';
       }
     });
 
-    document.getElementById('copy-radio-btn').addEventListener('click', () => {
-      const urlToCopy = radioUrl || document.getElementById('res-radio-input').value;
-      if (urlToCopy) {
-        navigator.clipboard.writeText(urlToCopy).then(() => {
-          document.getElementById('copy-radio-btn').innerText = "✅ Copied .mp3 URL!";
-          setTimeout(() => {
-            document.getElementById('copy-radio-btn').innerText = "📋 Copy .mp3 URL";
-          }, 2500);
-        });
-      }
-    });
+    function copyStreamUrl() {
+      const url = currentRadioUrl || document.getElementById('res-radio-field').value;
+      if (!url) return;
+      navigator.clipboard.writeText(url).then(() => {
+        const btnText = document.getElementById('copy-radio-text');
+        btnText.innerText = "Copied to Clipboard!";
+        setTimeout(() => { btnText.innerText = "Copy .mp3 Link"; }, 2500);
+      });
+    }
 
-    document.getElementById('copy-health-btn').addEventListener('click', () => {
-      const urlToCopy = healthUrl || document.getElementById('res-health-input').value;
-      if (urlToCopy) {
-        navigator.clipboard.writeText(urlToCopy).then(() => {
-          document.getElementById('copy-health-btn').innerText = "✅ Copied!";
-          setTimeout(() => {
-            document.getElementById('copy-health-btn').innerText = "📋 Copy";
-          }, 2500);
-        });
-      }
-    });
+    function copyDirect(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        const oldText = btn.innerHTML;
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-green)"><polyline points="20 6 9 17 4 12"/></svg><span>Copied!</span>`;
+        setTimeout(() => { btn.innerHTML = oldText; }, 2000);
+      });
+    }
 
-    // Start auth check
+    // Initialize
     initAuth();
+    restoreSavedDetails();
   </script>
 </body>
 </html>
