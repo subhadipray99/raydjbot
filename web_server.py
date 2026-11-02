@@ -93,12 +93,24 @@ def get_uptime() -> str:
     return f"{hours}h {minutes}m {seconds}s"
 
 
-async def handle_root(request: web.Request) -> web.Response:
-    """Status endpoint for root URL."""
-    base_url = config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
+def get_base_url(request: web.Request) -> str:
+    """Dynamically resolve the external base URL from custom domain or incoming request headers."""
+    forwarded_host = request.headers.get("X-Forwarded-Host") or request.headers.get("Host")
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "https")
+    if forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}"
+    if config.CUSTOM_DOMAIN:
+        return config.CUSTOM_DOMAIN
+    return config.RENDER_EXTERNAL_URL or f"http://localhost:{config.PORT}"
+
+
+async def handle_status_api(request: web.Request) -> web.Response:
+    """JSON status API endpoint."""
+    base_url = get_base_url(request)
     return web.json_response({
         "status": "online",
-        "service": "Highrise Bot Web Service & Jukebox",
+        "service": "ZevRay Highrise Bot SaaS & Jukebox",
+        "domain": base_url,
         "uptime": get_uptime(),
         "room_configured": bool(config.ROOM_ID),
         "room_id": config.ROOM_ID,
@@ -108,11 +120,19 @@ async def handle_root(request: web.Request) -> web.Response:
         "radio_stream_url": f"{base_url}/radio.mp3",
         "radio_url": f"{base_url}/radio.mp3",
         "player_url": f"{base_url}/player",
-        "deploy_portal_url": f"{base_url}/portal",
+        "deploy_portal_url": f"{base_url}/",
         "registered_bots_count": len(get_registered_bots()),
         "master_pinger": "active (10m interval)",
         "music_state": music_manager.get_state(),
     })
+
+
+async def handle_root(request: web.Request) -> web.Response:
+    """Root homepage: serves SaaS portal to browsers and JSON status to API clients."""
+    accept_header = request.headers.get("Accept", "")
+    if "text/html" in accept_header and request.query.get("format") != "json":
+        return await handle_portal_page(request)
+    return await handle_status_api(request)
 
 
 async def handle_health(request: web.Request) -> web.Response:
@@ -608,7 +628,7 @@ PORTAL_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Highrise 24/7 DJ Bot Cloud Deployer</title>
+  <title>ZevRay &bull; Highrise 24/7 DJ Bot Cloud Deployer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -908,7 +928,7 @@ PORTAL_HTML = """<!DOCTYPE html>
   <div class="container">
     <div class="header">
       <div class="badge">🚀 Automated 1-Click Deployer</div>
-      <h1>Highrise 24/7 DJ Bot Cloud Deployer</h1>
+      <h1>ZevRay 24/7 Highrise DJ Bot Cloud Deployer</h1>
       <p class="subtitle">Deploy your own 24/7 Music DJ, Multi-Floor Spawner, Tip Leaderboard & Room Assistant directly to your Render account in 60 seconds with zero coding.</p>
     </div>
 
@@ -1032,6 +1052,15 @@ PORTAL_HTML = """<!DOCTYPE html>
           <li><b>Set Floor Spawns:</b> Walk to each floor and type <code>!setfloor f1</code>, <code>!setfloor f2</code>, etc.</li>
           <li><b>24/7 Keep-Alive:</b> Your bot is already pinged every 10 minutes automatically by our network! If using your own cron-job account, run it every 10 mins.</li>
         </ol>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 36px; padding: 20px 0; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: #6b7280;">
+      <div>&copy; 2026 <b>ZevRay</b> (zevray.com). All rights reserved.</div>
+      <div style="margin-top: 8px; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+        <a href="https://zevray.com" style="color: #9ca3af; text-decoration: none;">Home</a>
+        <a href="mailto:support@zevray.com" style="color: #9ca3af; text-decoration: none;">Contact Support</a>
+        <a href="https://create.highrise.game" target="_blank" style="color: #9ca3af; text-decoration: none;">Highrise Developer Hub</a>
       </div>
     </div>
   </div>
@@ -1348,6 +1377,8 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_root)
+    app.router.add_get("/status", handle_status_api)
+    app.router.add_get("/api/status", handle_status_api)
     app.router.add_get("/health", handle_health)
     app.router.add_get("/player", handle_player_page)
     app.router.add_get("/portal", handle_portal_page)

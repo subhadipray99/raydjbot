@@ -11,6 +11,7 @@ API_TOKEN = os.getenv("API_TOKEN", "").strip()
 PORT = int(os.getenv("PORT", 8080))
 BOT_PREFIX = os.getenv("BOT_PREFIX", "!").strip()
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+CUSTOM_DOMAIN = os.getenv("CUSTOM_DOMAIN", "https://zevray.com").strip().rstrip("/")
 WELCOME_MESSAGE = os.getenv(
     "WELCOME_MESSAGE",
     "Welcome to the room, @{username}! Type !help for commands."
