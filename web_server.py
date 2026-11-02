@@ -53,7 +53,10 @@ async def handle_root(request: web.Request) -> web.Response:
         "saved_position": position.get_saved_position_dict(config.ROOM_ID),
         "floors": position.get_all_floors(config.ROOM_ID),
         "top_tipper": tips.get_top_tipper(config.ROOM_ID),
+        "radio_stream_url": f"{base_url}/radio.mp3",
+        "radio_url": f"{base_url}/radio.mp3",
         "player_url": f"{base_url}/player",
+        "deploy_portal_url": f"{base_url}/portal",
         "music_state": music_manager.get_state(),
     })
 
@@ -772,6 +775,51 @@ PORTAL_HTML = """<!DOCTYPE html>
     .copy-btn:hover {
       background: rgba(255, 255, 255, 0.15);
     }
+    .stream-card {
+      background: rgba(168, 85, 247, 0.12);
+      border: 1.5px solid rgba(168, 85, 247, 0.4);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .url-input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      align-items: center;
+    }
+    .url-input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #38bdf8;
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      outline: none;
+      word-break: break-all;
+    }
+    .btn-action-copy {
+      background: linear-gradient(135deg, #9333ea 0%, #c026d3 100%);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .btn-action-copy:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
     .setup-steps {
       margin-top: 18px;
       background: rgba(0, 0, 0, 0.3);
@@ -815,6 +863,11 @@ PORTAL_HTML = """<!DOCTYPE html>
       <div class="feature-item"><span class="feature-icon">🏢</span> 4-Floor Spawner (/f1 to /f4)</div>
       <div class="feature-item"><span class="feature-icon">🏆</span> Live Tip Tracker & Leaderboard</div>
       <div class="feature-item"><span class="feature-icon">👗</span> Wardrobe & Presets (!fit)</div>
+    </div>
+
+    <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #e9d5ff; display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 20px;">📻</span>
+      <span><b>In-Room Audio:</b> Once deployed, this portal gives you a direct <b>.mp3 Stream URL</b> (<code>https://...onrender.com/radio.mp3</code>) to paste directly into Highrise <b>Room Settings &rarr; Custom Radio Station</b>!</span>
     </div>
 
     <div class="card">
@@ -864,32 +917,46 @@ PORTAL_HTML = """<!DOCTYPE html>
 
     <div id="success-card" class="success-card">
       <div class="success-title">
-        <span>🎉</span> <span>Deployment Successful!</span>
+        <span>🎉</span> <span>Deployment Initiated Successfully!</span>
       </div>
-      <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">Render is now building and deploying your bot. It will connect to your room automatically in about 1-2 minutes!</p>
+      <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">Render is now building and deploying your bot container. It will connect to your room automatically in about 1-2 minutes!</p>
+
+      <!-- Prominent Highrise In-Room Radio (.mp3) Section -->
+      <div class="stream-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 13px; font-weight: 800; color: #f3f4f6; display: flex; align-items: center; gap: 6px;">
+            <span>📻</span> <span>Highrise In-Room Custom Radio (.mp3 URL)</span>
+          </span>
+          <span style="font-size: 11px; background: rgba(168, 85, 247, 0.25); color: #d8b4fe; padding: 2px 8px; border-radius: 6px; font-weight: 700;">Paste into Room Radio</span>
+        </div>
+        <p style="font-size: 12px; color: #c084fc; line-height: 1.4;">
+          This is your direct <b>.mp3 audio stream link</b>. Paste this into Highrise <b>Room Settings &rarr; Custom Radio Station</b> so music plays through your room speakers:
+        </p>
+        <div class="url-input-group">
+          <input type="text" id="res-radio-input" class="url-input" readonly value="" placeholder="https://...onrender.com/radio.mp3">
+          <button type="button" class="btn-action-copy" id="copy-radio-btn">📋 Copy .mp3 URL</button>
+        </div>
+      </div>
 
       <div class="info-row">
-        <span class="info-label">Service Name:</span>
+        <span class="info-label">⏱️ 24/7 Keep-Alive Link:</span>
+        <div style="display: flex; gap: 6px; align-items: center; flex: 1; justify-content: flex-end; max-width: 65%;">
+          <input type="text" id="res-health-input" class="url-input" style="padding: 6px 10px; font-size: 12px;" readonly value="" placeholder="https://...onrender.com/health">
+          <button type="button" class="copy-btn" id="copy-health-btn">📋 Copy</button>
+        </div>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">🌐 Web Jukebox Dashboard:</span>
+        <div style="text-align: right;">
+          <a id="res-player-url" href="#" target="_blank">Open /player Dashboard &rarr;</a>
+          <div style="font-size: 11px; color: #6b7280; font-weight: normal; margin-top: 2px;">(Optional browser visualizer & queue viewer &mdash; do not paste this into room radio)</div>
+        </div>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Render Service:</span>
         <span id="res-name" class="info-val" style="font-weight:700; color:#fff;"></span>
-      </div>
-
-      <div class="info-row">
-        <span class="info-label">📻 In-Room Radio (.mp3):</span>
-        <span class="info-val">
-          <button type="button" class="copy-btn" id="copy-radio-btn">📋 Copy .mp3 Stream URL</button>
-        </span>
-      </div>
-
-      <div class="info-row">
-        <span class="info-label">Live Web Jukebox:</span>
-        <span class="info-val"><a id="res-player-url" href="#" target="_blank">Open Jukebox</a></span>
-      </div>
-
-      <div class="info-row">
-        <span class="info-label">24/7 Keep-Alive Link:</span>
-        <span class="info-val">
-          <button type="button" class="copy-btn" id="copy-health-btn">📋 Copy Health URL</button>
-        </span>
       </div>
 
       <div class="setup-steps">
@@ -897,7 +964,7 @@ PORTAL_HTML = """<!DOCTYPE html>
         <ol>
           <li><b>Invite Bot:</b> Go to your room in Highrise and invite your bot account.</li>
           <li><b>Give Permissions:</b> Room Settings &rarr; Privileges &rarr; Give your bot <b>Designer</b> rights (required for teleporting players).</li>
-          <li><b>Play Room Music:</b> In Room Settings &rarr; Custom Radio &rarr; Paste your copied <b>.mp3 Stream URL</b> so music plays through the speakers!</li>
+          <li><b>Enable Room Audio:</b> In Highrise Room Settings &rarr; Custom Radio Station &rarr; Paste your copied <b>.mp3 Stream URL</b> (ends in <code>/radio.mp3</code>) and tap Save!</li>
           <li><b>Lock DJ Booth:</b> Walk into your DJ booth and type <code>!setpos</code> in chat.</li>
           <li><b>Set Floor Spawns:</b> Walk to each floor and type <code>!setfloor f1</code>, <code>!setfloor f2</code>, etc.</li>
           <li><b>Keep-Alive:</b> Paste your copied Health URL into <a href="https://cron-job.org" target="_blank" style="color:#38bdf8;">cron-job.org</a> (run every 5 mins) so your free Render bot never sleeps!</li>
@@ -953,6 +1020,8 @@ PORTAL_HTML = """<!DOCTYPE html>
 
         // Display success card
         document.getElementById('res-name').innerText = data.service_name;
+        document.getElementById('res-radio-input').value = data.radio_url;
+        document.getElementById('res-health-input').value = data.health_url;
         document.getElementById('res-player-url').href = data.player_url;
         document.getElementById('res-player-url').innerText = data.player_url;
         healthUrl = data.health_url;
@@ -969,22 +1038,24 @@ PORTAL_HTML = """<!DOCTYPE html>
     });
 
     document.getElementById('copy-radio-btn').addEventListener('click', () => {
-      if (radioUrl) {
-        navigator.clipboard.writeText(radioUrl).then(() => {
+      const urlToCopy = radioUrl || document.getElementById('res-radio-input').value;
+      if (urlToCopy) {
+        navigator.clipboard.writeText(urlToCopy).then(() => {
           document.getElementById('copy-radio-btn').innerText = "✅ Copied .mp3 URL!";
           setTimeout(() => {
-            document.getElementById('copy-radio-btn').innerText = "📋 Copy .mp3 Stream URL";
+            document.getElementById('copy-radio-btn').innerText = "📋 Copy .mp3 URL";
           }, 2500);
         });
       }
     });
 
     document.getElementById('copy-health-btn').addEventListener('click', () => {
-      if (healthUrl) {
-        navigator.clipboard.writeText(healthUrl).then(() => {
+      const urlToCopy = healthUrl || document.getElementById('res-health-input').value;
+      if (urlToCopy) {
+        navigator.clipboard.writeText(urlToCopy).then(() => {
           document.getElementById('copy-health-btn').innerText = "✅ Copied!";
           setTimeout(() => {
-            document.getElementById('copy-health-btn').innerText = "📋 Copy Health URL";
+            document.getElementById('copy-health-btn').innerText = "📋 Copy";
           }, 2500);
         });
       }
