@@ -142,7 +142,7 @@ async def handle_root(request: web.Request) -> web.Response:
     """Root homepage: serves SaaS portal to browsers and JSON status to API clients."""
     accept_header = request.headers.get("Accept", "")
     if "text/html" in accept_header and request.query.get("format") != "json":
-        return await handle_portal_page(request)
+        return await handle_landing_page(request)
     return await handle_status_api(request)
 
 
@@ -634,46 +634,35 @@ async def handle_debug_download(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
-PORTAL_HTML = """<!DOCTYPE html>
+LANDING_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ZevRay &bull; The Autonomous 24/7 Highrise DJ & Butler Platform</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ZevRay &bull; Autonomous 24/7 Highrise Butler & DJ</title>
   
-  <!-- Premium Apple-style Typography -->
+  <!-- Cloudstudio Typography: Bricolage Grotesque + Geist Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=SF+Pro+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <!-- Supabase JS Client v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root {
-      --bg-page: #fbfbfd;
-      --bg-surface: #ffffff;
-      --bg-secondary: #f5f5f7;
-      --bg-tertiary: #eef0f4;
-      --border-subtle: rgba(0, 0, 0, 0.08);
-      --border-medium: rgba(0, 0, 0, 0.14);
-      --text-primary: #1d1d1f;
-      --text-secondary: #515154;
-      --text-tertiary: #86868b;
-      --accent-blue: #0071e3;
-      --accent-blue-hover: #0077ed;
-      --accent-indigo: #4f46e5;
-      --accent-purple: #7c3aed;
-      --accent-green: #10b981;
-      --accent-amber: #f59e0b;
-      --accent-red: #ef4444;
-      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
-      --shadow-md: 0 10px 30px -4px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
-      --shadow-lg: 0 20px 45px -8px rgba(0, 0, 0, 0.09), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
-      --radius-sm: 10px;
-      --radius-md: 16px;
-      --radius-lg: 24px;
-      --radius-full: 9999px;
+      --bg: #FFF48D;
+      --paper: #faf8f0;
+      --paper-card: #ffffff;
+      --ink: #0e0e0c;
+      --ink-soft: #2e2e28;
+      --ink-mute: #78786a;
+      --sky: #8ED8FF;
+      --lavender: #A3B1FF;
+      --accent: #FFF48D;
+      --ok: #27ae60;
+      --border: rgba(14, 14, 12, 0.12);
+      --border-dark: rgba(14, 14, 12, 0.22);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -681,542 +670,1182 @@ PORTAL_HTML = """<!DOCTYPE html>
     html {
       scroll-behavior: smooth;
       -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
     }
 
     body {
-      background-color: var(--bg-page);
-      color: var(--text-primary);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Plus Jakarta Sans", "Inter", sans-serif;
-      line-height: 1.5;
+      background-color: var(--paper);
+      color: var(--ink);
+      font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.45;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
     }
 
-    /* ---------------- HEADER & STICKY NAV ---------------- */
-    .site-header {
-      position: sticky;
+    /* ---------------- CLOUDSTUDIO FIXED NAV ---------------- */
+    #cs-nav {
+      position: fixed;
       top: 0;
-      z-index: 100;
-      background: rgba(251, 251, 253, 0.82);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border-subtle);
-      transition: all 0.2s ease;
-    }
-    .header-inner {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 12px 24px;
+      left: 0;
+      right: 0;
+      z-index: 180;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      padding: 16px clamp(18px, 4vw, 44px);
+      background: rgba(250, 248, 240, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      transition: all 0.3s ease;
     }
-    .brand-wrap {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    .nav-brand {
       text-decoration: none;
-      color: var(--text-primary);
-    }
-    .brand-icon {
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, #0071e3 0%, #7c3aed 100%);
-      color: #fff;
-      border-radius: 9px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
-    }
-    .brand-name {
-      font-size: 19px;
       font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-    .brand-tag {
-      font-size: 11px;
-      background: var(--bg-tertiary);
-      color: var(--text-secondary);
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: var(--radius-full);
-      margin-left: 4px;
-    }
-    .nav-menu {
+      font-size: 24px;
+      letter-spacing: -0.03em;
+      color: var(--ink);
       display: flex;
       align-items: center;
-      gap: 28px;
+      gap: 2px;
+    }
+    .nav-brand span {
+      color: var(--ink);
+      font-weight: 900;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: clamp(14px, 2.5vw, 32px);
     }
     .nav-link {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-secondary);
       text-decoration: none;
-      transition: color 0.15s ease;
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--ink);
+      transition: opacity 0.15s ease;
     }
-    .nav-link:hover { color: var(--accent-blue); }
-    .nav-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    /* Modern Apple Buttons */
-    .btn {
-      font-family: inherit;
+    .nav-link:hover { opacity: 0.65; }
+    
+    .btn-pill-ink {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
       gap: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 8px 16px;
-      border-radius: var(--radius-full);
-      cursor: pointer;
       text-decoration: none;
-      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-      border: 1px solid transparent;
-      outline: none;
-      white-space: nowrap;
-    }
-    .btn:active { transform: scale(0.97); }
-    .btn-secondary {
-      background: var(--bg-surface);
-      color: var(--text-primary);
-      border-color: var(--border-medium);
-      box-shadow: var(--shadow-sm);
-    }
-    .btn-secondary:hover {
-      background: var(--bg-secondary);
-      border-color: rgba(0, 0, 0, 0.2);
-    }
-    .btn-primary {
-      background: var(--accent-blue);
-      color: #ffffff;
-      box-shadow: 0 4px 14px rgba(0, 113, 227, 0.28);
-    }
-    .btn-primary:hover {
-      background: var(--accent-blue-hover);
-      box-shadow: 0 6px 18px rgba(0, 113, 227, 0.36);
-      transform: translateY(-1px);
-    }
-    .btn-cta-large {
-      padding: 14px 28px;
-      font-size: 16px;
       font-weight: 700;
-      border-radius: var(--radius-full);
+      font-size: 15px;
+      background: var(--ink);
+      color: var(--accent);
+      padding: 11px 22px;
+      border-radius: 100px;
+      border: 1px solid var(--ink);
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform 0.3s cubic-bezier(.34, 1.56, .64, 1), background 0.2s ease;
+    }
+    .btn-pill-ink:hover {
+      transform: scale(1.04);
+      background: #1c1c18;
+    }
+    .btn-pill-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 15px;
+      background: transparent;
+      color: var(--ink);
+      padding: 11px 22px;
+      border-radius: 100px;
+      border: 1.5px solid var(--ink);
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    .btn-pill-outline:hover {
+      background: rgba(14, 14, 12, 0.05);
+      transform: translateY(-1px);
     }
 
     /* ---------------- HERO SECTION ---------------- */
-    .hero-section {
-      padding: 72px 24px 48px;
-      text-align: center;
-      max-width: 900px;
+    .hero-wrap {
+      position: relative;
+      min-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 130px clamp(18px, 4vw, 44px) 80px;
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      max-width: 1320px;
       margin: 0 auto;
+      width: 100%;
     }
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(0, 113, 227, 0.08);
-      border: 1px solid rgba(0, 113, 227, 0.2);
-      color: var(--accent-blue);
-      padding: 6px 16px;
-      border-radius: var(--radius-full);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      margin-bottom: 24px;
+    
+    /* Rotating Stamp Badge (Cloudstudio Signature) */
+    .hero-badge-stamp {
+      position: absolute;
+      right: clamp(20px, 6vw, 90px);
+      top: 140px;
+      width: clamp(100px, 13vw, 150px);
+      height: clamp(100px, 13vw, 150px);
+      z-index: 5;
     }
-    .hero-title {
-      font-size: 54px;
-      line-height: 1.08;
-      font-weight: 800;
-      letter-spacing: -0.035em;
-      color: var(--text-primary);
-      margin-bottom: 20px;
+    .spin-ring {
+      position: absolute;
+      inset: 0;
+      animation: cs-spin 16s linear infinite;
     }
-    .hero-title-highlight {
-      background: linear-gradient(135deg, #0071e3 0%, #7c3aed 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    @keyframes cs-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
-    .hero-desc {
-      font-size: 19px;
-      line-height: 1.45;
-      color: var(--text-secondary);
-      max-width: 680px;
-      margin: 0 auto 32px;
-      font-weight: 400;
-    }
-    .hero-cta-group {
+    .stamp-dot {
+      position: absolute;
+      inset: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 14px;
+    }
+    .stamp-dot span {
+      width: 36%;
+      height: 36%;
+      border-radius: 50%;
+      background: var(--ink);
+    }
+
+    .hero-kicker {
+      font-family: 'Geist Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+    }
+    .hero-kicker-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--ink);
+    }
+
+    .hero-h1 {
+      font-size: clamp(2.8rem, 7vw, 6.4rem);
+      line-height: 0.94;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin-bottom: 28px;
+      max-width: 960px;
+    }
+    .hero-h1-accent {
+      background: var(--accent);
+      padding: 0 8px;
+      border-radius: 8px;
+      display: inline-block;
+      border: 1px solid var(--ink);
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .hero-lead {
+      font-size: clamp(18px, 2.2vw, 24px);
+      line-height: 1.4;
+      color: var(--ink-soft);
+      max-width: 720px;
+      margin-bottom: 40px;
+      font-weight: 500;
+    }
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
       flex-wrap: wrap;
       margin-bottom: 48px;
     }
 
-    /* ---------------- INTERACTIVE LIVE PREVIEW CARD ---------------- */
-    .preview-card-wrap {
-      max-width: 820px;
-      margin: 0 auto 80px;
-      padding: 0 16px;
-    }
-    .preview-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      padding: 24px;
-      box-shadow: var(--shadow-lg);
+    /* Micro-ticker */
+    .hero-ticker {
       display: flex;
-      flex-direction: column;
-      gap: 20px;
+      gap: 24px;
+      flex-wrap: wrap;
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      color: var(--ink-mute);
+      text-transform: uppercase;
+      padding-top: 24px;
+      border-top: 1px dashed var(--border);
     }
-    .preview-header {
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ticker-item span { color: var(--ok); font-weight: 700; }
+
+    /* ---------------- INTERACTIVE JUKEBOX MOCKUP (STUDIO CARD) ---------------- */
+    .live-showcase-wrap {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: clamp(40px, 6vw, 80px) clamp(18px, 4vw, 44px);
+    }
+    .studio-card {
+      background: var(--paper-card);
+      border: 1.5px solid var(--ink);
+      border-radius: 24px;
+      padding: clamp(24px, 4vw, 44px);
+      box-shadow: 6px 6px 0 var(--ink);
+    }
+    .studio-card-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid var(--border-subtle);
-      padding-bottom: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
     }
-    .preview-live-indicator {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
+    .tag-editorial {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: var(--bg);
+      border: 1px solid var(--ink);
+      padding: 4px 10px;
+      border-radius: 100px;
       font-weight: 700;
-      color: var(--accent-green);
-      background: rgba(16, 185, 129, 0.1);
-      padding: 4px 12px;
-      border-radius: var(--radius-full);
     }
-    .live-dot {
-      width: 8px;
-      height: 8px;
-      background: var(--accent-green);
-      border-radius: 50%;
-      animation: pulse 1.8s infinite;
-    }
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
-      70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-    }
-    .preview-player-body {
+    .live-stream-bar {
       display: grid;
       grid-template-columns: auto 1fr auto;
-      gap: 18px;
+      gap: 20px;
       align-items: center;
-      background: var(--bg-secondary);
-      border-radius: var(--radius-md);
-      padding: 16px 20px;
+      background: #f7f6ed;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 24px;
+      margin-bottom: 20px;
     }
-    .player-visualizer {
+    .wave-bars {
       display: flex;
       align-items: flex-end;
-      gap: 3px;
+      gap: 4px;
       height: 32px;
-      padding-bottom: 4px;
     }
-    .visualizer-bar {
-      width: 4px;
-      background: var(--accent-blue);
-      border-radius: 2px;
-      animation: wave 1.2s ease-in-out infinite alternate;
+    .wave-col {
+      width: 5px;
+      background: var(--ink);
+      border-radius: 3px;
+      animation: cs-wave 1.1s ease-in-out infinite alternate;
     }
-    .visualizer-bar:nth-child(1) { height: 16px; animation-delay: 0.1s; }
-    .visualizer-bar:nth-child(2) { height: 28px; animation-delay: 0.3s; }
-    .visualizer-bar:nth-child(3) { height: 10px; animation-delay: 0.2s; }
-    .visualizer-bar:nth-child(4) { height: 24px; animation-delay: 0.4s; }
-    .visualizer-bar:nth-child(5) { height: 18px; animation-delay: 0.15s; }
-    @keyframes wave {
-      0% { transform: scaleY(0.4); }
+    .wave-col:nth-child(1) { height: 14px; animation-delay: 0.1s; }
+    .wave-col:nth-child(2) { height: 28px; animation-delay: 0.3s; }
+    .wave-col:nth-child(3) { height: 8px; animation-delay: 0.2s; }
+    .wave-col:nth-child(4) { height: 26px; animation-delay: 0.4s; }
+    .wave-col:nth-child(5) { height: 18px; animation-delay: 0.15s; }
+    @keyframes cs-wave {
+      0% { transform: scaleY(0.3); }
       100% { transform: scaleY(1); }
     }
-    .player-meta {
-      text-align: left;
-    }
-    .player-track-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-    .player-track-sub {
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
-    .preview-commands-row {
+    .command-pills {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
-      justify-content: center;
     }
-    .command-tag {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
-      padding: 6px 12px;
-      font-family: ui-monospace, Menlo, Monaco, monospace;
+    .cmd-pill {
+      font-family: 'Geist Mono', monospace;
       font-size: 12px;
       font-weight: 600;
-      color: var(--accent-indigo);
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 10px;
+      color: var(--ink);
     }
 
-    /* ---------------- FEATURES PILLARS ---------------- */
+    /* ---------------- SECTION 01: WHAT WE DO (EDITORIAL GRID) ---------------- */
     .section-wrap {
-      max-width: 1120px;
-      margin: 0 auto 96px;
-      padding: 0 24px;
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: clamp(60px, 8vw, 120px) clamp(18px, 4vw, 44px);
     }
-    .section-header {
-      text-align: center;
-      max-width: 640px;
-      margin: 0 auto 48px;
-    }
-    .section-subtitle {
-      font-size: 12px;
+    .sec-kicker {
+      font-family: 'Geist Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-weight: 800;
-      color: var(--accent-blue);
-      margin-bottom: 8px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
     }
-    .section-title {
-      font-size: 36px;
+    .sec-h2 {
+      font-size: clamp(2.4rem, 5.5vw, 4.8rem);
+      line-height: 0.96;
       font-weight: 800;
-      letter-spacing: -0.025em;
-      color: var(--text-primary);
-      line-height: 1.16;
+      letter-spacing: -0.035em;
+      margin-bottom: 56px;
+      max-width: 880px;
     }
-    .features-grid {
+    .grid-2col {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 24px;
     }
-    @media (max-width: 768px) {
-      .features-grid { grid-template-columns: 1fr; }
-      .hero-title { font-size: 38px; }
-      .nav-menu { display: none; }
+    @media (max-width: 820px) {
+      .grid-2col { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      .live-stream-bar { grid-template-columns: 1fr; }
     }
-    .feature-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      padding: 32px;
-      box-shadow: var(--shadow-sm);
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    .editorial-card {
+      background: var(--paper-card);
+      border: 1.5px solid var(--ink);
+      border-radius: 20px;
+      padding: clamp(28px, 4vw, 40px);
+      box-shadow: 4px 4px 0 var(--ink);
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      justify-content: space-between;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .feature-card:hover {
-      box-shadow: var(--shadow-md);
+    .editorial-card:hover {
       transform: translateY(-2px);
-      border-color: rgba(0, 0, 0, 0.12);
+      box-shadow: 6px 6px 0 var(--ink);
     }
-    .feature-icon-box {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
-      background: var(--bg-secondary);
-      color: var(--accent-blue);
+    .card-num {
+      font-family: 'Geist Mono', monospace;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink-mute);
+      margin-bottom: 24px;
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      justify-content: center;
     }
-    .feature-card-title {
+    .card-title {
+      font-size: clamp(24px, 3vw, 32px);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      margin-bottom: 14px;
+    }
+    .card-body {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--ink-soft);
+      font-weight: 500;
+    }
+
+    /* ---------------- SECTION 02: THE 3-STEP SHIP PROCESS ---------------- */
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 40px;
+    }
+    @media (max-width: 880px) {
+      .steps-grid { grid-template-columns: 1fr; }
+    }
+    .step-box {
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      border-radius: 18px;
+      padding: 30px 24px;
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .step-badge {
+      display: inline-block;
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--sky);
+      border: 1px solid var(--ink);
+      padding: 3px 10px;
+      border-radius: 6px;
+      margin-bottom: 18px;
+    }
+    .step-title {
       font-size: 20px;
       font-weight: 800;
+      margin-bottom: 10px;
       letter-spacing: -0.015em;
     }
-    .feature-card-desc {
+    .step-desc {
       font-size: 14px;
-      color: var(--text-secondary);
+      color: var(--ink-soft);
+      line-height: 1.55;
+    }
+
+    /* ---------------- FAQ ACCORDION ---------------- */
+    .faq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    .faq-item {
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      border-radius: 16px;
+      padding: 24px 28px;
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .faq-q {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+    .faq-a {
+      font-size: 14px;
+      color: var(--ink-soft);
       line-height: 1.6;
     }
 
-    /* ---------------- DEPLOYER CORE FORM (APPLE CARD) ---------------- */
-    .deploy-section {
-      max-width: 760px;
-      margin: 0 auto 96px;
-      padding: 0 20px;
-    }
-    .deploy-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      padding: 36px 40px;
-      box-shadow: var(--shadow-lg);
-    }
-    @media (max-width: 600px) {
-      .deploy-card { padding: 24px 20px; }
-    }
-    .deploy-header {
+    /* ---------------- BOTTOM BIG CALLOUT BANNER ---------------- */
+    .banner-cta {
+      background: var(--bg);
+      border-top: 1.5px solid var(--ink);
+      border-bottom: 1.5px solid var(--ink);
+      padding: clamp(60px, 8vw, 100px) clamp(18px, 4vw, 44px);
       text-align: center;
-      margin-bottom: 32px;
     }
-    .deploy-title {
-      font-size: 26px;
+    .banner-h2 {
+      font-size: clamp(2.6rem, 6vw, 5.2rem);
+      line-height: 0.95;
       font-weight: 800;
-      letter-spacing: -0.02em;
-      margin-bottom: 8px;
+      letter-spacing: -0.035em;
+      margin-bottom: 24px;
     }
-    .deploy-subtitle {
-      font-size: 14px;
-      color: var(--text-secondary);
+    .banner-sub {
+      font-size: 18px;
+      color: var(--ink-soft);
+      max-width: 600px;
+      margin: 0 auto 36px;
+      font-weight: 500;
     }
 
-    /* Interactive Form Groups & Tutorials */
+    /* ---------------- FOOTER ---------------- */
+    .cs-footer {
+      padding: 48px clamp(18px, 4vw, 44px);
+      background: var(--paper);
+    }
+    .cs-footer-inner {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 13px;
+      color: var(--ink-mute);
+    }
+    .footer-nav {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-nav a {
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer-nav a:hover { text-decoration: underline; }
+
+    /* ---------------- AUTH MODAL (NATIVE <DIALOG>) ---------------- */
+    dialog:modal {
+      border: none;
+      padding: 0;
+      background: transparent;
+      max-width: 440px;
+      width: calc(100% - 32px);
+      margin: auto;
+      overscroll-behavior: contain;
+    }
+    dialog::backdrop {
+      background: rgba(14, 14, 12, 0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      overflow: hidden;
+      overscroll-behavior: contain;
+    }
+    .auth-box {
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 8px 8px 0 var(--ink);
+    }
+    .auth-tabs-row {
+      display: flex;
+      background: #f7f6ed;
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 4px;
+      margin-bottom: 22px;
+    }
+    .auth-tab {
+      flex: 1;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px;
+      border-radius: 100px;
+      cursor: pointer;
+    }
+    .auth-tab.active {
+      background: var(--ink);
+      color: var(--accent);
+    }
+    .app-input {
+      width: 100%;
+      background: #ffffff;
+      border: 1.5px solid var(--border-dark);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      outline: none;
+      margin-top: 6px;
+    }
+    .app-input:focus {
+      border-color: var(--ink);
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Floating Nav (Cloudstudio style) -->
+  <nav id="cs-nav">
+    <a href="/" class="nav-brand">
+      zevray<span>*</span>
+    </a>
+
+    <div class="nav-links">
+      <a href="#work" class="nav-link">What We Do</a>
+      <a href="#how" class="nav-link">How It Works</a>
+      <a href="/player" target="_blank" class="nav-link">Live Jukebox</a>
+      <a href="#faq" class="nav-link">FAQ</a>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <button class="nav-link" onclick="openAuthModal()" style="background:none; border:none; cursor:pointer;" id="nav-auth-btn">Sign In</button>
+      <a href="/deploy" class="btn-pill-ink">
+        <span>Deploy Bot &rarr;</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero-wrap">
+    <!-- Rotating Circular Stamp Seal -->
+    <div class="hero-badge-stamp">
+      <div class="spin-ring">
+        <svg viewBox="0 0 100 100" style="width:100%; height:100%">
+          <defs>
+            <path id="circle-path" d="M50,50 m-40,0 a40,40 0 1,1 80,0 a40,40 0 1,1 -80,0"></path>
+          </defs>
+          <text style="font-family:'Geist Mono',monospace; font-size:8.4px; letter-spacing:2.1px; fill:var(--ink); text-transform:uppercase; font-weight:700;">
+            <textPath href="#circle-path" startOffset="0">AUTONOMOUS BUTLER &bull; 24/7 ONLINE &bull; HIGHRISE &bull; </textPath>
+          </text>
+        </svg>
+      </div>
+      <div class="stamp-dot">
+        <span></span>
+      </div>
+    </div>
+
+    <div class="hero-kicker">
+      <span class="hero-kicker-dot"></span>
+      <span>( The Highrise Room Engine )</span>
+    </div>
+
+    <h1 class="hero-h1">
+      Your room's next host <br>
+      <span class="hero-h1-accent">isn't a person.</span>
+    </h1>
+
+    <p class="hero-lead">
+      Autonomous 24/7 in-room radio, multi-floor teleportation, tip leaderboards, and permanent outfit memory. Designed for creators who want their Highrise room bustling around the clock.
+    </p>
+
+    <div class="hero-actions">
+      <a href="/deploy" class="btn-pill-ink" style="font-size: 17px; padding: 14px 28px;">
+        <span>Deploy Your Bot in 60s &rarr;</span>
+      </a>
+      <a href="/player" target="_blank" class="btn-pill-outline" style="font-size: 17px; padding: 14px 28px;">
+        <span>Open Live Jukebox</span>
+      </a>
+    </div>
+
+    <div class="hero-ticker">
+      <div class="ticker-item"><span>&bull;</span> 100% Free Cloud Hosting</div>
+      <div class="ticker-item"><span>&bull;</span> 24/7 Keep-Alive Auto-Pinger</div>
+      <div class="ticker-item"><span>&bull;</span> Permanent Supabase Cloud State</div>
+      <div class="ticker-item"><span>&bull;</span> Zero Coding Required</div>
+    </div>
+  </header>
+
+  <!-- Interactive Live Jukebox Showcase -->
+  <div class="live-showcase-wrap">
+    <div class="studio-card">
+      <div class="studio-card-top">
+        <span class="tag-editorial">Live In-Room Broadcast Simulation</span>
+        <div style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700;">
+          STATUS: <span style="color:var(--ok);">STREAMING 24/7</span>
+        </div>
+      </div>
+
+      <div class="live-stream-bar">
+        <div class="wave-bars">
+          <div class="wave-col"></div>
+          <div class="wave-col"></div>
+          <div class="wave-col"></div>
+          <div class="wave-col"></div>
+          <div class="wave-col"></div>
+        </div>
+        <div>
+          <div style="font-weight: 800; font-size: 16px;">Synchronous In-Room Radio Station</div>
+          <div style="font-size: 13px; color: var(--ink-mute);">Highrise Custom Radio Link (.mp3) &bull; Synchronized for all guests</div>
+        </div>
+        <a href="/player" target="_blank" class="btn-pill-ink" style="font-size:13px; padding:8px 16px;">
+          <span>Listen in Browser &rarr;</span>
+        </a>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <span style="font-size: 12px; font-family:'Geist Mono',monospace; font-weight: 600; color: var(--ink-mute);">
+          BUILT-IN CHAT COMMANDS:
+        </span>
+        <div class="command-pills">
+          <span class="cmd-pill">/play &lt;song&gt;</span>
+          <span class="cmd-pill">/skip</span>
+          <span class="cmd-pill">/f1 ... /f4</span>
+          <span class="cmd-pill">!fit</span>
+          <span class="cmd-pill">!setpos</span>
+          <span class="cmd-pill">!setwelcome</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 01: What We Do (Editorial Grid) -->
+  <section class="section-wrap" id="work">
+    <div class="sec-kicker">
+      <span class="hero-kicker-dot"></span>
+      <span>What We Do &bull; The 4 Pillars</span>
+    </div>
+    <h2 class="sec-h2">We don't build toys.<br>We ship autonomous room infrastructure.</h2>
+
+    <div class="grid-2col">
+      <!-- 01 -->
+      <div class="editorial-card">
+        <div>
+          <div class="card-num">
+            <span>01</span>
+            <span>( Radio Stream )</span>
+          </div>
+          <h3 class="card-title">24/7 In-Room Music Takeover</h3>
+          <p class="card-body">
+            Stream directly through your Highrise room speakers via <code>/radio.mp3</code>. Guests can request any song with <code>/play</code>, jump queue, or enjoy curated autonomous playlists when the queue clears.
+          </p>
+        </div>
+      </div>
+
+      <!-- 02 -->
+      <div class="editorial-card">
+        <div>
+          <div class="card-num">
+            <span>02</span>
+            <span>( Multi-Floor )</span>
+          </div>
+          <h3 class="card-title">Dynamic Multi-Floor Elevator</h3>
+          <p class="card-body">
+            Whether you run a 2-floor lounge or a 5-story club, walk to each level and type <code>!setfloor f1</code>, <code>!setfloor f2</code>. Guests teleport instantly across levels simply by typing <code>/f1</code> to <code>/f4</code>.
+          </p>
+        </div>
+      </div>
+
+      <!-- 03 -->
+      <div class="editorial-card">
+        <div>
+          <div class="card-num">
+            <span>03</span>
+            <span>( Tip Engine )</span>
+          </div>
+          <h3 class="card-title">Live Tip Leaderboard & Top Tipper</h3>
+          <p class="card-body">
+            Automatically track gold tips in real time. The bot broadcasts celebratory in-room whispers, celebrates supporters, and crowns your room's Top Tipper on the live leaderboard.
+          </p>
+        </div>
+      </div>
+
+      <!-- 04 -->
+      <div class="editorial-card">
+        <div>
+          <div class="card-num">
+            <span>04</span>
+            <span>( State Anchor )</span>
+          </div>
+          <h3 class="card-title">Permanent Outfits & Memory</h3>
+          <p class="card-body">
+            Cloud-backed state via Supabase. Your bot never forgets its wardrobe (<code>!fit</code>), DJ booth anchor (<code>!setpos</code>), or welcome message when the cloud container updates or redeploys.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 02: How It Works (The 3-Step Ship Process) -->
+  <section class="section-wrap" id="how" style="background:#f4f2e6; border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+    <div class="sec-kicker">
+      <span class="hero-kicker-dot"></span>
+      <span>Execution &bull; 60 Seconds</span>
+    </div>
+    <h2 class="sec-h2">How it ships to your room.</h2>
+
+    <div class="steps-grid">
+      <div class="step-box">
+        <span class="step-badge">STEP 01</span>
+        <h3 class="step-title">Get Highrise Token</h3>
+        <p class="step-desc">
+          Sign into <b>create.highrise.game</b> &rarr; Bots & API Keys &rarr; Create Bot. Copy your bot's 64-character token in 30 seconds.
+        </p>
+      </div>
+
+      <div class="step-box">
+        <span class="step-badge">STEP 02</span>
+        <h3 class="step-title">1-Click Cloud Launch</h3>
+        <p class="step-desc">
+          Open our dedicated <b>/deploy</b> page. Paste your token, room link, and Render key. Hit deploy &mdash; Render builds your bot container automatically.
+        </p>
+      </div>
+
+      <div class="step-box">
+        <span class="step-badge">STEP 03</span>
+        <h3 class="step-title">Enable In-Room Audio</h3>
+        <p class="step-desc">
+          Copy your generated <code>.mp3</code> stream URL and paste it into Highrise <b>Room Settings &rarr; Custom Radio Station</b>. Music plays for everyone!
+        </p>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 48px;">
+      <a href="/deploy" class="btn-pill-ink" style="font-size: 16px; padding: 13px 26px;">
+        <span>Go to Bot Setup Form (/deploy) &rarr;</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- Section 03: FAQ -->
+  <section class="section-wrap" id="faq">
+    <div class="sec-kicker">
+      <span class="hero-kicker-dot"></span>
+      <span>Common Questions</span>
+    </div>
+    <h2 class="sec-h2">Frequently asked questions.</h2>
+
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q">Does my computer or phone need to stay on?</div>
+        <div class="faq-a">
+          No! Your bot runs inside an autonomous cloud container on Render. You can close your laptop, turn off your phone, or go offline &mdash; the bot stays active 24/7 in your room.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">How does in-room sound work?</div>
+        <div class="faq-a">
+          Our cloud server broadcasts a direct synchronous MP3 stream (`/radio.mp3`). Highrise has a built-in Custom Radio feature in Room Settings &mdash; paste the link there, and all guests in your room hear the same music simultaneously!
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Can other players mess with my bot's coordinates or outfit?</div>
+        <div class="faq-a">
+          Never. You specify your Highrise username as the Master Administrator during deployment. Admin commands like <code>!setpos</code>, <code>!setfloor</code>, <code>!fit</code>, and <code>!setwelcome</code> strictly respond only to you.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Where is the bot setup form?</div>
+        <div class="faq-a">
+          The bot setup form is located on our dedicated deployment page at <b><a href="/deploy" style="color:var(--ink); font-weight:700;">/deploy</a></b>. It features detailed step-by-step tutorials for every field, password reveal/hide eye toggles, and browser credential memory.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom CTA Banner (Cloudstudio signature) -->
+  <section class="banner-cta">
+    <h2 class="banner-h2">Ready to ship your 24/7 Highrise butler?</h2>
+    <p class="banner-sub">
+      Launch your autonomous DJ, multi-floor elevator, and live tip tracker on your free Render cloud account in 60 seconds.
+    </p>
+    <a href="/deploy" class="btn-pill-ink" style="font-size: 18px; padding: 16px 36px;">
+      <span>Launch Your Bot on /deploy &rarr;</span>
+    </a>
+  </section>
+
+  <!-- Footer -->
+  <footer class="cs-footer">
+    <div class="cs-footer-inner">
+      <div>
+        <b>zevray*</b> &bull; Autonomous Highrise Platform &bull; &copy; 2026 All rights reserved.
+      </div>
+      <div class="footer-nav">
+        <a href="/deploy">Deployer</a>
+        <a href="/player" target="_blank">Jukebox</a>
+        <a href="https://create.highrise.game" target="_blank">Highrise Developer Hub</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Auth Dialog (Native <dialog>) -->
+  <dialog id="auth-dialog" closedby="any" aria-labelledby="auth-title">
+    <div class="auth-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <span style="font-weight:800; font-size:18px;" id="auth-title">zevray* account</span>
+        <button onclick="document.getElementById('auth-dialog').close()" style="background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
+      </div>
+
+      <div class="auth-tabs-row">
+        <button type="button" class="auth-tab active" id="tab-login" onclick="setAuthTab('login')">Sign In</button>
+        <button type="button" class="auth-tab" id="tab-signup" onclick="setAuthTab('signup')">Create Account</button>
+      </div>
+
+      <form id="auth-form" onsubmit="handleAuth(event)">
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; font-weight:700;">Email Address</label>
+          <input type="email" id="auth-email" class="app-input" placeholder="you@example.com" required>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; font-weight:700;">Password</label>
+          <input type="password" id="auth-password" class="app-input" placeholder="••••••••" required minlength="6">
+        </div>
+
+        <div id="signup-extra" style="display:none; margin-bottom:14px;">
+          <label style="font-size:13px; font-weight:700;">Highrise Username (Optional)</label>
+          <input type="text" id="auth-hr" class="app-input" placeholder="e.g. Sarah">
+        </div>
+
+        <div id="auth-err" style="display:none; color:red; font-size:12px; margin-bottom:12px;"></div>
+
+        <button type="submit" class="btn-pill-ink" style="width:100%; justify-content:center; padding:12px;" id="btn-auth-sub">
+          <span id="auth-btn-txt">Sign In</span>
+        </button>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    const SUPABASE_URL = "__SUPABASE_URL__";
+    const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
+    const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+    let authMode = 'login';
+    const authDialog = document.getElementById('auth-dialog');
+
+    function openAuthModal() {
+      if (typeof authDialog.showModal === 'function') authDialog.showModal();
+    }
+
+    function setAuthTab(mode) {
+      authMode = mode;
+      document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+      document.getElementById('tab-signup').classList.toggle('active', mode === 'signup');
+      document.getElementById('signup-extra').style.display = mode === 'signup' ? 'block' : 'none';
+      document.getElementById('auth-btn-txt').innerText = mode === 'signup' ? 'Create Account' : 'Sign In';
+      document.getElementById('auth-err').style.display = 'none';
+    }
+
+    async function handleAuth(e) {
+      e.preventDefault();
+      if (!sb) return;
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const hr = document.getElementById('auth-hr').value.trim();
+      const errBox = document.getElementById('auth-err');
+
+      try {
+        if (authMode === 'signup') {
+          const { error } = await sb.auth.signUp({ email, password, options: { data: { highrise_username: hr } } });
+          if (error) throw error;
+          alert('Check your email for confirmation link!');
+          authDialog.close();
+        } else {
+          const { error } = await sb.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          authDialog.close();
+          window.location.href = '/deploy';
+        }
+      } catch (err) {
+        errBox.innerText = err.message;
+        errBox.style.display = 'block';
+      }
+    }
+
+    async function checkUser() {
+      if (!sb) return;
+      const { data: { session } } = await sb.auth.getSession();
+      if (session && session.user) {
+        document.getElementById('nav-auth-btn').innerText = 'Dashboard (' + session.user.email.split('@')[0] + ')';
+        document.getElementById('nav-auth-btn').onclick = () => { window.location.href = '/deploy'; };
+      }
+    }
+    checkUser();
+  </script>
+</body>
+</html>
+"""
+
+
+DEPLOY_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deploy Bot &bull; ZevRay Highrise Cloud Engine</title>
+  
+  <!-- Cloudstudio Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Supabase JS Client v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root {
+      --bg: #FFF48D;
+      --paper: #faf8f0;
+      --paper-card: #ffffff;
+      --ink: #0e0e0c;
+      --ink-soft: #2e2e28;
+      --ink-mute: #78786a;
+      --sky: #8ED8FF;
+      --lavender: #A3B1FF;
+      --accent: #FFF48D;
+      --ok: #27ae60;
+      --border: rgba(14, 14, 12, 0.12);
+      --border-dark: rgba(14, 14, 12, 0.22);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background-color: var(--paper);
+      color: var(--ink);
+      font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.45;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 60px;
+    }
+
+    /* Top Nav */
+    .deploy-nav {
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 24px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand-link {
+      text-decoration: none;
+      font-weight: 800;
+      font-size: 22px;
+      color: var(--ink);
+    }
+    .back-link {
+      font-family: 'Geist Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    /* Core Deploy Card */
+    .deploy-container {
+      max-width: 760px;
+      margin: 0 auto;
+      width: calc(100% - 32px);
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      border-radius: 24px;
+      padding: clamp(24px, 5vw, 44px);
+      box-shadow: 6px 6px 0 var(--ink);
+    }
+
+    .kicker {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--ink-mute);
+      margin-bottom: 8px;
+    }
+    .deploy-h1 {
+      font-size: clamp(28px, 4.5vw, 38px);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .deploy-sub {
+      font-size: 15px;
+      color: var(--ink-soft);
+      line-height: 1.5;
+      margin-bottom: 32px;
+    }
+
+    /* Form Steps & Tutorials */
     .form-step {
       margin-bottom: 28px;
-      border-bottom: 1px solid var(--border-subtle);
       padding-bottom: 24px;
+      border-bottom: 1px dashed var(--border);
     }
     .form-step:last-of-type {
       border-bottom: none;
       padding-bottom: 12px;
     }
-    .step-label-row {
+    .step-header {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
       margin-bottom: 8px;
     }
-    .field-label {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    .step-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--ink);
     }
-    .badge-required {
+    .badge-req {
+      font-family: 'Geist Mono', monospace;
       font-size: 10px;
       font-weight: 700;
-      color: var(--accent-blue);
-      background: rgba(0, 113, 227, 0.08);
+      background: var(--bg);
+      border: 1px solid var(--ink);
       padding: 2px 6px;
       border-radius: 4px;
       text-transform: uppercase;
     }
-    .badge-optional {
+    .badge-opt {
+      font-family: 'Geist Mono', monospace;
       font-size: 10px;
       font-weight: 700;
-      color: var(--text-tertiary);
-      background: var(--bg-secondary);
+      background: #f0efe6;
+      border: 1px solid var(--border);
       padding: 2px 6px;
       border-radius: 4px;
       text-transform: uppercase;
+      color: var(--ink-mute);
     }
 
-    /* Input wrapper with Hide/Reveal Icon */
-    .input-wrapper {
+    .input-box {
       position: relative;
       display: flex;
       align-items: center;
     }
     .app-input {
       width: 100%;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-medium);
-      border-radius: var(--radius-md);
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      border-radius: 12px;
       padding: 13px 44px 13px 14px;
       font-family: inherit;
       font-size: 14px;
-      color: var(--text-primary);
+      color: var(--ink);
       outline: none;
+      box-shadow: 2px 2px 0 var(--border);
       transition: all 0.15s ease;
-      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
     }
     .app-input:focus {
-      border-color: var(--accent-blue);
-      box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+      border-color: var(--ink);
+      box-shadow: 4px 4px 0 var(--ink);
     }
     .app-input.no-reveal {
       padding-right: 14px;
     }
-    .btn-reveal-toggle {
+    .btn-reveal {
       position: absolute;
       right: 12px;
       background: none;
       border: none;
-      color: var(--text-tertiary);
       cursor: pointer;
       padding: 6px;
+      color: var(--ink-mute);
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 6px;
-      transition: color 0.15s ease;
     }
-    .btn-reveal-toggle:hover { color: var(--text-primary); }
+    .btn-reveal:hover { color: var(--ink); }
 
     /* Interactive Tutorial Box */
-    .tutorial-box {
+    .tutorial-card {
       margin-top: 10px;
-      background: var(--bg-secondary);
-      border: 1px solid rgba(0, 0, 0, 0.05);
-      border-radius: var(--radius-md);
-      padding: 14px 16px;
+      background: #fbfaf2;
+      border: 1px solid var(--border-dark);
+      border-radius: 12px;
+      padding: 12px 16px;
     }
-    .tutorial-header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
+    .tutorial-heading {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
       font-weight: 700;
-      color: var(--accent-blue);
-      margin-bottom: 6px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--ink);
+      margin-bottom: 4px;
     }
-    .tutorial-text {
-      font-size: 12px;
-      line-height: 1.55;
-      color: var(--text-secondary);
+    .tutorial-desc {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--ink-soft);
     }
-    .tutorial-text a {
-      color: var(--accent-blue);
+    .tutorial-desc a {
+      color: var(--ink);
+      font-weight: 700;
       text-decoration: underline;
-      font-weight: 600;
     }
-    .example-code {
+    .code-sample {
       display: inline-block;
       margin-top: 6px;
-      font-family: ui-monospace, Menlo, Monaco, monospace;
+      font-family: 'Geist Mono', monospace;
       font-size: 11px;
       background: #ffffff;
-      border: 1px solid var(--border-subtle);
+      border: 1px solid var(--border);
+      padding: 3px 8px;
       border-radius: 6px;
-      padding: 4px 8px;
-      color: #b91c1c;
       word-break: break-all;
     }
 
-    /* Save preferences switch */
+    /* Switch */
     .pref-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 14px 0;
-      margin-bottom: 16px;
-    }
-    .pref-label-wrap {
-      display: flex;
-      flex-direction: column;
-    }
-    .pref-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-    .pref-sub {
-      font-size: 11px;
-      color: var(--text-tertiary);
+      margin-bottom: 20px;
     }
     .switch {
       position: relative;
@@ -1229,1173 +1858,347 @@ PORTAL_HTML = """<!DOCTYPE html>
       position: absolute;
       cursor: pointer;
       inset: 0;
-      background-color: #e5e5ea;
+      background-color: #ddd;
       transition: .2s;
       border-radius: 24px;
+      border: 1.5px solid var(--ink);
     }
     .slider:before {
       position: absolute;
       content: "";
-      height: 20px;
-      width: 20px;
+      height: 16px;
+      width: 16px;
       left: 2px;
       bottom: 2px;
-      background-color: white;
+      background-color: var(--ink);
       transition: .2s;
       border-radius: 50%;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     input:checked + .slider {
-      background-color: var(--accent-green);
+      background-color: var(--bg);
     }
     input:checked + .slider:before {
       transform: translateX(20px);
     }
 
-    /* Submit & Status */
-    .btn-submit-deploy {
+    /* Submit Button */
+    .btn-submit {
       width: 100%;
+      background: var(--ink);
+      color: var(--accent);
+      border: 1.5px solid var(--ink);
+      border-radius: 100px;
       padding: 16px;
       font-size: 16px;
-      font-weight: 700;
-      background: linear-gradient(135deg, #0071e3 0%, #7c3aed 100%);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-full);
-      box-shadow: 0 8px 24px rgba(0, 113, 227, 0.3);
+      font-weight: 800;
+      font-family: inherit;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 4px 4px 0 var(--border);
+      transition: all 0.2s cubic-bezier(.34, 1.56, .64, 1);
     }
-    .btn-submit-deploy:hover {
-      box-shadow: 0 12px 28px rgba(0, 113, 227, 0.4);
-      transform: translateY(-1px);
+    .btn-submit:hover {
+      transform: scale(1.02);
+      box-shadow: 6px 6px 0 var(--ink);
     }
-    .btn-submit-deploy:disabled {
-      opacity: 0.6;
+    .btn-submit:disabled {
+      opacity: 0.5;
       cursor: not-allowed;
       transform: none;
     }
 
-    /* Status and Error banners */
-    .status-alert {
-      display: none;
-      margin-top: 20px;
-      padding: 14px 18px;
-      border-radius: var(--radius-md);
-      font-size: 13px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .status-loading {
-      background: rgba(0, 113, 227, 0.08);
-      border: 1px solid rgba(0, 113, 227, 0.2);
-      color: var(--accent-blue);
-    }
-    .status-error {
-      background: rgba(239, 68, 68, 0.08);
-      border: 1px solid rgba(239, 68, 68, 0.2);
-      color: #dc2626;
-    }
-
-    /* ---------------- SUCCESS RESULT CARD ---------------- */
-    .result-card {
+    /* Results Card */
+    .result-box {
       display: none;
       margin-top: 32px;
-      background: var(--bg-surface);
-      border: 2px solid rgba(16, 185, 129, 0.3);
-      border-radius: var(--radius-lg);
+      background: var(--bg);
+      border: 2px solid var(--ink);
+      border-radius: 20px;
       padding: 28px;
-      box-shadow: var(--shadow-lg);
-    }
-    .result-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(16, 185, 129, 0.1);
-      color: var(--accent-green);
-      font-size: 12px;
-      font-weight: 700;
-      padding: 4px 12px;
-      border-radius: var(--radius-full);
-      margin-bottom: 12px;
-    }
-    .result-title {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin-bottom: 8px;
-    }
-    .result-desc {
-      font-size: 13px;
-      color: var(--text-secondary);
-      margin-bottom: 24px;
+      box-shadow: 6px 6px 0 var(--ink);
     }
 
-    /* Prominent MP3 Stream Container */
-    .radio-stream-box {
-      background: linear-gradient(135deg, rgba(0, 113, 227, 0.04) 0%, rgba(124, 58, 237, 0.05) 100%);
-      border: 1.5px solid rgba(0, 113, 227, 0.2);
-      border-radius: var(--radius-md);
-      padding: 20px;
-      margin-bottom: 20px;
-    }
-    .radio-stream-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    .radio-stream-label {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .stream-input-group {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .stream-url-field {
-      flex: 1;
+    .stream-card {
       background: #ffffff;
-      border: 1px solid var(--border-medium);
-      border-radius: var(--radius-sm);
-      padding: 10px 14px;
-      font-family: ui-monospace, Menlo, Monaco, monospace;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--accent-blue);
-      outline: none;
+      border: 1.5px solid var(--ink);
+      border-radius: 14px;
+      padding: 18px;
+      margin: 18px 0;
     }
 
-    /* ---------------- AUTH MODAL (NATIVE DIALOG COMPLIANT) ---------------- */
-    dialog:modal {
-      border: none;
-      padding: 0;
-      background: transparent;
-      max-width: 420px;
-      width: calc(100% - 32px);
-      margin: auto;
-      overscroll-behavior: contain;
-    }
-    dialog::backdrop {
-      background: rgba(0, 0, 0, 0.35);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      overflow: hidden;
-      overscroll-behavior: contain;
-    }
-    .auth-dialog-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      padding: 32px;
-      box-shadow: var(--shadow-lg);
-    }
-    .auth-tabs {
-      display: flex;
-      background: var(--bg-secondary);
-      border-radius: var(--radius-full);
-      padding: 4px;
-      margin-bottom: 24px;
-    }
-    .auth-tab-btn {
-      flex: 1;
-      border: none;
-      background: none;
-      padding: 8px 16px;
-      border-radius: var(--radius-full);
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-secondary);
-      cursor: pointer;
-      font-family: inherit;
-      transition: all 0.15s ease;
-    }
-    .auth-tab-btn.active {
-      background: #ffffff;
-      color: var(--text-primary);
-      box-shadow: var(--shadow-sm);
-    }
-    .auth-dialog-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 18px;
-    }
-    .auth-close-btn {
-      background: none;
-      border: none;
-      color: var(--text-tertiary);
-      cursor: pointer;
-      padding: 4px;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .auth-close-btn:hover { color: var(--text-primary); }
-
-    /* ---------------- USER BOT FLEET (DASHBOARD) ---------------- */
-    .dashboard-panel {
+    /* Dashboard Fleet */
+    .fleet-box {
       display: none;
-      max-width: 760px;
-      margin: 0 auto 48px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      padding: 28px 32px;
-      box-shadow: var(--shadow-md);
+      margin-bottom: 28px;
+      background: #f7f6ed;
+      border: 1.5px solid var(--ink);
+      border-radius: 18px;
+      padding: 20px;
     }
-    .dash-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid var(--border-subtle);
-    }
-    .dash-title {
-      font-size: 18px;
-      font-weight: 800;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .bot-card-item {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 16px 20px;
-      margin-bottom: 12px;
-    }
-    .bot-card-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    .bot-card-name {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-    .bot-card-links {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-      flex-wrap: wrap;
-    }
-
-    /* ---------------- FOOTER ---------------- */
-    .site-footer {
-      margin-top: auto;
-      border-top: 1px solid var(--border-subtle);
-      background: var(--bg-secondary);
-      padding: 48px 24px;
-    }
-    .footer-inner {
-      max-width: 1120px;
-      margin: 0 auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 20px;
-      font-size: 13px;
-      color: var(--text-tertiary);
-    }
-    .footer-links {
-      display: flex;
-      gap: 24px;
-    }
-    .footer-links a {
-      color: var(--text-secondary);
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.15s ease;
-    }
-    .footer-links a:hover { color: var(--accent-blue); }
-
-    .spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      border-radius: 50%;
-      border-top-color: #fff;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
-  <!-- ---------------- NAVIGATION BAR ---------------- -->
-  <header class="site-header">
-    <div class="header-inner">
-      <a href="#" class="brand-wrap">
-        <div class="brand-icon">
-          <!-- Vector Bolt Icon -->
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-        </div>
-        <span class="brand-name">ZevRay</span>
-        <span class="brand-tag">Highrise Cloud</span>
-      </a>
-
-      <nav class="nav-menu">
-        <a href="#features" class="nav-link">Features</a>
-        <a href="#deploy" class="nav-link">Deployer</a>
-        <a href="/player" target="_blank" class="nav-link">Live Jukebox</a>
-        <a href="#faq" class="nav-link">FAQ</a>
-      </nav>
-
-      <div class="nav-actions">
-        <!-- Logged Out State -->
-        <div id="nav-logged-out" style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary" onclick="openAuthDialog('login')">Sign In</button>
-          <button class="btn btn-primary" onclick="openAuthDialog('signup')">Create Account</button>
-        </div>
-
-        <!-- Logged In State -->
-        <div id="nav-logged-in" style="display: none; align-items: center; gap: 8px;">
-          <button class="btn btn-secondary" onclick="toggleUserDashboard()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-            </svg>
-            <span>My Bots (<span id="user-bots-badge">0</span>)</span>
-          </button>
-          <button class="btn btn-secondary" onclick="handleSignOut()" title="Sign Out">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-          </button>
-        </div>
-      </div>
+  <header class="deploy-nav">
+    <a href="/" class="brand-link">zevray<span>*</span></a>
+    <div style="display: flex; gap: 16px; align-items: center;">
+      <a href="/" class="back-link">&larr; Back to Landing Page</a>
+      <span id="nav-user-label" style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700;"></span>
     </div>
   </header>
 
-  <!-- ---------------- USER FLEET DASHBOARD ---------------- -->
-  <section class="dashboard-panel" id="user-dashboard-panel">
-    <div class="dash-top">
-      <div class="dash-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
-          <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h6"/>
-        </svg>
-        <span>Your Active Bot Fleet</span>
+  <main style="max-width: 900px; margin: 0 auto; width: 100%; padding: 0 16px;">
+    <!-- Active Fleet if Logged In -->
+    <div class="fleet-box" id="user-fleet-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span style="font-weight:800; font-size:16px;">Your Active Highrise Bot Fleet</span>
+        <button class="btn-reveal" onclick="loadUserBots()" style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700; color:var(--ink);">Refresh</button>
       </div>
-      <button class="btn btn-secondary" onclick="fetchUserBots()">Refresh</button>
+      <div id="fleet-list">Loading bots...</div>
     </div>
-    <div id="user-bots-list">
-      <p style="font-size: 13px; color: var(--text-tertiary); text-align: center; padding: 20px 0;">Loading your deployed bots...</p>
-    </div>
-  </section>
 
-  <!-- ---------------- HERO ---------------- -->
-  <main>
-    <section class="hero-section">
-      <div class="hero-badge">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-        </svg>
-        <span>The Autonomous Highrise Butler Engine</span>
-      </div>
-
-      <h1 class="hero-title">
-        The 24/7 AI DJ & Butler for <br>
-        <span class="hero-title-highlight">Your Highrise Lounge.</span>
-      </h1>
-
-      <p class="hero-desc">
-        Effortless in-room live music streams, instant multi-floor teleportation, permanent outfit memory, and live tip leaderboards. Deployed directly to the cloud in under 60 seconds.
+    <!-- The 60-Second Setup Form Card -->
+    <div class="deploy-container">
+      <div class="kicker">( 60-Second Cloud Deployer )</div>
+      <h1 class="deploy-h1">Configure & Launch Your Bot</h1>
+      <p class="deploy-sub">
+        Follow each step below. Your bot container will be created on your Render account and will connect to your room automatically.
       </p>
 
-      <div class="hero-cta-group">
-        <a href="#deploy" class="btn btn-primary btn-cta-large">
-          <span>Deploy Your Bot in 60s</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-          </svg>
-        </a>
-        <a href="/player" target="_blank" class="btn btn-secondary btn-cta-large">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-          <span>Live Music Demo</span>
-        </a>
-      </div>
-    </section>
-
-    <!-- ---------------- INTERACTIVE LIVE PREVIEW ---------------- -->
-    <div class="preview-card-wrap">
-      <div class="preview-card">
-        <div class="preview-header">
-          <div style="text-align: left;">
-            <div style="font-size: 14px; font-weight: 800; color: var(--text-primary);">Simulated Room Experience</div>
-            <div style="font-size: 12px; color: var(--text-tertiary);">Autonomous Bot Status &bull; Connected 24/7</div>
+      <form id="deploy-form">
+        <!-- Step 1: Highrise Token -->
+        <div class="form-step">
+          <div class="step-header">
+            <span class="step-title">1. Highrise Bot API Token</span>
+            <span class="badge-req">Required</span>
           </div>
-          <div class="preview-live-indicator">
-            <span class="live-dot"></span>
-            <span>Online & Broadcasting</span>
-          </div>
-        </div>
-
-        <div class="preview-player-body">
-          <div class="player-visualizer">
-            <div class="visualizer-bar"></div>
-            <div class="visualizer-bar"></div>
-            <div class="visualizer-bar"></div>
-            <div class="visualizer-bar"></div>
-            <div class="visualizer-bar"></div>
-          </div>
-          <div class="player-meta">
-            <div class="player-track-title">24/7 Highrise Autonomous Radio</div>
-            <div class="player-track-sub">Zero-latency synchronous stream &bull; Highrise Room Audio Ready</div>
-          </div>
-          <a href="/player" target="_blank" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">Open Player</a>
-        </div>
-
-        <div class="preview-commands-row">
-          <span class="command-tag">/play &lt;song&gt;</span>
-          <span class="command-tag">/skip</span>
-          <span class="command-tag">/f1 ... /f4</span>
-          <span class="command-tag">!fit</span>
-          <span class="command-tag">!setpos</span>
-          <span class="command-tag">!setwelcome</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ---------------- 4 PILLARS FEATURES ---------------- -->
-    <section class="section-wrap" id="features">
-      <div class="section-header">
-        <div class="section-subtitle">Engineered with Precision</div>
-        <h2 class="section-title">Everything your Highrise lounge needs to run completely on autopilot.</h2>
-      </div>
-
-      <div class="features-grid">
-        <!-- Feature 1 -->
-        <div class="feature-card">
-          <div class="feature-icon-box">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-            </svg>
-          </div>
-          <h3 class="feature-card-title">24/7 Radio & Music Takeover</h3>
-          <p class="feature-card-desc">
-            Plays music directly through your in-game room speakers. Guests type <code>/play &lt;song&gt;</code> in chat to instantly queue their favorite tracks, while the bot automatically falls back to curated tunes when the queue clears.
-          </p>
-        </div>
-
-        <!-- Feature 2 -->
-        <div class="feature-card">
-          <div class="feature-icon-box">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="22" x2="9" y2="22.01"/><line x1="15" y1="22" x2="15" y2="22.01"/><line x1="8" y1="6" x2="8.01" y2="6"/><line x1="12" y1="6" x2="12.01" y2="6"/><line x1="16" y1="6" x2="16.01" y2="6"/><line x1="8" y1="10" x2="8.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="16" y1="10" x2="16.01" y2="10"/>
-            </svg>
-          </div>
-          <h3 class="feature-card-title">Dynamic Multi-Floor Elevator</h3>
-          <p class="feature-card-desc">
-            Whether your venue has 2 floors or 5 floors, stand where you want each landing spot to be and type <code>!setfloor f1</code>, <code>!setfloor f2</code>, etc. Guests can teleport smoothly across levels simply by typing <code>/f1</code> to <code>/f4</code>.
-          </p>
-        </div>
-
-        <!-- Feature 3 -->
-        <div class="feature-card">
-          <div class="feature-icon-box">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v1h10v-1c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34"/><path d="M6 4h12v7a6 6 0 0 1-12 0V4Z"/>
-            </svg>
-          </div>
-          <h3 class="feature-card-title">Live Tip Leaderboard</h3>
-          <p class="feature-card-desc">
-            Celebrate your room's supporters in real time. The bot tracks every tip, plays custom celebration sound bites, crowns your Top Tipper, and broadcasts celebratory whispers to inspire your community.
-          </p>
-        </div>
-
-        <!-- Feature 4 -->
-        <div class="feature-card">
-          <div class="feature-icon-box">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-            </svg>
-          </div>
-          <h3 class="feature-card-title">Permanent Outfits & State Memory</h3>
-          <p class="feature-card-desc">
-            Backed by cloud persistence, your bot never forgets its wardrobe, DJ booth anchor, custom welcome messages, or floors when the cloud container updates or restarts. Simply wear an outfit and type <code>!fit</code> to lock it forever.
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <!-- ---------------- CLOUD DEPLOYER INTERACTIVE SECTION ---------------- -->
-    <section class="deploy-section" id="deploy">
-      <div class="deploy-card">
-        <div class="deploy-header">
-          <div class="section-subtitle">60-Second Setup</div>
-          <h2 class="deploy-title">Launch Your 24/7 Cloud Bot</h2>
-          <p class="deploy-subtitle">Deploy directly to your free Render cloud account. Follow each step below with our simple, playful tutorials.</p>
-        </div>
-
-        <form id="deployer-form">
-          <!-- Step 1: Highrise Bot Token -->
-          <div class="form-step">
-            <div class="step-label-row">
-              <label class="field-label" for="highrise-token">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
-                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-                <span>Highrise Bot API Token</span>
-              </label>
-              <span class="badge-required">Required</span>
-            </div>
-            
-            <div class="input-wrapper">
-              <input type="password" id="highrise-token" class="app-input" placeholder="e.g. 20d06551e88098d0b7c6..." required autocomplete="off">
-              <button type="button" class="btn-reveal-toggle" onclick="toggleInputVisibility('highrise-token', this)" aria-label="Toggle password visibility">
-                <!-- Eye Icon -->
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-
-            <!-- Tutorial Box for Token -->
-            <div class="tutorial-box">
-              <div class="tutorial-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                <span>How to grab your Bot Token in 3 clicks:</span>
-              </div>
-              <div class="tutorial-text">
-                1. Visit the official portal <a href="https://create.highrise.game" target="_blank">create.highrise.game</a> and sign in with your Highrise account.<br>
-                2. In the left menu, click <b>Bots & API Keys</b> &rarr; tap <b>Create Bot</b>.<br>
-                3. Name your bot (e.g. <i>NeonDJ</i>) and copy the generated 64-character token.<br>
-                <span class="example-code">Example format: 20d06551e88098d0b7c6a084de450abf...</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 2: Room ID or URL -->
-          <div class="form-step">
-            <div class="step-label-row">
-              <label class="field-label" for="room-id">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
-                  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
-                <span>Highrise Room ID or Share Link</span>
-              </label>
-              <span class="badge-required">Required</span>
-            </div>
-
-            <div class="input-wrapper">
-              <input type="text" id="room-id" class="app-input no-reveal" placeholder="e.g. 64005ecfb3d3644258e0040e or paste Room Link" required>
-            </div>
-
-            <!-- Tutorial Box for Room -->
-            <div class="tutorial-box">
-              <div class="tutorial-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                <span>Super easy: Just paste your room share link!</span>
-              </div>
-              <div class="tutorial-text">
-                In the Highrise app, walk into your room &rarr; tap the top Room Info &rarr; tap <b>Share Room</b> &rarr; <b>Copy Link</b>.<br>
-                Paste the entire link right here. Our parser automatically extracts the 24-character hexadecimal room ID for you!<br>
-                <span class="example-code">Example: https://highrise.game/room/64005ecfb3d3644258e0040e &rarr; 64005ecfb3d3644258e0040e</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 3: Room Owner Username -->
-          <div class="form-step">
-            <div class="step-label-row">
-              <label class="field-label" for="room-owner">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
-                  <circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>
-                </svg>
-                <span>Your Highrise Username (Bot Administrator)</span>
-              </label>
-              <span class="badge-required">Required</span>
-            </div>
-
-            <div class="input-wrapper">
-              <input type="text" id="room-owner" class="app-input no-reveal" placeholder="e.g. Sarah (without @)" required>
-            </div>
-
-            <!-- Tutorial Box for Owner -->
-            <div class="tutorial-box">
-              <div class="tutorial-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                <span>Why this is crucial:</span>
-              </div>
-              <div class="tutorial-text">
-                This grants you Master Admin privileges inside your room. Only you will be able to lock the DJ booth location (<code>!setpos</code>), change outfits (<code>!fit</code>), and set floors (<code>!setfloor</code>).<br>
-                <span class="example-code">Example: Sarah or JayShah</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 4: Room Display Title -->
-          <div class="form-step">
-            <div class="step-label-row">
-              <label class="field-label" for="room-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
-                  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
-                </svg>
-                <span>Venue Display Name</span>
-              </label>
-              <span class="badge-optional">Optional</span>
-            </div>
-
-            <div class="input-wrapper">
-              <input type="text" id="room-title" class="app-input no-reveal" placeholder="e.g. Neon Rooftop or Chill Lounge" value="My Lounge">
-            </div>
-
-            <!-- Tutorial Box for Room Name -->
-            <div class="tutorial-box">
-              <div class="tutorial-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                <span>Playful room customization:</span>
-              </div>
-              <div class="tutorial-text">
-                Your bot uses this name in automated welcome whispers when players step into your room! (e.g. <i>"Welcome to Neon Rooftop, @player! Enjoy the music!"</i>).
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 5: Render API Key -->
-          <div class="form-step">
-            <div class="step-label-row">
-              <label class="field-label" for="render-key">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
-                  <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-                </svg>
-                <span>Render.com API Key</span>
-              </label>
-              <span class="badge-required">Required</span>
-            </div>
-
-            <div class="input-wrapper">
-              <input type="password" id="render-key" class="app-input" placeholder="e.g. rnd_xxxxxxxxxxxxxxxxxxxx" required autocomplete="off">
-              <button type="button" class="btn-reveal-toggle" onclick="toggleInputVisibility('render-key', this)" aria-label="Toggle Render key visibility">
-                <!-- Eye Icon -->
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-
-            <!-- Tutorial Box for Render -->
-            <div class="tutorial-box">
-              <div class="tutorial-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                <span>How to get your free Render API key:</span>
-              </div>
-              <div class="tutorial-text">
-                1. Sign up or log into <a href="https://dashboard.render.com" target="_blank">dashboard.render.com</a> (100% free, zero credit card needed).<br>
-                2. Click your avatar icon (bottom-left) &rarr; <b>Account Settings</b>.<br>
-                3. Click <b>API Keys</b> &rarr; <b>Create API Key</b>.<br>
-                4. Copy the key starting with <code>rnd_</code> and paste it above.<br>
-                <span class="example-code">Example format: rnd_3a4b5c6d7e8f90123456789...</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 6: 24/7 Keep-Alive & Auto-Pinger -->
-          <div class="form-step">
-            <div class="step-label-row">
-              <label class="field-label" for="cron-key">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
-                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                </svg>
-                <span>cron-job.org API Key</span>
-              </label>
-              <span class="badge-optional">Optional</span>
-            </div>
-
-            <div class="input-wrapper">
-              <input type="password" id="cron-key" class="app-input" placeholder="e.g. crons_xxxx... (leave blank for Zero-Setup Auto-Pinger)" autocomplete="off">
-              <button type="button" class="btn-reveal-toggle" onclick="toggleInputVisibility('cron-key', this)" aria-label="Toggle cron key visibility">
-                <!-- Eye Icon -->
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-
-            <!-- Tutorial Box for 24/7 keep alive -->
-            <div class="tutorial-box">
-              <div class="tutorial-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                <span>Zero-setup 24/7 keep-alive:</span>
-              </div>
-              <div class="tutorial-text">
-                Leave this blank! Our Master Keep-Alive network automatically enrolls your bot and pings it every 10 minutes so Render never sleeps. If you have your own personal cron-job.org key, you can optionally paste it here.
-              </div>
-            </div>
-          </div>
-
-          <!-- Save Preferences Switch -->
-          <div class="pref-row">
-            <div class="pref-label-wrap">
-              <span class="pref-title">Remember details in this browser</span>
-              <span class="pref-sub">Securely saves your non-sensitive tokens locally so you can redeploy with one click.</span>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="save-local-pref" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <!-- Submit Button -->
-          <button type="submit" id="btn-deploy-submit" class="btn-submit-deploy">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-            <span id="deploy-btn-text">Launch Autonomous Bot in Cloud</span>
-          </button>
-        </form>
-
-        <!-- Loading State Indicator -->
-        <div id="deploy-loading" class="status-alert status-loading" style="display: none;">
-          <div class="spinner" style="border-color: rgba(0, 113, 227, 0.3); border-top-color: var(--accent-blue);"></div>
-          <span id="deploy-loading-text">Connecting to Render cloud & provisioning container...</span>
-        </div>
-
-        <!-- Error Banner -->
-        <div id="deploy-error" class="status-alert status-error" style="display: none;"></div>
-
-        <!-- ---------------- RESULT CARD ---------------- -->
-        <div id="deploy-result" class="result-card">
-          <div class="result-badge">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <span>Cloud Service Created Successfully!</span>
-          </div>
-
-          <h3 class="result-title">Your 24/7 DJ Bot is Building</h3>
-          <p class="result-desc">Render is compiling your bot. It will join your room automatically in approximately 60-90 seconds.</p>
-
-          <!-- MP3 Stream URL Box -->
-          <div class="radio-stream-box">
-            <div class="radio-stream-header">
-              <span class="radio-stream-label">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-blue)">
-                  <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-                </svg>
-                <span>Highrise In-Room Custom Radio (.mp3 Stream)</span>
-              </span>
-              <span style="font-size: 11px; background: rgba(0, 113, 227, 0.1); color: var(--accent-blue); padding: 2px 8px; border-radius: 6px; font-weight: 700;">Paste into Room Settings</span>
-            </div>
-            <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
-              Paste this URL into Highrise <b>Room Settings &rarr; Custom Radio Station</b> so that music plays through your room speakers for everyone:
-            </p>
-            <div class="stream-input-group">
-              <input type="text" id="res-radio-field" class="stream-url-field" readonly value="" placeholder="https://...onrender.com/radio.mp3">
-              <button type="button" class="btn btn-primary" id="btn-copy-radio" onclick="copyStreamUrl()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
-                </svg>
-                <span id="copy-radio-text">Copy .mp3 Link</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Secondary Links -->
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13px;">
-            <span style="font-weight: 600; color: var(--text-secondary);">Web Jukebox Dashboard:</span>
-            <a id="res-player-link" href="#" target="_blank" style="color: var(--accent-blue); font-weight: 700; text-decoration: none;">Open /player &rarr;</a>
-          </div>
-
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13px;">
-            <span style="font-weight: 600; color: var(--text-secondary);">24/7 Keep-Alive:</span>
-            <span id="res-cron-badge" style="font-weight: 700; color: var(--accent-green);">Auto-Pinger Active (10m)</span>
-          </div>
-
-          <div style="margin-top: 20px; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 16px;">
-            <h4 style="font-size: 13px; font-weight: 800; margin-bottom: 8px;">Next: In-Room 30-Second Checklist</h4>
-            <ol style="margin-left: 20px; font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
-              <li>Invite your bot into your Highrise room.</li>
-              <li>Go to <b>Room Settings &rarr; Privileges</b> and give your bot <b>Designer</b> rights (needed to teleport players).</li>
-              <li>Paste your copied <b>.mp3 Stream URL</b> into <b>Room Settings &rarr; Custom Radio Station</b> and hit Save!</li>
-              <li>Walk into your DJ booth and type <code>!setpos</code> in chat.</li>
-            </ol>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ---------------- FAQ SECTION ---------------- -->
-    <section class="section-wrap" id="faq">
-      <div class="section-header">
-        <div class="section-subtitle">Got Questions?</div>
-        <h2 class="section-title">Frequently Asked Questions</h2>
-      </div>
-
-      <div style="max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px;">
-        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px 24px;">
-          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">Does my PC or phone need to stay on?</h3>
-          <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
-            No! Your bot runs 100% inside a high-speed cloud container on Render. You can turn off your computer, close your phone, or go to sleep — your bot stays online playing music and greeting visitors 24/7.
-          </p>
-        </div>
-
-        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px 24px;">
-          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">How does in-room audio work?</h3>
-          <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
-            When deployed, our platform gives you a direct synchronous <code>/radio.mp3</code> audio stream link. Highrise has a built-in Custom Radio feature in Room Settings &mdash; paste the link there, and all players in the room will hear the music simultaneously!
-          </p>
-        </div>
-
-        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px 24px;">
-          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">Can anyone else change my bot's settings?</h3>
-          <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
-            Never. When you specify your Highrise username, you are locked in as the Master Administrator. Admin commands like <code>!setpos</code>, <code>!setfloor</code>, <code>!fit</code>, and <code>!setwelcome</code> strictly respond only to you.
-          </p>
-        </div>
-
-        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px 24px;">
-          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">Is Render really free?</h3>
-          <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
-            Yes. Render provides 750 free web service hours each month, which covers a full 24/7 month with zero charges. No credit card is required to sign up.
-          </p>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- ---------------- PLAYFUL AUTH DIALOG (NATIVE <DIALOG>) ---------------- -->
-  <dialog id="auth-dialog" closedby="any" aria-labelledby="auth-dialog-title">
-    <div class="auth-dialog-card">
-      <div class="auth-dialog-header">
-        <div class="brand-wrap">
-          <div class="brand-icon" style="width:26px; height:26px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          </div>
-          <span style="font-size: 16px; font-weight: 800;" id="auth-dialog-title">ZevRay Account</span>
-        </div>
-        <button type="button" class="auth-close-btn" onclick="closeAuthDialog()" aria-label="Close dialog">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-
-      <div class="auth-tabs">
-        <button type="button" class="auth-tab-btn active" id="btn-tab-login" onclick="switchAuthTab('login')">Sign In</button>
-        <button type="button" class="auth-tab-btn" id="btn-tab-signup" onclick="switchAuthTab('signup')">Create Account</button>
-      </div>
-
-      <form id="auth-form" onsubmit="handleAuthSubmit(event)">
-        <div style="margin-bottom: 16px;">
-          <label style="display:block; font-size:13px; font-weight:700; margin-bottom:6px;" for="auth-email">Email Address</label>
-          <input type="email" id="auth-email" class="app-input no-reveal" placeholder="you@example.com" required>
-        </div>
-
-        <div style="margin-bottom: 16px;">
-          <label style="display:block; font-size:13px; font-weight:700; margin-bottom:6px;" for="auth-password">Password</label>
-          <div class="input-wrapper">
-            <input type="password" id="auth-password" class="app-input" placeholder="••••••••" required minlength="6">
-            <button type="button" class="btn-reveal-toggle" onclick="toggleInputVisibility('auth-password', this)" aria-label="Toggle password visibility">
-              <!-- Eye Icon -->
+          <div class="input-box">
+            <input type="password" id="highrise-token" class="app-input" placeholder="e.g. 20d06551e88098d0b7c6..." required autocomplete="off">
+            <button type="button" class="btn-reveal" onclick="toggleVisibility('highrise-token', this)" aria-label="Toggle token visibility">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="tutorial-card">
+            <div class="tutorial-heading">How to get your Bot Token:</div>
+            <div class="tutorial-desc">
+              1. Sign in to <a href="https://create.highrise.game" target="_blank">create.highrise.game</a> &rarr; <b>Bots & API Keys</b>.<br>
+              2. Click <b>Create Bot</b>, give it a name, and copy the 64-character token.<br>
+              <span class="code-sample">Example: 20d06551e88098d0b7c6a084de450abf...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Room ID or URL -->
+        <div class="form-step">
+          <div class="step-header">
+            <span class="step-title">2. Highrise Room ID or Share Link</span>
+            <span class="badge-req">Required</span>
+          </div>
+          <div class="input-box">
+            <input type="text" id="room-id" class="app-input no-reveal" placeholder="e.g. 64005ecfb3d3644258e0040e or paste Room Link" required>
+          </div>
+          <div class="tutorial-card">
+            <div class="tutorial-heading">How to get your Room ID:</div>
+            <div class="tutorial-desc">
+              Inside Highrise, tap Room Info &rarr; <b>Share Room</b> &rarr; <b>Copy Link</b>.<br>
+              Paste the full link here! We automatically extract the 24-character hexadecimal ID.<br>
+              <span class="code-sample">Example: https://highrise.game/room/64005ecfb3d3644258e0040e</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Room Owner -->
+        <div class="form-step">
+          <div class="step-header">
+            <span class="step-title">3. Your Highrise Username (Master Admin)</span>
+            <span class="badge-req">Required</span>
+          </div>
+          <div class="input-box">
+            <input type="text" id="room-owner" class="app-input no-reveal" placeholder="e.g. Sarah (without @)" required>
+          </div>
+          <div class="tutorial-card">
+            <div class="tutorial-heading">Why this matters:</div>
+            <div class="tutorial-desc">
+              Only this username will be able to lock the DJ booth (<code>!setpos</code>), change outfits (<code>!fit</code>), and configure floors (<code>!setfloor</code>).<br>
+              <span class="code-sample">Example: Sarah or JayShah</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Room Display Name -->
+        <div class="form-step">
+          <div class="step-header">
+            <span class="step-title">4. Venue Display Name</span>
+            <span class="badge-opt">Optional</span>
+          </div>
+          <div class="input-box">
+            <input type="text" id="room-title" class="app-input no-reveal" placeholder="e.g. Neon Rooftop or Chill Lounge" value="My Lounge">
+          </div>
+          <div class="tutorial-card">
+            <div class="tutorial-heading">Customization:</div>
+            <div class="tutorial-desc">
+              The bot uses this name in welcome whispers when players join your room! (e.g. <i>"Welcome to Neon Rooftop, @player!"</i>)
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 5: Render API Key -->
+        <div class="form-step">
+          <div class="step-header">
+            <span class="step-title">5. Render.com API Key</span>
+            <span class="badge-req">Required</span>
+          </div>
+          <div class="input-box">
+            <input type="password" id="render-key" class="app-input" placeholder="e.g. rnd_xxxxxxxxxxxxxxxxxxxx" required autocomplete="off">
+            <button type="button" class="btn-reveal" onclick="toggleVisibility('render-key', this)" aria-label="Toggle Render key visibility">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="tutorial-card">
+            <div class="tutorial-heading">How to get your free Render API key:</div>
+            <div class="tutorial-desc">
+              1. Sign up free at <a href="https://dashboard.render.com" target="_blank">dashboard.render.com</a> (zero credit card needed).<br>
+              2. Bottom-left avatar &rarr; <b>Account Settings</b> &rarr; <b>API Keys</b> &rarr; <b>Create API Key</b>.<br>
+              <span class="code-sample">Example: rnd_3a4b5c6d7e8f90123456789...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 6: 24/7 Keep-Alive -->
+        <div class="form-step">
+          <div class="step-header">
+            <span class="step-title">6. cron-job.org API Key</span>
+            <span class="badge-opt">Optional</span>
+          </div>
+          <div class="input-box">
+            <input type="password" id="cron-key" class="app-input" placeholder="e.g. crons_xxxx... (leave blank for Zero-Setup Auto-Pinger)" autocomplete="off">
+            <button type="button" class="btn-reveal" onclick="toggleVisibility('cron-key', this)" aria-label="Toggle cron key visibility">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="tutorial-card">
+            <div class="tutorial-heading">Zero-setup auto-pinger:</div>
+            <div class="tutorial-desc">
+              Leave this blank! Our Master Keep-Alive network automatically enrolls your bot and pings it every 10 minutes so Render never sleeps.
+            </div>
+          </div>
+        </div>
+
+        <!-- Remember Details Toggle -->
+        <div class="pref-row">
+          <div>
+            <div style="font-size:14px; font-weight:700;">Remember details in this browser</div>
+            <div style="font-size:12px; color:var(--ink-mute);">Securely saves your credentials locally for 1-click re-deploys.</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="save-local-pref" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <button type="submit" id="btn-submit-deploy" class="btn-submit">
+          <span id="submit-text">Deploy 24/7 Bot to Render &rarr;</span>
+        </button>
+      </form>
+
+      <!-- Status Alerts -->
+      <div id="deploy-loading" style="display:none; margin-top:20px; font-weight:700; color:var(--ink); font-family:'Geist Mono',monospace; font-size:13px; text-align:center;">
+        Connecting to Render cloud & building service container...
+      </div>
+      <div id="deploy-err" style="display:none; margin-top:20px; background:#fee2e2; border:1.5px solid var(--ink); border-radius:12px; padding:14px; color:#b91c1c; font-size:13px; font-weight:600;"></div>
+
+      <!-- Result Card -->
+      <div id="deploy-res" class="result-box">
+        <div style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700; margin-bottom:6px;">SUCCESS &bull; DEPLOYMENT INITIATED</div>
+        <h2 style="font-size:26px; font-weight:800; margin-bottom:8px;">Your Bot is Building on Render!</h2>
+        <p style="font-size:14px; color:var(--ink-soft); margin-bottom:16px;">
+          Render is compiling your container. It will join your Highrise room in 60-90 seconds.
+        </p>
+
+        <!-- MP3 Stream Link -->
+        <div class="stream-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-weight:800; font-size:14px;">Highrise In-Room Radio (.mp3 URL)</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; background:var(--bg); border:1px solid var(--ink); padding:2px 6px; border-radius:4px;">PASTE INTO ROOM RADIO</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="res-stream-input" readonly value="" class="app-input" style="font-family:'Geist Mono',monospace; font-weight:600; padding:10px 14px;">
+            <button type="button" class="btn-submit" style="width:auto; padding:10px 20px; font-size:13px;" onclick="copyStream()">
+              <span id="copy-stream-lbl">Copy Link</span>
             </button>
           </div>
         </div>
 
-        <div id="signup-extra-fields" style="display: none; margin-bottom: 16px;">
-          <label style="display:block; font-size:13px; font-weight:700; margin-bottom:6px;" for="auth-highrise-user">
-            Highrise Username <span style="font-size:11px; color:var(--text-tertiary); font-weight:normal;">(Optional)</span>
-          </label>
-          <input type="text" id="auth-highrise-user" class="app-input no-reveal" placeholder="e.g. Sarah">
+        <div style="font-size:13px; margin-bottom:12px;">
+          <b>Web Jukebox:</b> <a id="res-jukebox-link" href="#" target="_blank" style="color:var(--ink); font-weight:700;">Open /player Dashboard &rarr;</a>
         </div>
 
-        <div id="auth-msg-box" class="status-alert" style="display: none; margin-bottom: 16px;"></div>
-
-        <button type="submit" id="btn-auth-submit" class="btn btn-primary" style="width:100%; padding:12px; font-size:14px; font-weight:700;">
-          <span id="auth-submit-label">Sign In to ZevRay</span>
-        </button>
-      </form>
-    </div>
-  </dialog>
-
-  <!-- ---------------- FOOTER ---------------- -->
-  <footer class="site-footer">
-    <div class="footer-inner">
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div class="brand-icon" style="width:22px; height:22px; border-radius:6px;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <div style="background:#ffffff; border:1.5px solid var(--ink); border-radius:12px; padding:14px; font-size:12px; line-height:1.6;">
+          <b>Quick Checklist:</b><br>
+          1. Invite your bot into your Highrise room.<br>
+          2. Room Settings &rarr; Privileges &rarr; Give your bot <b>Designer</b> rights.<br>
+          3. Room Settings &rarr; Custom Radio Station &rarr; Paste your copied <b>.mp3 URL</b>.<br>
+          4. Walk into your DJ booth and type <code>!setpos</code> in chat!
         </div>
-        <span>&copy; 2026 <b>ZevRay</b> &bull; zevray.com. All rights reserved.</span>
-      </div>
-
-      <div class="footer-links">
-        <a href="#features">Features</a>
-        <a href="#deploy">Deployer</a>
-        <a href="/player" target="_blank">Jukebox</a>
-        <a href="https://create.highrise.game" target="_blank">Highrise Developer Hub</a>
       </div>
     </div>
-  </footer>
+  </main>
 
-  <!-- ---------------- CLIENT LOGIC ---------------- -->
   <script>
     const SUPABASE_URL = "__SUPABASE_URL__";
     const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
     const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-
     let currentUser = null;
-    let authMode = 'login'; // 'login' or 'signup'
-    let currentRadioUrl = '';
 
-    // Eye SVGs for Reveal/Hide toggling
-    const SVG_EYE_OPEN = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    // Reveal/Hide Eye toggles
+    const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
     const SVG_EYE_SLASH = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`;
 
-    function toggleInputVisibility(inputId, btn) {
-      const input = document.getElementById(inputId);
-      if (!input) return;
-      if (input.type === 'password') {
-        input.type = 'text';
+    function toggleVisibility(inputId, btn) {
+      const el = document.getElementById(inputId);
+      if (el.type === 'password') {
+        el.type = 'text';
         btn.innerHTML = SVG_EYE_SLASH;
       } else {
-        input.type = 'password';
-        btn.innerHTML = SVG_EYE_OPEN;
+        el.type = 'password';
+        btn.innerHTML = SVG_EYE;
       }
     }
 
-    // Modern Dialog Helpers with closedby="any" light-dismiss fallback
-    const authDialog = document.getElementById('auth-dialog');
-    if (!('closedBy' in HTMLDialogElement.prototype)) {
-      const outside = (e, dialog) => {
-        const r = dialog.getBoundingClientRect();
-        return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
-      };
-      let pressedOutside = false;
-      authDialog.addEventListener('pointerdown', (e) => { pressedOutside = outside(e, authDialog); });
-      authDialog.addEventListener('pointerup', (e) => { if (pressedOutside && outside(e, authDialog)) authDialog.close(); });
-    }
-
-    function openAuthDialog(mode = 'login') {
-      authMode = mode;
-      switchAuthTab(mode);
-      document.getElementById('auth-msg-box').style.display = 'none';
-      if (typeof authDialog.showModal === 'function') {
-        authDialog.showModal();
-      }
-    }
-
-    function closeAuthDialog() {
-      if (authDialog.open) authDialog.close();
-    }
-
-    function switchAuthTab(mode) {
-      authMode = mode;
-      const tabLogin = document.getElementById('btn-tab-login');
-      const tabSignup = document.getElementById('btn-tab-signup');
-      const extra = document.getElementById('signup-extra-fields');
-      const submitLabel = document.getElementById('auth-submit-label');
-
-      if (mode === 'signup') {
-        tabLogin.classList.remove('active');
-        tabSignup.classList.add('active');
-        extra.style.display = 'block';
-        submitLabel.innerText = 'Create Free Account';
-      } else {
-        tabSignup.classList.remove('active');
-        tabLogin.classList.add('active');
-        extra.style.display = 'none';
-        submitLabel.innerText = 'Sign In to ZevRay';
-      }
-      document.getElementById('auth-msg-box').style.display = 'none';
-    }
-
-    // ---------------- AUTH OPERATIONS ----------------
-    async function initAuth() {
-      if (!sb) return;
+    // LocalStorage Remember preference
+    const STORE_KEY = 'zevray_creds';
+    function loadSaved() {
       try {
-        const { data: { session } } = await sb.auth.getSession();
-        applyUserSession(session ? session.user : null);
+        const val = localStorage.getItem(STORE_KEY);
+        if (val) {
+          const d = JSON.parse(val);
+          if (d.highrise_token) document.getElementById('highrise-token').value = d.highrise_token;
+          if (d.room_id) document.getElementById('room-id').value = d.room_id;
+          if (d.room_owner) document.getElementById('room-owner').value = d.room_owner;
+          if (d.room_title) document.getElementById('room-title').value = d.room_title;
+          if (d.render_key) document.getElementById('render-key').value = d.render_key;
+          if (d.cron_key) document.getElementById('cron-key').value = d.cron_key;
+        }
+      } catch (e) {}
+    }
 
-        sb.auth.onAuthStateChange((_event, session) => {
-          applyUserSession(session ? session.user : null);
-        });
-      } catch (err) {
-        console.error("Auth error:", err);
+    function saveIfPermitted(payload) {
+      if (document.getElementById('save-local-pref').checked) {
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(payload)); } catch (e) {}
       }
     }
 
-    function applyUserSession(user) {
-      currentUser = user;
-      const loggedOutNav = document.getElementById('nav-logged-out');
-      const loggedInNav = document.getElementById('nav-logged-in');
-      const dash = document.getElementById('user-dashboard-panel');
-
-      if (user) {
-        loggedOutNav.style.display = 'none';
-        loggedInNav.style.display = 'flex';
-        dash.style.display = 'block';
-        fetchUserBots();
-      } else {
-        loggedOutNav.style.display = 'flex';
-        loggedInNav.style.display = 'none';
-        dash.style.display = 'none';
-      }
-    }
-
-    async function handleAuthSubmit(e) {
+    // Deploy Submit
+    const form = document.getElementById('deploy-form');
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!sb) return;
-
-      const email = document.getElementById('auth-email').value.trim();
-      const password = document.getElementById('auth-password').value;
-      const hrUser = document.getElementById('auth-highrise-user').value.trim();
-      const msgBox = document.getElementById('auth-msg-box');
-      const submitBtn = document.getElementById('btn-auth-submit');
-
-      msgBox.style.display = 'none';
-      submitBtn.disabled = true;
-
-      try {
-        if (authMode === 'signup') {
-          const { data, error } = await sb.auth.signUp({
-            email,
-            password,
-            options: {
-              data: { highrise_username: hrUser }
-            }
-          });
-          if (error) throw error;
-          if (data.session) {
-            closeAuthDialog();
-          } else {
-            msgBox.className = 'status-alert status-loading';
-            msgBox.innerText = 'Confirmation link sent! Please check your email to complete registration.';
-            msgBox.style.display = 'block';
-          }
-        } else {
-          const { error } = await sb.auth.signInWithPassword({ email, password });
-          if (error) throw error;
-          closeAuthDialog();
-        }
-      } catch (err) {
-        msgBox.className = 'status-alert status-error';
-        msgBox.innerText = err.message || 'Authentication error.';
-        msgBox.style.display = 'block';
-      } finally {
-        submitBtn.disabled = false;
-      }
-    }
-
-    async function handleSignOut() {
-      if (sb) await sb.auth.signOut();
-      applyUserSession(null);
-    }
-
-    function toggleUserDashboard() {
-      const panel = document.getElementById('user-dashboard-panel');
-      if (panel.style.display === 'none') {
-        panel.style.display = 'block';
-        panel.scrollIntoView({ behavior: 'smooth' });
-        fetchUserBots();
-      } else {
-        panel.style.display = 'none';
-      }
-    }
-
-    async function fetchUserBots() {
-      if (!currentUser) return;
-      const container = document.getElementById('user-bots-list');
-      const badge = document.getElementById('user-bots-badge');
-
-      try {
-        const res = await fetch(`/api/user-bots?user_id=${currentUser.id}`);
-        const data = await res.json();
-        if (!data.success || !data.bots || data.bots.length === 0) {
-          container.innerHTML = `<p style="font-size: 13px; color: var(--text-tertiary); text-align: center; padding: 20px 0;">You haven't deployed any bots yet. Use the form below to launch your first 24/7 bot!</p>`;
-          badge.innerText = '0';
-          return;
-        }
-
-        badge.innerText = data.bots.length;
-        let html = '';
-        data.bots.forEach(bot => {
-          const streamUrl = bot.radio_stream_url || `${bot.render_service_url}/radio.mp3`;
-          const playerUrl = `${bot.render_service_url}/player`;
-          html += `
-            <div class="bot-card-item">
-              <div class="bot-card-top">
-                <span class="bot-card-name">${bot.room_title || 'Highrise Bot'}</span>
-                <span class="preview-live-indicator" style="font-size:11px; padding:2px 8px;">Online 24/7</span>
-              </div>
-              <div style="font-size:12px; color:var(--text-secondary); margin-bottom:6px;">
-                Room ID: <code>${bot.room_id}</code> &bull; Owner: <b>@${bot.room_owner}</b>
-              </div>
-              <div class="bot-card-links">
-                <button class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="copyDirect('${streamUrl}', this)">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                  <span>Copy .mp3 Stream URL</span>
-                </button>
-                <a href="${playerUrl}" target="_blank" class="btn btn-secondary" style="font-size:12px; padding:4px 10px;">
-                  <span>Open Player &rarr;</span>
-                </a>
-              </div>
-            </div>
-          `;
-        });
-        container.innerHTML = html;
-      } catch (err) {
-        container.innerHTML = `<p style="color:var(--accent-red); font-size:12px;">Failed to load bots: ${err.message}</p>`;
-      }
-    }
-
-    // ---------------- LOCAL CREDENTIAL REMEMBER PREFERENCE ----------------
-    const STORAGE_KEY = 'zevray_bot_saved_creds';
-
-    function restoreSavedDetails() {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const data = JSON.parse(saved);
-          if (data.highrise_token) document.getElementById('highrise-token').value = data.highrise_token;
-          if (data.room_id) document.getElementById('room-id').value = data.room_id;
-          if (data.room_owner) document.getElementById('room-owner').value = data.room_owner;
-          if (data.room_title) document.getElementById('room-title').value = data.room_title;
-          if (data.render_key) document.getElementById('render-key').value = data.render_key;
-          if (data.cron_key) document.getElementById('cron-key').value = data.cron_key;
-        }
-      } catch (e) {
-        console.warn("Could not load saved credentials:", e);
-      }
-    }
-
-    function saveDetailsIfAllowed(payload) {
-      const allowed = document.getElementById('save-local-pref').checked;
-      if (allowed) {
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-        } catch (e) {
-          console.warn("Could not save to localStorage:", e);
-        }
-      }
-    }
-
-    // ---------------- DEPLOY SUBMIT HANDLER ----------------
-    const deployForm = document.getElementById('deployer-form');
-    const submitBtn = document.getElementById('btn-deploy-submit');
-    const submitText = document.getElementById('deploy-btn-text');
-    const loadBox = document.getElementById('deploy-loading');
-    const errBox = document.getElementById('deploy-error');
-    const resCard = document.getElementById('deploy-result');
-
-    deployForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      errBox.style.display = 'none';
-      resCard.style.display = 'none';
-      loadBox.style.display = 'flex';
-      submitBtn.disabled = true;
+      document.getElementById('deploy-err').style.display = 'none';
+      document.getElementById('deploy-res').style.display = 'none';
+      document.getElementById('deploy-loading').style.display = 'block';
+      document.getElementById('btn-submit-deploy').disabled = true;
 
       const payload = {
         highrise_token: document.getElementById('highrise-token').value.trim(),
@@ -2407,7 +2210,7 @@ PORTAL_HTML = """<!DOCTYPE html>
         user_id: currentUser ? currentUser.id : ''
       };
 
-      saveDetailsIfAllowed(payload);
+      saveIfPermitted(payload);
 
       try {
         const res = await fetch('/api/deploy-render', {
@@ -2415,83 +2218,111 @@ PORTAL_HTML = """<!DOCTYPE html>
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-
         const data = await res.json();
-        loadBox.style.display = 'none';
-        submitBtn.disabled = false;
+        document.getElementById('deploy-loading').style.display = 'none';
+        document.getElementById('btn-submit-deploy').disabled = false;
 
         if (!res.ok || !data.success) {
-          errBox.innerText = data.error || "Deployment failed. Please verify your Render and Highrise credentials.";
-          errBox.style.display = 'flex';
+          document.getElementById('deploy-err').innerText = data.error || 'Deployment failed. Check credentials.';
+          document.getElementById('deploy-err').style.display = 'block';
           return;
         }
 
-        // Populate Success Card
-        currentRadioUrl = data.radio_url;
-        document.getElementById('res-radio-field').value = data.radio_url;
-        document.getElementById('res-player-link').href = data.player_url;
+        document.getElementById('res-stream-input').value = data.radio_url;
+        document.getElementById('res-jukebox-link').href = data.player_url;
+        document.getElementById('deploy-res').style.display = 'block';
+        document.getElementById('deploy-res').scrollIntoView({ behavior: 'smooth' });
 
-        const cronBadge = document.getElementById('res-cron-badge');
-        if (data.cron_job_created) {
-          cronBadge.innerText = 'Custom cron-job.org Configured (10m)';
-        } else {
-          cronBadge.innerText = 'Master Auto-Pinger Active (10m)';
-        }
-
-        resCard.style.display = 'block';
-        resCard.scrollIntoView({ behavior: 'smooth' });
-
-        if (currentUser) {
-          fetchUserBots();
-          document.getElementById('user-dashboard-panel').style.display = 'block';
-        }
+        if (currentUser) loadUserBots();
       } catch (err) {
-        loadBox.style.display = 'none';
-        submitBtn.disabled = false;
-        errBox.innerText = "Network error: " + err.message;
-        errBox.style.display = 'flex';
+        document.getElementById('deploy-loading').style.display = 'none';
+        document.getElementById('btn-submit-deploy').disabled = false;
+        document.getElementById('deploy-err').innerText = 'Network error: ' + err.message;
+        document.getElementById('deploy-err').style.display = 'block';
       }
     });
 
-    function copyStreamUrl() {
-      const url = currentRadioUrl || document.getElementById('res-radio-field').value;
-      if (!url) return;
-      navigator.clipboard.writeText(url).then(() => {
-        const btnText = document.getElementById('copy-radio-text');
-        btnText.innerText = "Copied to Clipboard!";
-        setTimeout(() => { btnText.innerText = "Copy .mp3 Link"; }, 2500);
+    function copyStream() {
+      const val = document.getElementById('res-stream-input').value;
+      if (!val) return;
+      navigator.clipboard.writeText(val).then(() => {
+        document.getElementById('copy-stream-lbl').innerText = 'Copied!';
+        setTimeout(() => { document.getElementById('copy-stream-lbl').innerText = 'Copy Link'; }, 2000);
       });
     }
 
-    function copyDirect(text, btn) {
-      navigator.clipboard.writeText(text).then(() => {
-        const oldText = btn.innerHTML;
-        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-green)"><polyline points="20 6 9 17 4 12"/></svg><span>Copied!</span>`;
-        setTimeout(() => { btn.innerHTML = oldText; }, 2000);
-      });
+    async function loadUserBots() {
+      if (!currentUser) return;
+      const listEl = document.getElementById('fleet-list');
+      try {
+        const res = await fetch(`/api/user-bots?user_id=${currentUser.id}`);
+        const data = await res.json();
+        if (!data.success || !data.bots || data.bots.length === 0) {
+          listEl.innerHTML = '<span style="font-size:13px; color:var(--ink-mute);">No bots deployed yet on your account.</span>';
+          return;
+        }
+        let html = '';
+        data.bots.forEach(b => {
+          const stream = b.radio_stream_url || `${b.render_service_url}/radio.mp3`;
+          html += `
+            <div style="background:#fff; border:1px solid var(--border-dark); border-radius:10px; padding:10px 14px; margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <b>${b.room_title || 'Highrise Bot'}</b> &bull; Room <code>${b.room_id}</code> &bull; @${b.room_owner}
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button onclick="navigator.clipboard.writeText('${stream}'); alert('Copied stream link!');" style="background:var(--bg); border:1px solid var(--ink); border-radius:6px; font-weight:700; font-size:11px; padding:4px 8px; cursor:pointer;">Copy Radio URL</button>
+                <a href="${b.render_service_url}/player" target="_blank" style="font-size:11px; font-weight:700; color:var(--ink);">Open Player</a>
+              </div>
+            </div>
+          `;
+        });
+        listEl.innerHTML = html;
+      } catch (e) {
+        listEl.innerHTML = 'Error loading bots: ' + e.message;
+      }
     }
 
-    // Initialize
-    initAuth();
-    restoreSavedDetails();
+    async function initUser() {
+      loadSaved();
+      if (!sb) return;
+      const { data: { session } } = await sb.auth.getSession();
+      if (session && session.user) {
+        currentUser = session.user;
+        document.getElementById('nav-user-label').innerText = session.user.email;
+        document.getElementById('user-fleet-box').style.display = 'block';
+        loadUserBots();
+      }
+    }
+    initUser();
   </script>
 </body>
 </html>
 """
 
 
-async def handle_portal_page(request: web.Request) -> web.Response:
-    """Serve the 1-click Render automated cloud deployer portal with Supabase Auth."""
-    rendered_html = PORTAL_HTML.replace("__SUPABASE_URL__", config.SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", config.SUPABASE_ANON_KEY)
+async def handle_landing_page(request: web.Request) -> web.Response:
+    """Serve the Cloudstudio-inspired high-craft landing page on root /."""
+    rendered = LANDING_HTML.replace("__SUPABASE_URL__", config.SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", config.SUPABASE_ANON_KEY)
     return web.Response(
-        text=rendered_html,
+        text=rendered,
         content_type="text/html",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        },
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
+
+
+async def handle_deploy_page(request: web.Request) -> web.Response:
+    """Serve the dedicated 60-second cloud deployer and bot setup form on /deploy."""
+    rendered = DEPLOY_HTML.replace("__SUPABASE_URL__", config.SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", config.SUPABASE_ANON_KEY)
+    return web.Response(
+        text=rendered,
+        content_type="text/html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+async def handle_portal_page(request: web.Request) -> web.Response:
+    """Backwards compatibility for /portal redirecting to /deploy."""
+    return await handle_deploy_page(request)
 
 
 async def handle_user_bots_api(request: web.Request) -> web.Response:
@@ -2727,7 +2558,7 @@ def create_app() -> web.Application:
     app.router.add_get("/health", handle_health)
     app.router.add_get("/player", handle_player_page)
     app.router.add_get("/portal", handle_portal_page)
-    app.router.add_get("/deploy", handle_portal_page)
+    app.router.add_get("/deploy", handle_deploy_page)
     app.router.add_post("/api/deploy-render", handle_deploy_render)
     app.router.add_get("/api/user-bots", handle_user_bots_api)
     app.router.add_get("/api/player-state", handle_player_state)
