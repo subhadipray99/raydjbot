@@ -874,6 +874,13 @@ PORTAL_HTML = """<!DOCTYPE html>
       </div>
 
       <div class="info-row">
+        <span class="info-label">📻 In-Room Radio (.mp3):</span>
+        <span class="info-val">
+          <button type="button" class="copy-btn" id="copy-radio-btn">📋 Copy .mp3 Stream URL</button>
+        </span>
+      </div>
+
+      <div class="info-row">
         <span class="info-label">Live Web Jukebox:</span>
         <span class="info-val"><a id="res-player-url" href="#" target="_blank">Open Jukebox</a></span>
       </div>
@@ -890,6 +897,7 @@ PORTAL_HTML = """<!DOCTYPE html>
         <ol>
           <li><b>Invite Bot:</b> Go to your room in Highrise and invite your bot account.</li>
           <li><b>Give Permissions:</b> Room Settings &rarr; Privileges &rarr; Give your bot <b>Designer</b> rights (required for teleporting players).</li>
+          <li><b>Play Room Music:</b> In Room Settings &rarr; Custom Radio &rarr; Paste your copied <b>.mp3 Stream URL</b> so music plays through the speakers!</li>
           <li><b>Lock DJ Booth:</b> Walk into your DJ booth and type <code>!setpos</code> in chat.</li>
           <li><b>Set Floor Spawns:</b> Walk to each floor and type <code>!setfloor f1</code>, <code>!setfloor f2</code>, etc.</li>
           <li><b>Keep-Alive:</b> Paste your copied Health URL into <a href="https://cron-job.org" target="_blank" style="color:#38bdf8;">cron-job.org</a> (run every 5 mins) so your free Render bot never sleeps!</li>
@@ -906,6 +914,7 @@ PORTAL_HTML = """<!DOCTYPE html>
     const errorBox = document.getElementById('error-box');
     const successCard = document.getElementById('success-card');
     let healthUrl = '';
+    let radioUrl = '';
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -947,6 +956,7 @@ PORTAL_HTML = """<!DOCTYPE html>
         document.getElementById('res-player-url').href = data.player_url;
         document.getElementById('res-player-url').innerText = data.player_url;
         healthUrl = data.health_url;
+        radioUrl = data.radio_url;
 
         successCard.style.display = 'block';
         successCard.scrollIntoView({ behavior: 'smooth' });
@@ -955,6 +965,17 @@ PORTAL_HTML = """<!DOCTYPE html>
         statusBox.style.display = 'none';
         errorBox.innerText = "Network error: " + err.message;
         errorBox.style.display = 'block';
+      }
+    });
+
+    document.getElementById('copy-radio-btn').addEventListener('click', () => {
+      if (radioUrl) {
+        navigator.clipboard.writeText(radioUrl).then(() => {
+          document.getElementById('copy-radio-btn').innerText = "✅ Copied .mp3 URL!";
+          setTimeout(() => {
+            document.getElementById('copy-radio-btn').innerText = "📋 Copy .mp3 Stream URL";
+          }, 2500);
+        });
       }
     });
 
