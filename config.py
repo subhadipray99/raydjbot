@@ -24,3 +24,7 @@ AUTOPLAY_CHAT_ANNOUNCEMENTS = os.getenv("AUTOPLAY_CHAT_ANNOUNCEMENTS", "true").l
 # Permanent Bot Position and Outfit overrides (optional)
 BOT_POSITION = os.getenv("BOT_POSITION", "").strip()
 BOT_OUTFIT = os.getenv("BOT_OUTFIT", "").strip()
+
+# Room Owner credentials for admin commands
+ROOM_OWNER = os.getenv("ROOM_OWNER", "shuvodip").strip()
+ROOM_OWNER_ID = os.getenv("ROOM_OWNER_ID", "63f3bbdf56dab79de656aea7").strip()

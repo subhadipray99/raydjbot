@@ -10,7 +10,7 @@ from highrise import (
     CurrencyItem,
     Item,
 )
-from highrise.models import GetRoomUsersRequest, GetWalletRequest, Error
+from highrise.models import GetRoomUsersRequest, GetWalletRequest, Error, RoomPermissions
 import config
 from music import music_manager
 import outfit
@@ -90,6 +90,25 @@ class HighriseBot(BaseBot):
         except Exception as e:
             logger.error(f"Error moving bot to {target_pos}: {e}")
             return False
+
+    async def is_admin(self, user: User) -> bool:
+        """Check if user is the room owner, moderator, or designer."""
+        if not user or not user.username:
+            return False
+        u_name = user.username.lower()
+        owner_name = getattr(config, "ROOM_OWNER", "shuvodip").lower()
+        if u_name in ("shuvodip", "subhadipray99", owner_name):
+            return True
+        if str(user.id) in ("63f3bbdf56dab79de656aea7", getattr(config, "ROOM_OWNER_ID", "")):
+            return True
+        try:
+            priv = await self.highrise.get_room_privilege(user.id)
+            if isinstance(priv, RoomPermissions):
+                if priv.moderator or priv.designer:
+                    return True
+        except Exception as e:
+            logger.debug(f"Could not check room privilege for {user.username}: {e}")
+        return False
 
     async def _get_user_position(self, target_user: User) -> Position | AnchorPosition | None:
         """Find the freshest position for a user (cache first, then room users API)."""
@@ -348,6 +367,8 @@ class HighriseBot(BaseBot):
             else:
                 await self.highrise.chat(text)
 
+        user_is_admin = await self.is_admin(user)
+
         # ---------------- MUSIC COMMANDS ----------------
         if cmd in ("play", "p"):
             if not args:
@@ -452,7 +473,11 @@ class HighriseBot(BaseBot):
 
         elif cmd in ("admin", "setup"):
             admin_text = (
-                f"⚙️ Admin & Setup Commands:\n"
+                f"⚙️ Admin & Setup Commands (Owner: @shuvodip):\n"
+                f"• !fit <preset> - Change bot dress (Presets: dj, suit, street, camo, goth, chill, puffer)\n"
+                f"• !copyfit [@user] - Clone someone's outfit onto bot\n"
+                f"• !fit save <name> | !fit load <name> | !fit list\n"
+                f"• !wardrobe - Check owned items in bot inventory\n"
                 f"• !setpos [front/left/right/back] - Set bot spot to your location\n"
                 f"• !turn - Rotate bot 90 degrees\n"
                 f"• !face <front|left|right|back> - Turn bot direction\n"
@@ -506,6 +531,9 @@ class HighriseBot(BaseBot):
                 await reply("\n".join(lines))
 
         elif cmd in ("setfloor", "addfloor"):
+            if not user_is_admin:
+                await reply("🔒 This command is reserved for room admins and owner (@shuvodip).")
+                return
             if not args:
                 await reply("Usage: !setfloor <floor> (e.g. !setfloor f1, !setfloor f2), or !setfloor <floor> <x> <y> <z> [facing]")
                 return
@@ -547,6 +575,9 @@ class HighriseBot(BaseBot):
             )
 
         elif cmd in ("delfloor", "clearfloor", "removefloor"):
+            if not user_is_admin:
+                await reply("🔒 This command is reserved for room admins and owner (@shuvodip).")
+                return
             if not args:
                 await reply("Usage: !delfloor <floor> (e.g. !delfloor f1, !delfloor f2)")
                 return
@@ -560,6 +591,9 @@ class HighriseBot(BaseBot):
 
         # ---------------- POSITION & MOVEMENT COMMANDS ----------------
         elif cmd in ("setpos", "setposition", "stayhere"):
+            if not user_is_admin:
+                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                return
             # Option A: Manual coordinates e.g. !setpos 10.5 0.0 14.2 [FrontRight]
             if len(args) >= 3:
                 try:
@@ -623,6 +657,9 @@ class HighriseBot(BaseBot):
             )
 
         elif cmd in ("face", "turn", "rotate"):
+            if not user_is_admin:
+                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                return
             saved_pos = position.get_saved_position(config.ROOM_ID)
             if not saved_pos or not isinstance(saved_pos, Position):
                 bot_user_pos = None
@@ -684,6 +721,9 @@ class HighriseBot(BaseBot):
                 await reply(f"🤖 Bot Spawn: Default Room Entrance (no custom position saved for room {config.ROOM_ID}). Stand anywhere and type !setpos to set one!")
 
         elif cmd in ("resetpos", "clearpos"):
+            if not user_is_admin:
+                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                return
             cleared = position.clear_room_position(config.ROOM_ID)
             if cleared:
                 await reply("🗑️ Custom bot position cleared for this room! Bot will spawn at the default entrance on next start.")
@@ -799,6 +839,9 @@ class HighriseBot(BaseBot):
                 await reply("\n".join(lines))
 
         elif cmd == "settoptipper":
+            if not user_is_admin:
+                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                return
             if not args:
                 await reply("Usage: !settoptipper <username> [gold_amount]")
                 return
@@ -808,6 +851,9 @@ class HighriseBot(BaseBot):
             await reply(f"🏆 Top tipper manually set to @{res['username']} ({res['total_gold']} gold)!")
 
         elif cmd in ("cleartippers", "resettippers"):
+            if not user_is_admin:
+                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                return
             tips.clear_room_tips(config.ROOM_ID)
             await reply("🗑️ Room tip leaderboard has been reset.")
 
@@ -818,6 +864,106 @@ class HighriseBot(BaseBot):
             to_say = " ".join(args)
             await self.highrise.chat(to_say)
 
-        # ---------------- OUTFIT & WARDROBE COMMANDS (DISABLED) ----------------
-        elif cmd in ("fit", "outfit", "copyfit", "copy", "wardrobe", "inventory"):
-            await reply("👗 Outfit commands are disabled. The bot's outfit is managed directly by the room owner.")
+        # ---------------- OUTFIT & WARDROBE COMMANDS (OWNER / ADMIN ONLY) ----------------
+        elif cmd in ("fit", "outfit"):
+            if not user_is_admin:
+                await reply("🔒 Outfit commands are reserved for the room owner (@shuvodip).")
+                return
+
+            if not args or args[0].lower() in ("help", "info"):
+                presets_dict = outfit.list_available_presets()
+                preset_names = ", ".join(presets_dict.keys())
+                await reply(
+                    f"👗 Bot Wardrobe Commands (Owner: @shuvodip):\n"
+                    f"• !fit <preset> - Change dress (Presets: {preset_names})\n"
+                    f"• !copyfit [@user] - Clone someone's outfit onto bot\n"
+                    f"• !fit save <name> - Save current look as a preset\n"
+                    f"• !fit load <name> - Equip saved preset\n"
+                    f"• !fit list - View all presets with details\n"
+                    f"• !wardrobe - Check owned items in bot inventory"
+                )
+                return
+
+            subcmd = args[0].lower()
+
+            if subcmd == "list":
+                presets_dict = outfit.list_available_presets()
+                lines = ["👗 Available Outfits & Presets:"]
+                for p_name, p_desc in presets_dict.items():
+                    lines.append(f"  • {p_name}: {p_desc}")
+                lines.append("Wear one using: !fit <name>")
+                await reply("\n".join(lines))
+                return
+
+            if subcmd == "copy":
+                target_str = args[1] if len(args) > 1 else user.username
+                await self._handle_copyfit(user, target_str, reply)
+                return
+
+            if subcmd == "save":
+                if len(args) < 2:
+                    await reply("Usage: !fit save <preset_name>")
+                    return
+                save_name = args[1].lower().strip()
+                try:
+                    my_outfit_resp = await self.highrise.get_my_outfit()
+                    if hasattr(my_outfit_resp, "outfit") and my_outfit_resp.outfit:
+                        outfit.save_custom_preset(save_name, my_outfit_resp.outfit)
+                        await reply(f"💾 Saved current outfit as '{save_name}'! Wear it anytime with !fit {save_name}")
+                    else:
+                        await reply("Could not retrieve current outfit to save.")
+                except Exception as e:
+                    logger.error(f"Error saving outfit preset: {e}")
+                    await reply(f"Failed to save outfit: {e}")
+                return
+
+            if subcmd == "load":
+                if len(args) < 2:
+                    await reply("Usage: !fit load <preset_name>")
+                    return
+                preset_name = args[1].lower().strip()
+            else:
+                preset_name = subcmd
+
+            # Equip preset
+            new_outfit = outfit.get_full_preset(preset_name)
+            if not new_outfit:
+                await reply(f"Unknown preset '{preset_name}'. Type !fit list to see all available outfits.")
+                return
+
+            try:
+                res = await self.highrise.set_outfit(new_outfit)
+                if isinstance(res, Error):
+                    await reply(f"⚠️ Failed to equip '{preset_name}': {res.message}")
+                else:
+                    outfit.save_active_outfit(new_outfit)
+                    try:
+                        await self.highrise.send_emote("dance-shoppingcart")
+                    except Exception:
+                        pass
+                    await reply(f"✨ Outfit changed to '{preset_name}'! Looking stylish.")
+            except Exception as e:
+                logger.error(f"Error setting outfit: {e}")
+                await reply(f"Error equipping outfit: {e}")
+
+        elif cmd in ("copyfit", "copy"):
+            if not user_is_admin:
+                await reply("🔒 Outfit commands are reserved for the room owner (@shuvodip).")
+                return
+            target_str = args[0] if args else user.username
+            await self._handle_copyfit(user, target_str, reply)
+
+        elif cmd in ("wardrobe", "inventory"):
+            if not user_is_admin:
+                await reply("🔒 Wardrobe inspection is reserved for the room owner (@shuvodip).")
+                return
+            try:
+                inv_resp = await self.highrise.get_inventory()
+                if hasattr(inv_resp, "items"):
+                    items_count = len(inv_resp.items)
+                    await reply(f"🎒 Bot Wardrobe: {items_count} clothing items in inventory. (Use !fit to change dress)")
+                else:
+                    await reply("Could not access bot inventory.")
+            except Exception as e:
+                logger.error(f"Error fetching inventory: {e}")
+                await reply(f"Failed to inspect wardrobe: {e}")
