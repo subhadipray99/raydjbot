@@ -33,6 +33,58 @@ memory_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(nam
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger().addHandler(memory_handler)
 
+REGISTERED_BOTS_FILE = "registered_bots.json"
+
+
+def get_registered_bots() -> list:
+    """Retrieve list of registered customer bot URLs for 10-minute master keep-alive pings."""
+    if not os.path.exists(REGISTERED_BOTS_FILE):
+        return []
+    try:
+        with open(REGISTERED_BOTS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.warning(f"[Pinger] Could not read {REGISTERED_BOTS_FILE}: {e}")
+        return []
+
+
+def register_bot_url(url: str):
+    """Add a new bot URL to registered_bots.json so it is automatically pinged every 10 minutes."""
+    cleaned = url.strip().rstrip("/")
+    if not cleaned:
+        return
+    bots = get_registered_bots()
+    if cleaned not in bots:
+        bots.append(cleaned)
+        try:
+            with open(REGISTERED_BOTS_FILE, "w", encoding="utf-8") as f:
+                json.dump(bots, f, indent=2)
+            logger.info(f"[Pinger] Enrolled new bot in 10-minute master keep-alive network: {cleaned}")
+        except Exception as e:
+            logger.error(f"[Pinger] Failed to save {REGISTERED_BOTS_FILE}: {e}")
+
+
+async def run_master_pinger_loop():
+    """Background task pinging all registered buyer bots every 10 minutes (600s) to keep them awake 24/7."""
+    await asyncio.sleep(45)  # Initial grace delay after server startup
+    while True:
+        try:
+            bots = get_registered_bots()
+            if bots:
+                logger.info(f"[Pinger] Starting 10-minute keep-alive ping cycle for {len(bots)} registered bot(s)...")
+                async with aiohttp.ClientSession() as session:
+                    for base_url in bots:
+                        ping_url = f"{base_url}/health" if not base_url.endswith("/health") else base_url
+                        try:
+                            async with session.get(ping_url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                                logger.info(f"[Pinger] Pinged {ping_url} -> HTTP {resp.status}")
+                        except Exception as p_err:
+                            logger.warning(f"[Pinger] Ping to {ping_url} failed: {p_err}")
+        except Exception as loop_err:
+            logger.error(f"[Pinger] Unexpected error in master pinger loop: {loop_err}")
+        await asyncio.sleep(600)  # Exactly 10 minutes
+
 
 def get_uptime() -> str:
     elapsed_seconds = int(time.time() - start_time)
@@ -57,6 +109,8 @@ async def handle_root(request: web.Request) -> web.Response:
         "radio_url": f"{base_url}/radio.mp3",
         "player_url": f"{base_url}/player",
         "deploy_portal_url": f"{base_url}/portal",
+        "registered_bots_count": len(get_registered_bots()),
+        "master_pinger": "active (10m interval)",
         "music_state": music_manager.get_state(),
     })
 
@@ -902,6 +956,12 @@ PORTAL_HTML = """<!DOCTYPE html>
           <div class="form-hint">Log into <a href="https://dashboard.render.com" target="_blank">Render Dashboard</a> &rarr; Account Settings &rarr; API Keys &rarr; Create API Key. (Deploys directly on your account).</div>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">cron-job.org API Key <span style="font-size: 11px; color: #c084fc; font-weight: normal; margin-left: 4px;">(Optional &mdash; Automatic 10-Min Setup)</span></label>
+          <input type="password" id="cron-key" class="form-input" placeholder="e.g. crons_xxxx... (leave blank for Auto-Pinger)" autocomplete="off">
+          <div class="form-hint">Optional: If provided, a 10-minute keep-alive ping is automatically created on your cron-job.org account. If left blank, our master network automatically keeps your bot awake every 10 minutes!</div>
+        </div>
+
         <button type="submit" id="submit-btn" class="btn-deploy">
           <span>🚀 Deploy 24/7 Bot to Render</span>
         </button>
@@ -938,12 +998,15 @@ PORTAL_HTML = """<!DOCTYPE html>
         </div>
       </div>
 
-      <div class="info-row">
-        <span class="info-label">⏱️ 24/7 Keep-Alive Link:</span>
-        <div style="display: flex; gap: 6px; align-items: center; flex: 1; justify-content: flex-end; max-width: 65%;">
+      <div class="info-row" style="flex-wrap: wrap;">
+        <span class="info-label">⏱️ 24/7 Keep-Alive (10-Min):</span>
+        <div style="display: flex; gap: 6px; align-items: center; flex: 1; justify-content: flex-end; min-width: 260px;">
           <input type="text" id="res-health-input" class="url-input" style="padding: 6px 10px; font-size: 12px;" readonly value="" placeholder="https://...onrender.com/health">
           <button type="button" class="copy-btn" id="copy-health-btn">📋 Copy</button>
         </div>
+      </div>
+      <div id="cron-status-badge" style="font-size: 12px; margin-top: -4px; margin-bottom: 12px; padding: 8px 12px; border-radius: 8px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #7dd3fc; line-height: 1.4;">
+        ⚡ <b>Master Auto-Pinger Active:</b> This bot is automatically enrolled in our 10-minute master keep-alive network so Render never sleeps.
       </div>
 
       <div class="info-row">
@@ -967,7 +1030,7 @@ PORTAL_HTML = """<!DOCTYPE html>
           <li><b>Enable Room Audio:</b> In Highrise Room Settings &rarr; Custom Radio Station &rarr; Paste your copied <b>.mp3 Stream URL</b> (ends in <code>/radio.mp3</code>) and tap Save!</li>
           <li><b>Lock DJ Booth:</b> Walk into your DJ booth and type <code>!setpos</code> in chat.</li>
           <li><b>Set Floor Spawns:</b> Walk to each floor and type <code>!setfloor f1</code>, <code>!setfloor f2</code>, etc.</li>
-          <li><b>Keep-Alive:</b> Paste your copied Health URL into <a href="https://cron-job.org" target="_blank" style="color:#38bdf8;">cron-job.org</a> (run every 5 mins) so your free Render bot never sleeps!</li>
+          <li><b>24/7 Keep-Alive:</b> Your bot is already pinged every 10 minutes automatically by our network! If using your own cron-job account, run it every 10 mins.</li>
         </ol>
       </div>
     </div>
@@ -998,7 +1061,8 @@ PORTAL_HTML = """<!DOCTYPE html>
         room_id: document.getElementById('room-id').value.trim(),
         room_owner: document.getElementById('room-owner').value.trim(),
         room_title: document.getElementById('room-title').value.trim(),
-        render_api_key: document.getElementById('render-key').value.trim()
+        render_api_key: document.getElementById('render-key').value.trim(),
+        cron_api_key: document.getElementById('cron-key') ? document.getElementById('cron-key').value.trim() : ''
       };
 
       try {
@@ -1026,6 +1090,19 @@ PORTAL_HTML = """<!DOCTYPE html>
         document.getElementById('res-player-url').innerText = data.player_url;
         healthUrl = data.health_url;
         radioUrl = data.radio_url;
+
+        const badge = document.getElementById('cron-status-badge');
+        if (data.cron_job_created) {
+          badge.innerHTML = '✅ <b>Auto-Pinger Created:</b> A 10-minute cron job was automatically configured in your personal cron-job.org account!';
+          badge.style.background = 'rgba(52, 211, 153, 0.15)';
+          badge.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+          badge.style.color = '#6ee7b7';
+        } else {
+          badge.innerHTML = '⚡ <b>Master Auto-Pinger Active:</b> Enrolled in our 10-minute master keep-alive network so your bot never sleeps! (Or use the copied URL above in your own cron-job account).';
+          badge.style.background = 'rgba(56, 189, 248, 0.12)';
+          badge.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+          badge.style.color = '#7dd3fc';
+        }
 
         successCard.style.display = 'block';
         successCard.scrollIntoView({ behavior: 'smooth' });
@@ -1087,6 +1164,7 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
         return web.json_response({"success": False, "error": "Invalid JSON payload."}, status=400)
 
     render_key = str(data.get("render_api_key", "")).strip()
+    cron_key = str(data.get("cron_api_key", "")).strip()
     highrise_token = str(data.get("highrise_token", "")).strip()
     raw_room_id = str(data.get("room_id", "")).strip()
     room_owner = str(data.get("room_owner", "")).strip().lstrip("@")
@@ -1205,6 +1283,52 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
                     except Exception as ev_err:
                         logger.warning(f"Secondary env-vars sync notice: {ev_err}")
 
+                # Step 4: Automatically enroll in 10-minute master keep-alive network
+                register_bot_url(srv_url)
+
+                # Step 5: If buyer provided personal cron-job.org API key, automatically create the 10-min job
+                cron_job_created = False
+                cron_job_notice = ""
+                if cron_key:
+                    try:
+                        cron_payload = {
+                            "job": {
+                                "title": f"Highrise DJ Bot ({slug})",
+                                "url": f"{srv_url}/health",
+                                "enabled": True,
+                                "saveResponses": True,
+                                "requestMethod": 0,
+                                "schedule": {
+                                    "timezone": "UTC",
+                                    "hours": [-1],
+                                    "mdays": [-1],
+                                    "months": [-1],
+                                    "wdays": [-1],
+                                    "minutes": [0, 10, 20, 30, 40, 50],
+                                },
+                            }
+                        }
+                        cron_headers = {
+                            "Authorization": f"Bearer {cron_key}",
+                            "Content-Type": "application/json",
+                        }
+                        async with session.put(
+                            "https://api.cron-job.org/jobs",
+                            headers=cron_headers,
+                            json=cron_payload,
+                            timeout=aiohttp.ClientTimeout(total=15),
+                        ) as c_resp:
+                            if c_resp.status in (200, 201):
+                                cron_job_created = True
+                                logger.info(f"Successfully auto-created 10-min cron job for {slug} on cron-job.org")
+                            else:
+                                c_txt = await c_resp.text()
+                                cron_job_notice = f"cron-job.org status {c_resp.status}"
+                                logger.warning(f"cron-job.org returned {c_resp.status}: {c_txt}")
+                    except Exception as ce:
+                        cron_job_notice = str(ce)
+                        logger.warning(f"cron-job.org API exception: {ce}")
+
                 return web.json_response({
                     "success": True,
                     "service_id": srv_id,
@@ -1213,6 +1337,9 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
                     "player_url": f"{srv_url}/player",
                     "health_url": f"{srv_url}/health",
                     "radio_url": f"{srv_url}/radio.mp3",
+                    "cron_job_created": cron_job_created,
+                    "cron_job_notice": cron_job_notice,
+                    "master_pinger_enrolled": True,
                 })
         except Exception as e:
             return web.json_response({"success": False, "error": f"Error communicating with Render: {e}"}, status=500)
@@ -1240,6 +1367,7 @@ def create_app() -> web.Application:
 async def start_web_server(port: int) -> web.AppRunner:
     music_manager.start()
     broadcaster.start()
+    asyncio.create_task(run_master_pinger_loop())
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
