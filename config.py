@@ -28,3 +28,8 @@ BOT_OUTFIT = os.getenv("BOT_OUTFIT", "").strip()
 # Room Owner credentials for admin commands
 ROOM_OWNER = os.getenv("ROOM_OWNER", "shuvodip").strip()
 ROOM_OWNER_ID = os.getenv("ROOM_OWNER_ID", "63f3bbdf56dab79de656aea7").strip()
+
+# White-Label Customization
+ROOM_TITLE = os.getenv("ROOM_TITLE", "YouTube").strip()
+ROOM_CREDITS = os.getenv("ROOM_CREDITS", f"Created and maintained by @{ROOM_OWNER}").strip()
+BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "RayDJBot").strip()

@@ -1,4 +1,6 @@
 import os
+import re
+import json
 import logging
 import time
 import asyncio
@@ -450,6 +452,12 @@ PLAYER_HTML = """<!DOCTYPE html>
     setInterval(fetchState, 2500);
     setInterval(updateProgressTick, 1000);
   </script>
+
+  <div style="margin-top: 24px; text-align: center;">
+    <a href="/portal" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); color: #c084fc; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 9999px; text-decoration: none; transition: all 0.2s ease;">
+      <span>🚀 Want this 24/7 DJ & Floor Bot in your room? Launch yours here &rarr;</span>
+    </a>
+  </div>
 </body>
 </html>
 """
@@ -538,11 +546,576 @@ async def handle_debug_download(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+PORTAL_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Highrise 24/7 DJ Bot Cloud Deployer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at top, #1f1235 0%, #0d0a1a 100%);
+      color: #f3f4f6;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 36px 16px 64px;
+    }
+    .container {
+      width: 100%;
+      max-width: 640px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(139, 92, 246, 0.2);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      color: #c084fc;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #ffffff 0%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 520px) {
+      .features-grid { grid-template-columns: 1fr; }
+    }
+    .feature-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(16px);
+      border-radius: 20px;
+      padding: 26px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: #e5e7eb;
+      margin-bottom: 6px;
+    }
+    .form-hint {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+    .form-hint a {
+      color: #c084fc;
+      text-decoration: underline;
+    }
+    .form-input {
+      width: 100%;
+      background: rgba(13, 10, 26, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .form-input:focus {
+      border-color: #a855f7;
+      box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25);
+    }
+    .btn-deploy {
+      width: 100%;
+      background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4);
+      transition: all 0.2s ease;
+      margin-top: 8px;
+    }
+    .btn-deploy:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(139, 92, 246, 0.5);
+    }
+    .btn-deploy:active {
+      transform: translateY(0);
+    }
+    .btn-deploy:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .status-box {
+      display: none;
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: #c084fc;
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 18px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+    }
+    .error-box {
+      display: none;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 16px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .success-card {
+      display: none;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 20px;
+      padding: 24px;
+      margin-top: 24px;
+    }
+    .success-title {
+      color: #34d399;
+      font-size: 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+      gap: 12px;
+    }
+    .info-label { color: #9ca3af; font-weight: 600; flex-shrink: 0; }
+    .info-val a { color: #38bdf8; text-decoration: none; font-weight: 700; word-break: break-all; }
+    .info-val a:hover { text-decoration: underline; }
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: #f3f4f6;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .setup-steps {
+      margin-top: 18px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+    .setup-steps h4 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #e5e7eb;
+    }
+    .setup-steps ol {
+      margin-left: 20px;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.6;
+    }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="badge">🚀 Automated 1-Click Deployer</div>
+      <h1>Highrise 24/7 DJ Bot Cloud Deployer</h1>
+      <p class="subtitle">Deploy your own 24/7 Music DJ, Multi-Floor Spawner, Tip Leaderboard & Room Assistant directly to your Render account in 60 seconds with zero coding.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-item"><span class="feature-icon">📻</span> 24/7 Music with /play takeover</div>
+      <div class="feature-item"><span class="feature-icon">🏢</span> 4-Floor Spawner (/f1 to /f4)</div>
+      <div class="feature-item"><span class="feature-icon">🏆</span> Live Tip Tracker & Leaderboard</div>
+      <div class="feature-item"><span class="feature-icon">👗</span> Wardrobe & Presets (!fit)</div>
+    </div>
+
+    <div class="card">
+      <form id="deploy-form">
+        <div class="form-group">
+          <label class="form-label">Highrise Bot API Token</label>
+          <input type="password" id="highrise-token" class="form-input" placeholder="e.g. 5928a3f890b..." required autocomplete="off">
+          <div class="form-hint">Get your token from <a href="https://create.highrise.game" target="_blank">create.highrise.game</a> &rarr; Dashboard &rarr; Bots & API Keys &rarr; Create Bot.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Highrise Room ID or URL</label>
+          <input type="text" id="room-id" class="form-input" placeholder="e.g. 64005ecfb3d3644258e0040e or paste Room Link" required>
+          <div class="form-hint">Open Highrise app &rarr; Room info panel &rarr; Tap "Share this Room" &rarr; Copy Link.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Your Highrise Username</label>
+          <input type="text" id="room-owner" class="form-input" placeholder="e.g. Sarah" required>
+          <div class="form-hint">Your exact handle. Gives you full admin rights in-game for <code>!fit</code>, <code>!setpos</code>, and <code>!setfloor</code>.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Room Display Name</label>
+          <input type="text" id="room-title" class="form-input" placeholder="e.g. Club Neon or Chill Lounge" value="My Lounge">
+          <div class="form-hint">Used in automated welcome whisper messages when players enter your room.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Render API Key</label>
+          <input type="password" id="render-key" class="form-input" placeholder="e.g. rnd_xxxx..." required autocomplete="off">
+          <div class="form-hint">Log into <a href="https://dashboard.render.com" target="_blank">Render Dashboard</a> &rarr; Account Settings &rarr; API Keys &rarr; Create API Key. (Deploys directly on your account).</div>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn-deploy">
+          <span>🚀 Deploy 24/7 Bot to Render</span>
+        </button>
+      </form>
+
+      <div id="status-box" class="status-box">
+        <span class="spinner"></span>
+        <span id="status-text">Validating credentials & deploying to Render...</span>
+      </div>
+
+      <div id="error-box" class="error-box"></div>
+    </div>
+
+    <div id="success-card" class="success-card">
+      <div class="success-title">
+        <span>🎉</span> <span>Deployment Successful!</span>
+      </div>
+      <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">Render is now building and deploying your bot. It will connect to your room automatically in about 1-2 minutes!</p>
+
+      <div class="info-row">
+        <span class="info-label">Service Name:</span>
+        <span id="res-name" class="info-val" style="font-weight:700; color:#fff;"></span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Live Web Jukebox:</span>
+        <span class="info-val"><a id="res-player-url" href="#" target="_blank">Open Jukebox</a></span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">24/7 Keep-Alive Link:</span>
+        <span class="info-val">
+          <button type="button" class="copy-btn" id="copy-health-btn">📋 Copy Health URL</button>
+        </span>
+      </div>
+
+      <div class="setup-steps">
+        <h4>⚡ 2-Minute In-Room Setup Checklist:</h4>
+        <ol>
+          <li><b>Invite Bot:</b> Go to your room in Highrise and invite your bot account.</li>
+          <li><b>Give Permissions:</b> Room Settings &rarr; Privileges &rarr; Give your bot <b>Designer</b> rights (required for teleporting players).</li>
+          <li><b>Lock DJ Booth:</b> Walk into your DJ booth and type <code>!setpos</code> in chat.</li>
+          <li><b>Set Floor Spawns:</b> Walk to each floor and type <code>!setfloor f1</code>, <code>!setfloor f2</code>, etc.</li>
+          <li><b>Keep-Alive:</b> Paste your copied Health URL into <a href="https://cron-job.org" target="_blank" style="color:#38bdf8;">cron-job.org</a> (run every 5 mins) so your free Render bot never sleeps!</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('deploy-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const statusBox = document.getElementById('status-box');
+    const statusText = document.getElementById('status-text');
+    const errorBox = document.getElementById('error-box');
+    const successCard = document.getElementById('success-card');
+    let healthUrl = '';
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.style.display = 'none';
+      errorBox.innerText = '';
+      successCard.style.display = 'none';
+
+      submitBtn.disabled = true;
+      statusBox.style.display = 'flex';
+      statusText.innerText = "Connecting to Render API & creating service...";
+
+      const payload = {
+        highrise_token: document.getElementById('highrise-token').value.trim(),
+        room_id: document.getElementById('room-id').value.trim(),
+        room_owner: document.getElementById('room-owner').value.trim(),
+        room_title: document.getElementById('room-title').value.trim(),
+        render_api_key: document.getElementById('render-key').value.trim()
+      };
+
+      try {
+        const res = await fetch('/api/deploy-render', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        submitBtn.disabled = false;
+        statusBox.style.display = 'none';
+
+        if (!res.ok || !data.success) {
+          errorBox.innerText = data.error || "Deployment failed. Please check your credentials.";
+          errorBox.style.display = 'block';
+          return;
+        }
+
+        // Display success card
+        document.getElementById('res-name').innerText = data.service_name;
+        document.getElementById('res-player-url').href = data.player_url;
+        document.getElementById('res-player-url').innerText = data.player_url;
+        healthUrl = data.health_url;
+
+        successCard.style.display = 'block';
+        successCard.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        submitBtn.disabled = false;
+        statusBox.style.display = 'none';
+        errorBox.innerText = "Network error: " + err.message;
+        errorBox.style.display = 'block';
+      }
+    });
+
+    document.getElementById('copy-health-btn').addEventListener('click', () => {
+      if (healthUrl) {
+        navigator.clipboard.writeText(healthUrl).then(() => {
+          document.getElementById('copy-health-btn').innerText = "✅ Copied!";
+          setTimeout(() => {
+            document.getElementById('copy-health-btn').innerText = "📋 Copy Health URL";
+          }, 2500);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
+"""
+
+
+async def handle_portal_page(request: web.Request) -> web.Response:
+    """Serve the 1-click Render automated cloud deployer portal."""
+    return web.Response(
+        text=PORTAL_HTML,
+        content_type="text/html",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+async def handle_deploy_render(request: web.Request) -> web.Response:
+    """Automated backend API to validate credentials and deploy a web service on buyer's Render account."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"success": False, "error": "Invalid JSON payload."}, status=400)
+
+    render_key = str(data.get("render_api_key", "")).strip()
+    highrise_token = str(data.get("highrise_token", "")).strip()
+    raw_room_id = str(data.get("room_id", "")).strip()
+    room_owner = str(data.get("room_owner", "")).strip().lstrip("@")
+    room_title = str(data.get("room_title", "the room")).strip() or "the room"
+    bot_name = str(data.get("bot_name", "")).strip()
+
+    if not render_key:
+        return web.json_response({"success": False, "error": "Render API Key is required."}, status=400)
+    if not highrise_token:
+        return web.json_response({"success": False, "error": "Highrise Bot API Token is required."}, status=400)
+    if not raw_room_id:
+        return web.json_response({"success": False, "error": "Highrise Room ID or URL is required."}, status=400)
+
+    # Extract 24-character hexadecimal ID from raw input or URL
+    match = re.search(r"[0-9a-f]{24}", raw_room_id.lower())
+    if not match:
+        return web.json_response({
+            "success": False,
+            "error": "Could not find a valid 24-character Highrise Room ID. Example format: 64005ecfb3d3644258e0040e"
+        }, status=400)
+    room_id = match.group(0)
+
+    # Build safe unique slug for Render service name
+    if bot_name:
+        slug = re.sub(r"[^a-z0-9-]", "", bot_name.lower().replace(" ", "-"))[:28]
+    else:
+        owner_slug = re.sub(r"[^a-z0-9-]", "", room_owner.lower()) if room_owner else "dj"
+        slug = f"hrbot-{owner_slug[:10]}-{room_id[-6:]}"
+
+    headers = {
+        "Authorization": f"Bearer {render_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    async with aiohttp.ClientSession() as session:
+        # Step 1: Validate Render API Key & Retrieve Owner ID
+        try:
+            async with session.get("https://api.render.com/v1/owners", headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status in (401, 403):
+                    return web.json_response({
+                        "success": False,
+                        "error": "Invalid Render API Key. Please verify your API key from Render.com -> Account Settings -> API Keys."
+                    }, status=401)
+                if resp.status != 200:
+                    err_txt = await resp.text()
+                    return web.json_response({
+                        "success": False,
+                        "error": f"Render API error ({resp.status}): {err_txt}"
+                    }, status=400)
+                owners_data = await resp.json()
+        except Exception as e:
+            return web.json_response({"success": False, "error": f"Failed to connect to Render API: {e}"}, status=500)
+
+        if not owners_data:
+            return web.json_response({"success": False, "error": "No Render owner account found for this API key."}, status=400)
+
+        first_owner = owners_data[0]
+        owner_id = first_owner.get("owner", {}).get("id") or first_owner.get("id")
+
+        # Step 2: Create Web Service via Render API
+        create_payload = {
+            "type": "web_service",
+            "name": slug,
+            "ownerId": owner_id,
+            "repo": "https://github.com/subhadipray99/raydjbot",
+            "branch": "main",
+            "autoDeploy": "yes",
+            "serviceDetails": {
+                "env": "python",
+                "plan": "free",
+                "buildCommand": "pip install -r requirements.txt",
+                "startCommand": "python main.py",
+                "envVars": [
+                    {"key": "PYTHON_VERSION", "value": "3.11.9"},
+                    {"key": "API_TOKEN", "value": highrise_token},
+                    {"key": "ROOM_ID", "value": room_id},
+                    {"key": "ROOM_OWNER", "value": room_owner or "owner"},
+                    {"key": "ROOM_TITLE", "value": room_title},
+                    {"key": "BOT_PREFIX", "value": "!"},
+                    {"key": "AUTOPLAY_ENABLED", "value": "true"},
+                ]
+            }
+        }
+
+        try:
+            async with session.post("https://api.render.com/v1/services", headers=headers, json=create_payload, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                resp_json = await resp.json()
+                if resp.status not in (200, 201):
+                    err_msg = resp_json.get("message") or str(resp_json)
+                    return web.json_response({
+                        "success": False,
+                        "error": f"Render rejected service creation: {err_msg}"
+                    }, status=400)
+
+                srv_data = resp_json
+                srv_id = srv_data.get("id", "")
+                srv_name = srv_data.get("name", slug)
+                srv_url = srv_data.get("serviceDetails", {}).get("url") or f"https://{srv_name}.onrender.com"
+
+                return web.json_response({
+                    "success": True,
+                    "service_id": srv_id,
+                    "service_name": srv_name,
+                    "service_url": srv_url,
+                    "player_url": f"{srv_url}/player",
+                    "health_url": f"{srv_url}/health",
+                    "radio_url": f"{srv_url}/radio.mp3",
+                })
+        except Exception as e:
+            return web.json_response({"success": False, "error": f"Error communicating with Render: {e}"}, status=500)
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_root)
     app.router.add_get("/health", handle_health)
     app.router.add_get("/player", handle_player_page)
+    app.router.add_get("/portal", handle_portal_page)
+    app.router.add_get("/deploy", handle_portal_page)
+    app.router.add_post("/api/deploy-render", handle_deploy_render)
     app.router.add_get("/api/player-state", handle_player_state)
     app.router.add_get("/audio/current.mp3", handle_audio_current)
     app.router.add_get("/audio/current", handle_audio_current)

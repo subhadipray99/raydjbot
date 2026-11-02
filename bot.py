@@ -189,7 +189,7 @@ class HighriseBot(BaseBot):
 
         # Only broadcast welcome message once on initial startup, not on every reconnect
         if not self._has_announced:
-            await self.highrise.chat("🤖 RayDJBot is online! Type /play <song> to queue music.")
+            await self.highrise.chat(f"🤖 {config.BOT_DISPLAY_NAME} is online! Type /play <song> to queue music.")
             self._has_announced = True
         else:
             logger.info("Bot reconnected silently (avoiding chat spam).")
@@ -204,7 +204,7 @@ class HighriseBot(BaseBot):
 
         # Whisper private automated welcome message (no skip, include /f4, no fit/copyfit, no links)
         w1 = (
-            f"Welcome to YouTube. This is an automated message.\n\n"
+            f"Welcome to {config.ROOM_TITLE}. This is an automated message.\n\n"
             f"🎶 Music Commands:\n"
             f"• /play <song> (or /p) - Request song\n"
             f"• /queue (or /q) - View queue\n"
@@ -218,7 +218,7 @@ class HighriseBot(BaseBot):
             f"✨ Emotes & Fun:\n"
             f"• !emote <name> | !emotes | !top\n\n"
             f"🏆 {top_tipper_text}\n"
-            f"Created and maintained by @shuvodip"
+            f"{config.ROOM_CREDITS}"
         )
         try:
             await self.highrise.send_whisper(user.id, w1)
@@ -446,8 +446,8 @@ class HighriseBot(BaseBot):
         # ---------------- ROOM & BOT COMMANDS ----------------
         elif cmd in ("help", "commands"):
             help_text = (
-                f"🤖 RayDJBot Commands:\n"
-                f"Welcome to YouTube. This is an automated message.\n\n"
+                f"🤖 {config.BOT_DISPLAY_NAME} Commands:\n"
+                f"Welcome to {config.ROOM_TITLE}. This is an automated message.\n\n"
                 f"🎶 Music Commands:\n"
                 f"• /play <song> (or /p) - Request a song (takes top priority!)\n"
                 f"• /skip (or /s) - Skip to next song in queue\n"
@@ -466,14 +466,14 @@ class HighriseBot(BaseBot):
                 f"• !emotes - List popular emotes\n"
                 f"• !wallet - Check bot tip wallet\n"
                 f"• !ping - Bot status\n\n"
-                f"Created and maintained by @shuvodip\n"
+                f"{config.ROOM_CREDITS}\n"
                 f"(Admins: Type !admin for setup & room management commands)"
             )
             await reply(help_text)
 
         elif cmd in ("admin", "setup"):
             admin_text = (
-                f"⚙️ Admin & Setup Commands (Owner: @shuvodip):\n"
+                f"⚙️ Admin & Setup Commands (Owner: @{config.ROOM_OWNER}):\n"
                 f"• !fit <preset> - Change bot dress (Presets: dj, suit, street, camo, goth, chill, puffer)\n"
                 f"• !copyfit [@user] - Clone someone's outfit onto bot\n"
                 f"• !fit save <name> | !fit load <name> | !fit list\n"
@@ -492,7 +492,7 @@ class HighriseBot(BaseBot):
             await reply(admin_text)
 
         elif cmd == "ping":
-            await reply("Pong! 🏓 RayDJBot is active and running 24/7.")
+            await reply(f"Pong! 🏓 {config.BOT_DISPLAY_NAME} is active and running 24/7.")
 
         # ---------------- FLOOR TELEPORTATION COMMANDS ----------------
         elif cmd in ("f1", "ground", "g"):
@@ -532,7 +532,7 @@ class HighriseBot(BaseBot):
 
         elif cmd in ("setfloor", "addfloor"):
             if not user_is_admin:
-                await reply("🔒 This command is reserved for room admins and owner (@shuvodip).")
+                await reply(f"🔒 This command is reserved for room admins and owner (@{config.ROOM_OWNER}).")
                 return
             if not args:
                 await reply("Usage: !setfloor <floor> (e.g. !setfloor f1, !setfloor f2), or !setfloor <floor> <x> <y> <z> [facing]")
@@ -576,7 +576,7 @@ class HighriseBot(BaseBot):
 
         elif cmd in ("delfloor", "clearfloor", "removefloor"):
             if not user_is_admin:
-                await reply("🔒 This command is reserved for room admins and owner (@shuvodip).")
+                await reply(f"🔒 This command is reserved for room admins and owner (@{config.ROOM_OWNER}).")
                 return
             if not args:
                 await reply("Usage: !delfloor <floor> (e.g. !delfloor f1, !delfloor f2)")
@@ -592,7 +592,7 @@ class HighriseBot(BaseBot):
         # ---------------- POSITION & MOVEMENT COMMANDS ----------------
         elif cmd in ("setpos", "setposition", "stayhere"):
             if not user_is_admin:
-                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                await reply(f"🔒 This command is reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
             # Option A: Manual coordinates e.g. !setpos 10.5 0.0 14.2 [FrontRight]
             if len(args) >= 3:
@@ -658,7 +658,7 @@ class HighriseBot(BaseBot):
 
         elif cmd in ("face", "turn", "rotate"):
             if not user_is_admin:
-                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                await reply(f"🔒 This command is reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
             saved_pos = position.get_saved_position(config.ROOM_ID)
             if not saved_pos or not isinstance(saved_pos, Position):
@@ -722,7 +722,7 @@ class HighriseBot(BaseBot):
 
         elif cmd in ("resetpos", "clearpos"):
             if not user_is_admin:
-                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                await reply(f"🔒 This command is reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
             cleared = position.clear_room_position(config.ROOM_ID)
             if cleared:
@@ -840,7 +840,7 @@ class HighriseBot(BaseBot):
 
         elif cmd == "settoptipper":
             if not user_is_admin:
-                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                await reply(f"🔒 This command is reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
             if not args:
                 await reply("Usage: !settoptipper <username> [gold_amount]")
@@ -852,7 +852,7 @@ class HighriseBot(BaseBot):
 
         elif cmd in ("cleartippers", "resettippers"):
             if not user_is_admin:
-                await reply("🔒 This command is reserved for the room owner (@shuvodip).")
+                await reply(f"🔒 This command is reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
             tips.clear_room_tips(config.ROOM_ID)
             await reply("🗑️ Room tip leaderboard has been reset.")
@@ -867,14 +867,14 @@ class HighriseBot(BaseBot):
         # ---------------- OUTFIT & WARDROBE COMMANDS (OWNER / ADMIN ONLY) ----------------
         elif cmd in ("fit", "outfit"):
             if not user_is_admin:
-                await reply("🔒 Outfit commands are reserved for the room owner (@shuvodip).")
+                await reply(f"🔒 Outfit commands are reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
 
             if not args or args[0].lower() in ("help", "info"):
                 presets_dict = outfit.list_available_presets()
                 preset_names = ", ".join(presets_dict.keys())
                 await reply(
-                    f"👗 Bot Wardrobe Commands (Owner: @shuvodip):\n"
+                    f"👗 Bot Wardrobe Commands (Owner: @{config.ROOM_OWNER}):\n"
                     f"• !fit <preset> - Change dress (Presets: {preset_names})\n"
                     f"• !copyfit [@user] - Clone someone's outfit onto bot\n"
                     f"• !fit save <name> - Save current look as a preset\n"
@@ -948,14 +948,14 @@ class HighriseBot(BaseBot):
 
         elif cmd in ("copyfit", "copy"):
             if not user_is_admin:
-                await reply("🔒 Outfit commands are reserved for the room owner (@shuvodip).")
+                await reply(f"🔒 Outfit commands are reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
             target_str = args[0] if args else user.username
             await self._handle_copyfit(user, target_str, reply)
 
         elif cmd in ("wardrobe", "inventory"):
             if not user_is_admin:
-                await reply("🔒 Wardrobe inspection is reserved for the room owner (@shuvodip).")
+                await reply(f"🔒 Wardrobe inspection is reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
             try:
                 inv_resp = await self.highrise.get_inventory()

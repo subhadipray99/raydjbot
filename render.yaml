@@ -13,5 +13,11 @@ services:
         value: "64005ecfb3d3644258e0040e"
       - key: API_TOKEN
         sync: false
+      - key: ROOM_OWNER
+        value: "shuvodip"
+      - key: ROOM_TITLE
+        value: "YouTube"
       - key: BOT_PREFIX
         value: "!"
+      - key: AUTOPLAY_ENABLED
+        value: "true"
