@@ -1766,7 +1766,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
 
     /* Top Nav */
     .deploy-nav {
-      max-width: 900px;
+      max-width: 1160px;
       margin: 0 auto;
       width: 100%;
       padding: 24px 20px;
@@ -1792,15 +1792,37 @@ DEPLOY_HTML = """<!DOCTYPE html>
     }
     .back-link:hover { text-decoration: underline; }
 
+    /* Responsive 2-Column Dashboard Grid */
+    .deploy-grid-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 28px;
+      align-items: start;
+      width: 100%;
+    }
+    @media (max-width: 960px) {
+      .deploy-grid-layout {
+        grid-template-columns: 1fr;
+      }
+      .deploy-sidebar {
+        order: 2;
+      }
+    }
+
+    .deploy-main-col {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      min-width: 0;
+    }
+
     /* Core Deploy Card */
     .deploy-container {
-      max-width: 760px;
-      margin: 0 auto;
-      width: calc(100% - 32px);
+      width: 100%;
       background: #ffffff;
       border: 2px solid var(--ink);
       border-radius: 24px;
-      padding: clamp(24px, 5vw, 44px);
+      padding: clamp(24px, 4vw, 40px);
       box-shadow: 6px 6px 0 var(--ink);
     }
 
@@ -1814,7 +1836,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
       margin-bottom: 8px;
     }
     .deploy-h1 {
-      font-size: clamp(28px, 4.5vw, 38px);
+      font-size: clamp(28px, 4.2vw, 36px);
       font-weight: 800;
       letter-spacing: -0.025em;
       line-height: 1.1;
@@ -1824,7 +1846,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
       font-size: 15px;
       color: var(--ink-soft);
       line-height: 1.5;
-      margin-bottom: 32px;
+      margin-bottom: 30px;
     }
 
     /* Form Steps & Tutorials */
@@ -1862,8 +1884,8 @@ DEPLOY_HTML = """<!DOCTYPE html>
       font-family: 'Geist Mono', monospace;
       font-size: 10px;
       font-weight: 700;
-      background: #f0efe6;
-      border: 1px solid var(--border);
+      background: #eee;
+      border: 1px solid var(--border-dark);
       padding: 2px 6px;
       border-radius: 4px;
       text-transform: uppercase;
@@ -1878,22 +1900,18 @@ DEPLOY_HTML = """<!DOCTYPE html>
     .app-input {
       width: 100%;
       background: #ffffff;
-      border: 1.5px solid var(--ink);
+      border: 1.5px solid var(--border-dark);
       border-radius: 12px;
-      padding: 13px 44px 13px 14px;
+      padding: 12px 14px;
       font-family: inherit;
       font-size: 14px;
       color: var(--ink);
       outline: none;
-      box-shadow: 2px 2px 0 var(--border);
       transition: all 0.15s ease;
     }
     .app-input:focus {
       border-color: var(--ink);
-      box-shadow: 4px 4px 0 var(--ink);
-    }
-    .app-input.no-reveal {
-      padding-right: 14px;
+      box-shadow: 2px 2px 0 var(--ink);
     }
     .btn-reveal {
       position: absolute;
@@ -1901,34 +1919,30 @@ DEPLOY_HTML = """<!DOCTYPE html>
       background: none;
       border: none;
       cursor: pointer;
-      padding: 6px;
       color: var(--ink-mute);
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 4px;
     }
     .btn-reveal:hover { color: var(--ink); }
 
-    /* Interactive Tutorial Box */
+    /* Interactive Tutorial Callout */
     .tutorial-card {
-      margin-top: 10px;
-      background: #fbfaf2;
-      border: 1px solid var(--border-dark);
+      background: #f7f6ed;
+      border: 1px solid var(--border);
       border-radius: 12px;
       padding: 12px 16px;
-    }
-    .tutorial-heading {
-      font-family: 'Geist Mono', monospace;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--ink);
-      margin-bottom: 4px;
-    }
-    .tutorial-desc {
+      margin-top: 10px;
       font-size: 13px;
       line-height: 1.5;
+    }
+    .tutorial-heading {
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--ink);
+    }
+    .tutorial-desc {
       color: var(--ink-soft);
     }
     .tutorial-desc a {
@@ -1937,48 +1951,48 @@ DEPLOY_HTML = """<!DOCTYPE html>
       text-decoration: underline;
     }
     .code-sample {
-      display: inline-block;
-      margin-top: 6px;
       font-family: 'Geist Mono', monospace;
       font-size: 11px;
-      background: #ffffff;
-      border: 1px solid var(--border);
-      padding: 3px 8px;
-      border-radius: 6px;
-      word-break: break-all;
+      background: rgba(0,0,0,0.04);
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 4px;
+      color: var(--ink);
     }
 
-    /* Switch */
+    /* Toggles & Preferences */
     .pref-row {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 14px 0;
-      margin-bottom: 20px;
+      justify-content: space-between;
+      margin-top: 20px;
+      margin-bottom: 28px;
     }
     .switch {
       position: relative;
       display: inline-block;
       width: 44px;
       height: 24px;
+      flex-shrink: 0;
     }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider {
       position: absolute;
       cursor: pointer;
-      inset: 0;
-      background-color: #ddd;
-      transition: .2s;
-      border-radius: 24px;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #e5e5dc;
       border: 1.5px solid var(--ink);
+      transition: .2s;
+      border-radius: 34px;
     }
     .slider:before {
       position: absolute;
       content: "";
       height: 16px;
       width: 16px;
-      left: 2px;
-      bottom: 2px;
+      left: 3px;
+      bottom: 2.5px;
       background-color: var(--ink);
       transition: .2s;
       border-radius: 50%;
@@ -1987,7 +2001,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
       background-color: var(--bg);
     }
     input:checked + .slider:before {
-      transform: translateX(20px);
+      transform: translateX(18px);
     }
 
     /* Submit Button */
@@ -1995,18 +2009,18 @@ DEPLOY_HTML = """<!DOCTYPE html>
       width: 100%;
       background: var(--ink);
       color: var(--accent);
-      border: 1.5px solid var(--ink);
+      border: 2px solid var(--ink);
       border-radius: 100px;
-      padding: 16px;
+      padding: 16px 28px;
+      font-family: inherit;
       font-size: 16px;
       font-weight: 800;
-      font-family: inherit;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      box-shadow: 4px 4px 0 var(--border);
+      box-shadow: 4px 4px 0 var(--ink);
       transition: all 0.2s cubic-bezier(.34, 1.56, .64, 1);
     }
     .btn-submit:hover {
@@ -2022,7 +2036,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
     /* Results Card */
     .result-box {
       display: none;
-      margin-top: 32px;
+      margin-top: 28px;
       background: var(--bg);
       border: 2px solid var(--ink);
       border-radius: 20px;
@@ -2041,7 +2055,6 @@ DEPLOY_HTML = """<!DOCTYPE html>
     /* Dashboard Fleet */
     .fleet-box {
       display: none;
-      margin-bottom: 28px;
       background: #f7f6ed;
       border: 1.5px solid var(--ink);
       border-radius: 18px;
@@ -2074,9 +2087,179 @@ DEPLOY_HTML = """<!DOCTYPE html>
       border: 1.5px solid var(--ink);
       border-radius: 18px;
       padding: 16px 20px;
-      margin-bottom: 24px;
       box-shadow: 4px 4px 0 var(--ink);
       font-size: 14px;
+    }
+
+    /* ---------------- RIGHT SIDEBAR STYLES ---------------- */
+    .deploy-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: sticky;
+      top: 24px;
+    }
+    .sidebar-card {
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+    .sidebar-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .sidebar-card-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-sidebar-refresh {
+      background: var(--bg);
+      border: 1px solid var(--ink);
+      border-radius: 6px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+    .btn-sidebar-refresh:hover { background: #ffffff; }
+    .btn-sidebar-sync {
+      background: var(--ink);
+      color: var(--accent);
+      border: none;
+      border-radius: 6px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .btn-sidebar-sync:hover { opacity: 0.9; }
+
+    /* Pulsing Status Dot */
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #27ae60;
+      display: inline-block;
+      box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.7);
+      animation: pulse-green 2s infinite;
+    }
+    @keyframes pulse-green {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(39, 174, 96, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(39, 174, 96, 0); }
+    }
+    .status-dot.offline {
+      background: #95a5a6;
+      animation: none;
+      box-shadow: none;
+    }
+    .status-dot.checking {
+      background: #f39c12;
+      animation: pulse-yellow 1.5s infinite;
+    }
+    @keyframes pulse-yellow {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(243, 156, 18, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(243, 156, 18, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(243, 156, 18, 0); }
+    }
+
+    /* Quick Links */
+    .quick-links-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .quick-link-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 12px;
+      border: 1px solid var(--border-dark);
+      border-radius: 12px;
+      background: #faf8f0;
+      color: var(--ink);
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+    .quick-link-item:hover {
+      background: #ffffff;
+      border-color: var(--ink);
+      transform: translateX(2px);
+    }
+    .quick-link-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--bg);
+      border: 1px solid var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .quick-link-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .quick-link-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .quick-link-sub {
+      font-size: 10px;
+      color: var(--ink-mute);
+    }
+    .quick-link-arrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-mute);
+    }
+
+    /* Cheat Sheet Commands */
+    .cmd-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .cmd-row:last-child {
+      border-bottom: none;
+    }
+    .cmd-row code {
+      background: var(--bg);
+      border: 1px solid var(--ink);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .cmd-row span {
+      font-size: 11px;
+      color: var(--ink-soft);
+      text-align: right;
     }
   </style>
 </head>
@@ -2107,12 +2290,12 @@ DEPLOY_HTML = """<!DOCTYPE html>
     </div>
   </header>
 
-  <main style="max-width: 900px; margin: 0 auto; width: 100%; padding: 0 16px;">
+  <main style="max-width: 1160px; margin: 0 auto; width: 100%; padding: 0 16px;">
     <!-- Prompt Banner for Unauthenticated Visitors -->
-    <div id="auth-prompt-banner" class="auth-banner" style="display:none;">
+    <div id="auth-prompt-banner" class="auth-banner" style="display:none; margin-bottom:24px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
         <div>
-          <b>Save & track your bot fleet</b> &bull; Sign in with Google so your deployed bots, room radios, and 24/7 health pings are linked to your account.
+          <b>Save & sync your bot credentials</b> &bull; Sign in with Google so your tokens, room IDs, and deployed fleets are saved safely to your cloud account database.
         </div>
         <button type="button" class="btn-google-auth-nav" onclick="signInWithGoogle()">
           <svg width="15" height="15" viewBox="0 0 24 24">
@@ -2126,199 +2309,365 @@ DEPLOY_HTML = """<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Active Fleet if Logged In -->
-    <div class="fleet-box" id="user-fleet-box">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <span style="font-weight:800; font-size:16px;">Your Active Highrise Bot Fleet</span>
-        <button class="btn-reveal" onclick="loadUserBots()" style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700; color:var(--ink);">Refresh</button>
+    <!-- 2-Column Responsive Dashboard Layout -->
+    <div class="deploy-grid-layout">
+      <!-- Main Column: Deploy Form & Results -->
+      <div class="deploy-main-col">
+        <!-- Active Fleet if Logged In -->
+        <div class="fleet-box" id="user-fleet-box">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <span style="font-weight:800; font-size:16px;">Your Active Highrise Bot Fleet</span>
+            <button class="btn-reveal" onclick="loadUserBots()" style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700; color:var(--ink);">Refresh Fleet</button>
+          </div>
+          <div id="fleet-list">Loading bots...</div>
+        </div>
+
+        <!-- The 60-Second Setup Form Card -->
+        <div class="deploy-container">
+          <div class="kicker">( 60-Second Cloud Deployer )</div>
+          <h1 class="deploy-h1">Configure & Launch Your Bot</h1>
+          <p class="deploy-sub">
+            Follow each step below. Your bot container will be created on your Render account and will connect to your room automatically.
+          </p>
+
+          <form id="deploy-form">
+            <!-- Step 1: Highrise Token -->
+            <div class="form-step">
+              <div class="step-header">
+                <span class="step-title">1. Highrise Bot API Token</span>
+                <span class="badge-req">Required</span>
+              </div>
+              <div class="input-box">
+                <input type="password" id="highrise-token" class="app-input" placeholder="e.g. 20d06551e88098d0b7c6..." required autocomplete="off">
+                <button type="button" class="btn-reveal" onclick="toggleVisibility('highrise-token', this)" aria-label="Toggle token visibility">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+              <div class="tutorial-card">
+                <div class="tutorial-heading">How to get your Bot Token:</div>
+                <div class="tutorial-desc">
+                  1. Sign in to <a href="https://create.highrise.game" target="_blank">create.highrise.game</a> &rarr; <b>Bots & API Keys</b>.<br>
+                  2. Click <b>Create Bot</b>, give it a name, and copy the 64-character token.<br>
+                  <span class="code-sample">Example: 20d06551e88098d0b7c6a084de450abf...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2: Room ID or URL -->
+            <div class="form-step">
+              <div class="step-header">
+                <span class="step-title">2. Highrise Room ID or Share Link</span>
+                <span class="badge-req">Required</span>
+              </div>
+              <div class="input-box">
+                <input type="text" id="room-id" class="app-input" placeholder="e.g. 64005ecfb3d3644258e0040e or room link" required>
+              </div>
+              <div class="tutorial-card">
+                <div class="tutorial-heading">How to find your Room ID:</div>
+                <div class="tutorial-desc">
+                  Open your room in Highrise &rarr; tap the share icon &rarr; tap <b>Copy Link</b>.<br>
+                  You can paste the full link directly or just the 24-character ID at the end.<br>
+                  <span class="code-sample">Example: https://highrise.game/room/64005ecfb3d3644258e0040e</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3: Room Owner -->
+            <div class="form-step">
+              <div class="step-header">
+                <span class="step-title">3. Room Owner Username</span>
+                <span class="badge-req">Required</span>
+              </div>
+              <div class="input-box">
+                <input type="text" id="room-owner" class="app-input" placeholder="e.g. subhadipray99 (without @)" required>
+              </div>
+              <div class="tutorial-card">
+                <div class="tutorial-heading">Who has admin rights:</div>
+                <div class="tutorial-desc">
+                  This user receives full owner commands (<code>!setpos</code>, <code>!setfloor</code>, <code>!fit</code>, <code>!copyfit</code>, <code>!top</code>).
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 4: Room Title -->
+            <div class="form-step">
+              <div class="step-header">
+                <span class="step-title">4. Room Title / Bot Display Name</span>
+                <span class="badge-opt">Optional</span>
+              </div>
+              <div class="input-box">
+                <input type="text" id="room-title" class="app-input" placeholder="e.g. The Neon Lounge">
+              </div>
+              <div class="tutorial-card">
+                <div class="tutorial-desc">
+                  Shown in chat greetings when players walk in: <i>"Welcome @guest to The Neon Lounge!"</i>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 5: Render API Key -->
+            <div class="form-step">
+              <div class="step-header">
+                <span class="step-title">5. Render API Key</span>
+                <span class="badge-req">Required for Cloud Hosting</span>
+              </div>
+              <div class="input-box">
+                <input type="password" id="render-key" class="app-input" placeholder="e.g. rnd_a8f92b7c6..." required autocomplete="off">
+                <button type="button" class="btn-reveal" onclick="toggleVisibility('render-key', this)" aria-label="Toggle Render key visibility">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+              <div class="tutorial-card">
+                <div class="tutorial-heading">How to get your free Render API Key:</div>
+                <div class="tutorial-desc">
+                  1. Go to <a href="https://dashboard.render.com" target="_blank">dashboard.render.com</a> &rarr; Profile (bottom left) &rarr; <b>Account Settings</b>.<br>
+                  2. Scroll down to <b>API Keys</b> &rarr; click <b>Create API Key</b>.<br>
+                  3. Paste the key here. It will deploy your container under Render's 100% free web service tier.
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 6: Cron-Job.org API Key -->
+            <div class="form-step">
+              <div class="step-header">
+                <span class="step-title">6. Cron-Job.org API Key</span>
+                <span class="badge-opt">Optional &bull; Autonomous Keep-Alive</span>
+              </div>
+              <div class="input-box">
+                <input type="password" id="cron-key" class="app-input" placeholder="Optional: e.g. cj_928172..." autocomplete="off">
+                <button type="button" class="btn-reveal" onclick="toggleVisibility('cron-key', this)" aria-label="Toggle cron key visibility">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+              <div class="tutorial-card">
+                <div class="tutorial-heading">Keep-Alive Network:</div>
+                <div class="tutorial-desc">
+                  Leave this blank! Our Master Keep-Alive network automatically enrolls your bot and pings it every 10 minutes so Render never sleeps.
+                </div>
+              </div>
+            </div>
+
+            <!-- Cloud Database Sync Toggle -->
+            <div class="pref-row" style="background:#f7f6ed; border:1.5px solid var(--border-dark); border-radius:14px; padding:16px;">
+              <div>
+                <div style="font-size:14px; font-weight:700; display:flex; align-items:center; gap:8px;">
+                  <span>Save & sync credentials to Cloud Database</span>
+                  <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; background:var(--ink); color:var(--accent); padding:2px 6px; border-radius:4px;">SUPABASE</span>
+                </div>
+                <div style="font-size:12px; color:var(--ink-mute); margin-top:2px;">
+                  Saves to your user account so your credentials and room settings persist across all your devices.
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <button type="button" onclick="saveConfigToDb()" class="btn-sidebar-sync" style="padding:6px 12px; font-size:11px;">Save Now</button>
+                <label class="switch">
+                  <input type="checkbox" id="save-db-pref" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" id="btn-submit-deploy" class="btn-submit">
+              <span id="submit-text">Deploy 24/7 Bot to Render &rarr;</span>
+            </button>
+          </form>
+
+          <!-- Status Alerts -->
+          <div id="deploy-loading" style="display:none; margin-top:20px; font-weight:700; color:var(--ink); font-family:'Geist Mono',monospace; font-size:13px; text-align:center;">
+            Connecting to Render cloud & building service container...
+          </div>
+          <div id="deploy-err" style="display:none; margin-top:20px; background:#fee2e2; border:1.5px solid var(--ink); border-radius:12px; padding:14px; color:#b91c1c; font-size:13px; font-weight:600;"></div>
+
+          <!-- Result Card -->
+          <div id="deploy-res" class="result-box">
+            <div style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700; margin-bottom:6px;">SUCCESS &bull; DEPLOYMENT INITIATED</div>
+            <h2 style="font-size:26px; font-weight:800; margin-bottom:8px;">Your Bot is Building on Render!</h2>
+            <p style="font-size:14px; color:var(--ink-soft); margin-bottom:16px;">
+              Render is compiling your container. It will join your Highrise room in 60-90 seconds.
+            </p>
+
+            <!-- MP3 Stream Link -->
+            <div class="stream-card">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-weight:800; font-size:14px;">Highrise In-Room Radio (.mp3 URL)</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; background:var(--bg); border:1px solid var(--ink); padding:2px 6px; border-radius:4px;">PASTE INTO ROOM RADIO</span>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <input type="text" id="res-stream-input" readonly value="" class="app-input" style="font-family:'Geist Mono',monospace; font-weight:600; padding:10px 14px;">
+                <button type="button" class="btn-submit" style="width:auto; padding:10px 20px; font-size:13px;" onclick="copyStream()">
+                  <span id="copy-stream-lbl">Copy Link</span>
+                </button>
+              </div>
+            </div>
+
+            <div style="font-size:13px; margin-bottom:12px;">
+              <b>Web Jukebox:</b> <a id="res-jukebox-link" href="#" target="_blank" style="color:var(--ink); font-weight:700;">Open /player Dashboard &rarr;</a>
+            </div>
+
+            <div style="background:#ffffff; border:1.5px solid var(--ink); border-radius:12px; padding:14px; font-size:12px; line-height:1.6;">
+              <b>Quick Checklist:</b><br>
+              1. Invite your bot into your Highrise room.<br>
+              2. Room Settings &rarr; Privileges &rarr; Give your bot <b>Designer</b> rights.<br>
+              3. Room Settings &rarr; Custom Radio Station &rarr; Paste your copied <b>.mp3 URL</b>.<br>
+              4. Walk into your DJ booth and type <code>!setpos</code> in chat!
+            </div>
+          </div>
+        </div>
       </div>
-      <div id="fleet-list">Loading bots...</div>
-    </div>
 
-    <!-- The 60-Second Setup Form Card -->
-    <div class="deploy-container">
-      <div class="kicker">( 60-Second Cloud Deployer )</div>
-      <h1 class="deploy-h1">Configure & Launch Your Bot</h1>
-      <p class="deploy-sub">
-        Follow each step below. Your bot container will be created on your Render account and will connect to your room automatically.
-      </p>
+      <!-- Right Column: Sidebar (Live Bot Status, Quick Links, Cheat Sheet) -->
+      <aside class="deploy-sidebar">
+        <!-- Card 1: Bot System Status -->
+        <div class="sidebar-card">
+          <div class="sidebar-card-header">
+            <span class="sidebar-card-title">
+              <span class="status-dot offline" id="status-dot"></span>
+              Live Bot Status
+            </span>
+            <button type="button" class="btn-sidebar-refresh" onclick="refreshBotStatus()" title="Refresh Status">Refresh</button>
+          </div>
 
-      <form id="deploy-form">
-        <!-- Step 1: Highrise Token -->
-        <div class="form-step">
-          <div class="step-header">
-            <span class="step-title">1. Highrise Bot API Token</span>
-            <span class="badge-req">Required</span>
-          </div>
-          <div class="input-box">
-            <input type="password" id="highrise-token" class="app-input" placeholder="e.g. 20d06551e88098d0b7c6..." required autocomplete="off">
-            <button type="button" class="btn-reveal" onclick="toggleVisibility('highrise-token', this)" aria-label="Toggle token visibility">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <div class="tutorial-card">
-            <div class="tutorial-heading">How to get your Bot Token:</div>
-            <div class="tutorial-desc">
-              1. Sign in to <a href="https://create.highrise.game" target="_blank">create.highrise.game</a> &rarr; <b>Bots & API Keys</b>.<br>
-              2. Click <b>Create Bot</b>, give it a name, and copy the 64-character token.<br>
-              <span class="code-sample">Example: 20d06551e88098d0b7c6a084de450abf...</span>
+          <div id="bot-status-container">
+            <div id="bot-status-idle" style="font-size:13px; color:var(--ink-soft); line-height:1.5;">
+              <div style="font-weight:700; color:var(--ink); margin-bottom:4px;" id="bot-status-title">Ready to Deploy</div>
+              <p id="bot-status-desc">No active bot instance registered yet. Fill in the form on the left to deploy your bot in 60 seconds.</p>
+            </div>
+
+            <div id="bot-status-active" style="display:none;">
+              <div style="background:#f7f6ed; border:1px solid var(--border-dark); border-radius:12px; padding:12px; margin-bottom:12px;">
+                <div style="font-weight:800; font-size:14px;" id="active-bot-name">Highrise Bot</div>
+                <div style="font-size:12px; color:var(--ink-soft); margin-top:2px;" id="active-bot-room">Room: --</div>
+                <div style="font-family:'Geist Mono',monospace; font-size:11px; color:#27ae60; font-weight:700; margin-top:6px;" id="active-bot-ping">
+                  Latency: --ms &bull; Operational
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--ink-mute);">Uptime Pinger:</span>
+                  <span style="font-weight:700; color:#27ae60;">Active (Every 10m)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--ink-mute);">Radio Stream:</span>
+                  <span style="font-weight:700;">MP3 Live</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--ink-mute);">Cloud Database:</span>
+                  <span style="font-weight:700; color:#27ae60;">Connected</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Step 2: Room ID or URL -->
-        <div class="form-step">
-          <div class="step-header">
-            <span class="step-title">2. Highrise Room ID or Share Link</span>
-            <span class="badge-req">Required</span>
+        <!-- Card 2: Quick Links -->
+        <div class="sidebar-card">
+          <div class="sidebar-card-header">
+            <span class="sidebar-card-title">Quick Links</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; text-transform:uppercase; color:var(--ink-mute);">Portals</span>
           </div>
-          <div class="input-box">
-            <input type="text" id="room-id" class="app-input no-reveal" placeholder="e.g. 64005ecfb3d3644258e0040e or paste Room Link" required>
-          </div>
-          <div class="tutorial-card">
-            <div class="tutorial-heading">How to get your Room ID:</div>
-            <div class="tutorial-desc">
-              Inside Highrise, tap Room Info &rarr; <b>Share Room</b> &rarr; <b>Copy Link</b>.<br>
-              Paste the full link here! We automatically extract the 24-character hexadecimal ID.<br>
-              <span class="code-sample">Example: https://highrise.game/room/64005ecfb3d3644258e0040e</span>
-            </div>
-          </div>
-        </div>
 
-        <!-- Step 3: Room Owner -->
-        <div class="form-step">
-          <div class="step-header">
-            <span class="step-title">3. Your Highrise Username (Master Admin)</span>
-            <span class="badge-req">Required</span>
-          </div>
-          <div class="input-box">
-            <input type="text" id="room-owner" class="app-input no-reveal" placeholder="e.g. Sarah (without @)" required>
-          </div>
-          <div class="tutorial-card">
-            <div class="tutorial-heading">Why this matters:</div>
-            <div class="tutorial-desc">
-              Only this username will be able to lock the DJ booth (<code>!setpos</code>), change outfits (<code>!fit</code>), and configure floors (<code>!setfloor</code>).<br>
-              <span class="code-sample">Example: Sarah or JayShah</span>
-            </div>
-          </div>
-        </div>
+          <div class="quick-links-list">
+            <a href="/player" target="_blank" class="quick-link-item">
+              <div class="quick-link-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+              </div>
+              <div class="quick-link-content">
+                <div class="quick-link-name">Live Jukebox Player</div>
+                <div class="quick-link-sub">Queue music & listen live</div>
+              </div>
+              <div class="quick-link-arrow">&rarr;</div>
+            </a>
 
-        <!-- Step 4: Room Display Name -->
-        <div class="form-step">
-          <div class="step-header">
-            <span class="step-title">4. Venue Display Name</span>
-            <span class="badge-opt">Optional</span>
-          </div>
-          <div class="input-box">
-            <input type="text" id="room-title" class="app-input no-reveal" placeholder="e.g. Neon Rooftop or Chill Lounge" value="My Lounge">
-          </div>
-          <div class="tutorial-card">
-            <div class="tutorial-heading">Customization:</div>
-            <div class="tutorial-desc">
-              The bot uses this name in welcome whispers when players join your room! (e.g. <i>"Welcome to Neon Rooftop, @player!"</i>)
-            </div>
-          </div>
-        </div>
+            <a href="https://create.highrise.game" target="_blank" class="quick-link-item">
+              <div class="quick-link-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <div class="quick-link-content">
+                <div class="quick-link-name">Highrise Developer Portal</div>
+                <div class="quick-link-sub">Manage Bot API keys</div>
+              </div>
+              <div class="quick-link-arrow">&rarr;</div>
+            </a>
 
-        <!-- Step 5: Render API Key -->
-        <div class="form-step">
-          <div class="step-header">
-            <span class="step-title">5. Render.com API Key</span>
-            <span class="badge-req">Required</span>
-          </div>
-          <div class="input-box">
-            <input type="password" id="render-key" class="app-input" placeholder="e.g. rnd_xxxxxxxxxxxxxxxxxxxx" required autocomplete="off">
-            <button type="button" class="btn-reveal" onclick="toggleVisibility('render-key', this)" aria-label="Toggle Render key visibility">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <div class="tutorial-card">
-            <div class="tutorial-heading">How to get your free Render API key:</div>
-            <div class="tutorial-desc">
-              1. Sign up free at <a href="https://dashboard.render.com" target="_blank">dashboard.render.com</a> (zero credit card needed).<br>
-              2. Bottom-left avatar &rarr; <b>Account Settings</b> &rarr; <b>API Keys</b> &rarr; <b>Create API Key</b>.<br>
-              <span class="code-sample">Example: rnd_3a4b5c6d7e8f90123456789...</span>
-            </div>
-          </div>
-        </div>
+            <a id="quick-room-link" href="#" target="_blank" class="quick-link-item" style="display:none;">
+              <div class="quick-link-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              </div>
+              <div class="quick-link-content">
+                <div class="quick-link-name">Open Highrise Room</div>
+                <div class="quick-link-sub">Join directly in browser or app</div>
+              </div>
+              <div class="quick-link-arrow">&rarr;</div>
+            </a>
 
-        <!-- Step 6: 24/7 Keep-Alive -->
-        <div class="form-step">
-          <div class="step-header">
-            <span class="step-title">6. cron-job.org API Key</span>
-            <span class="badge-opt">Optional</span>
-          </div>
-          <div class="input-box">
-            <input type="password" id="cron-key" class="app-input" placeholder="e.g. crons_xxxx... (leave blank for Zero-Setup Auto-Pinger)" autocomplete="off">
-            <button type="button" class="btn-reveal" onclick="toggleVisibility('cron-key', this)" aria-label="Toggle cron key visibility">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <div class="tutorial-card">
-            <div class="tutorial-heading">Zero-setup auto-pinger:</div>
-            <div class="tutorial-desc">
-              Leave this blank! Our Master Keep-Alive network automatically enrolls your bot and pings it every 10 minutes so Render never sleeps.
-            </div>
-          </div>
-        </div>
+            <a href="https://dashboard.render.com" target="_blank" class="quick-link-item">
+              <div class="quick-link-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </div>
+              <div class="quick-link-content">
+                <div class="quick-link-name">Render Dashboard</div>
+                <div class="quick-link-sub">View container logs & specs</div>
+              </div>
+              <div class="quick-link-arrow">&rarr;</div>
+            </a>
 
-        <!-- Remember Details Toggle -->
-        <div class="pref-row">
-          <div>
-            <div style="font-size:14px; font-weight:700;">Remember details in this browser</div>
-            <div style="font-size:12px; color:var(--ink-mute);">Securely saves your credentials locally for 1-click re-deploys.</div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="save-local-pref" checked>
-            <span class="slider"></span>
-          </label>
-        </div>
+            <a href="https://console.cron-job.org" target="_blank" class="quick-link-item">
+              <div class="quick-link-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div class="quick-link-content">
+                <div class="quick-link-name">Cron-Job.org Monitor</div>
+                <div class="quick-link-sub">Inspect keep-alive schedule</div>
+              </div>
+              <div class="quick-link-arrow">&rarr;</div>
+            </a>
 
-        <button type="submit" id="btn-submit-deploy" class="btn-submit">
-          <span id="submit-text">Deploy 24/7 Bot to Render &rarr;</span>
-        </button>
-      </form>
-
-      <!-- Status Alerts -->
-      <div id="deploy-loading" style="display:none; margin-top:20px; font-weight:700; color:var(--ink); font-family:'Geist Mono',monospace; font-size:13px; text-align:center;">
-        Connecting to Render cloud & building service container...
-      </div>
-      <div id="deploy-err" style="display:none; margin-top:20px; background:#fee2e2; border:1.5px solid var(--ink); border-radius:12px; padding:14px; color:#b91c1c; font-size:13px; font-weight:600;"></div>
-
-      <!-- Result Card -->
-      <div id="deploy-res" class="result-box">
-        <div style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700; margin-bottom:6px;">SUCCESS &bull; DEPLOYMENT INITIATED</div>
-        <h2 style="font-size:26px; font-weight:800; margin-bottom:8px;">Your Bot is Building on Render!</h2>
-        <p style="font-size:14px; color:var(--ink-soft); margin-bottom:16px;">
-          Render is compiling your container. It will join your Highrise room in 60-90 seconds.
-        </p>
-
-        <!-- MP3 Stream Link -->
-        <div class="stream-card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span style="font-weight:800; font-size:14px;">Highrise In-Room Radio (.mp3 URL)</span>
-            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; background:var(--bg); border:1px solid var(--ink); padding:2px 6px; border-radius:4px;">PASTE INTO ROOM RADIO</span>
-          </div>
-          <div style="display:flex; gap:8px;">
-            <input type="text" id="res-stream-input" readonly value="" class="app-input" style="font-family:'Geist Mono',monospace; font-weight:600; padding:10px 14px;">
-            <button type="button" class="btn-submit" style="width:auto; padding:10px 20px; font-size:13px;" onclick="copyStream()">
-              <span id="copy-stream-lbl">Copy Link</span>
+            <button type="button" class="quick-link-item" onclick="copyStream()" style="width:100%; text-align:left; background:none; border:none; cursor:pointer;">
+              <div class="quick-link-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </div>
+              <div class="quick-link-content">
+                <div class="quick-link-name" id="sidebar-copy-stream-txt">Copy Radio Stream URL</div>
+                <div class="quick-link-sub">For Highrise Room Radio</div>
+              </div>
+              <div class="quick-link-arrow">&plus;</div>
             </button>
           </div>
         </div>
 
-        <div style="font-size:13px; margin-bottom:12px;">
-          <b>Web Jukebox:</b> <a id="res-jukebox-link" href="#" target="_blank" style="color:var(--ink); font-weight:700;">Open /player Dashboard &rarr;</a>
+        <!-- Card 3: Cloud Database Sync Status -->
+        <div class="sidebar-card">
+          <div class="sidebar-card-header">
+            <span class="sidebar-card-title">Cloud Database</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; color:#27ae60;">SUPABASE</span>
+          </div>
+          <div style="font-size:12px; color:var(--ink-soft); line-height:1.5;">
+            Credentials & configurations are synced to your Supabase account so you never lose them.
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;">
+            <span id="cloud-sync-status" style="font-family:'Geist Mono',monospace; font-size:11px; font-weight:700; color:var(--ink);">Checking sync...</span>
+            <button type="button" onclick="saveConfigToDb()" class="btn-sidebar-sync">Sync Now</button>
+          </div>
         </div>
 
-        <div style="background:#ffffff; border:1.5px solid var(--ink); border-radius:12px; padding:14px; font-size:12px; line-height:1.6;">
-          <b>Quick Checklist:</b><br>
-          1. Invite your bot into your Highrise room.<br>
-          2. Room Settings &rarr; Privileges &rarr; Give your bot <b>Designer</b> rights.<br>
-          3. Room Settings &rarr; Custom Radio Station &rarr; Paste your copied <b>.mp3 URL</b>.<br>
-          4. Walk into your DJ booth and type <code>!setpos</code> in chat!
+        <!-- Card 4: In-Game Commands Cheat Sheet -->
+        <div class="sidebar-card">
+          <div class="sidebar-card-header">
+            <span class="sidebar-card-title">In-Game Commands</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; color:var(--ink-mute);">CHEATSHEET</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
+            <div class="cmd-row"><code>!setpos</code><span>Lock DJ booth coordinates</span></div>
+            <div class="cmd-row"><code>/play &lt;song&gt;</code><span>Request song to queue</span></div>
+            <div class="cmd-row"><code>/emotes</code><span>View 68+ emotes catalog</span></div>
+            <div class="cmd-row"><code>/emote &lt;name&gt;</code><span>Loop emote non-stop</span></div>
+            <div class="cmd-row"><code>/stop</code><span>Stop active emote loop</span></div>
+            <div class="cmd-row"><code>/f1, /f2</code><span>Teleport to floor spawns</span></div>
+            <div class="cmd-row"><code>!fit</code><span>Save current bot outfit</span></div>
+          </div>
         </div>
-      </div>
+      </aside>
     </div>
   </main>
 
@@ -2327,6 +2676,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
     const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
     const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
     let currentUser = null;
+    let latestDeployedBot = null;
 
     // Reveal/Hide Eye toggles
     const SVG_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
@@ -2343,30 +2693,157 @@ DEPLOY_HTML = """<!DOCTYPE html>
       }
     }
 
-    // LocalStorage Remember preference
+    // Dynamic Room Link in Quick Links
+    const roomInput = document.getElementById('room-id');
+    roomInput.addEventListener('input', () => {
+      const match = roomInput.value.match(/[0-9a-f]{24}/i);
+      updateRoomQuickLink(match ? match[0] : null);
+    });
+
+    function updateRoomQuickLink(roomId) {
+      const linkEl = document.getElementById('quick-room-link');
+      if (!linkEl) return;
+      if (roomId) {
+        linkEl.href = `https://highrise.game/room/${roomId}`;
+        linkEl.style.display = 'flex';
+      } else {
+        linkEl.style.display = 'none';
+      }
+    }
+
+    // ---------------- DATABASE CREDENTIAL PERSISTENCE ----------------
+    async function loadUserConfigFromDb(userId) {
+      const statusEl = document.getElementById('cloud-sync-status');
+      if (statusEl) statusEl.innerText = 'Syncing...';
+      try {
+        const res = await fetch(`/api/user-config?user_id=${userId}`);
+        const data = await res.json();
+        if (data.success && data.config) {
+          const c = data.config;
+          if (c.highrise_token) document.getElementById('highrise-token').value = c.highrise_token;
+          if (c.room_id) {
+            document.getElementById('room-id').value = c.room_id;
+            updateRoomQuickLink(c.room_id);
+          }
+          if (c.room_owner) document.getElementById('room-owner').value = c.room_owner;
+          if (c.room_title) document.getElementById('room-title').value = c.room_title;
+          if (c.render_key) document.getElementById('render-key').value = c.render_key;
+          if (c.cron_key) document.getElementById('cron-key').value = c.cron_key;
+
+          if (statusEl) statusEl.innerText = 'Synced with Cloud';
+          return;
+        }
+      } catch (e) {
+        console.debug('Cloud config load exception:', e);
+      }
+      if (statusEl) statusEl.innerText = 'Account ready';
+    }
+
+    async function saveConfigToDb() {
+      if (!currentUser) {
+        alert('Please sign in with Google first to save your credentials to your personal cloud database.');
+        return;
+      }
+      const payload = {
+        highrise_token: document.getElementById('highrise-token').value.trim(),
+        room_id: document.getElementById('room-id').value.trim(),
+        room_owner: document.getElementById('room-owner').value.trim(),
+        room_title: document.getElementById('room-title').value.trim(),
+        render_key: document.getElementById('render-key').value.trim(),
+        cron_key: document.getElementById('cron-key').value.trim()
+      };
+
+      const statusEl = document.getElementById('cloud-sync-status');
+      if (statusEl) statusEl.innerText = 'Saving to database...';
+
+      try {
+        const res = await fetch('/api/user-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: currentUser.id, config: payload })
+        });
+        const d = await res.json();
+        if (d.success) {
+          if (statusEl) statusEl.innerText = 'Saved to Supabase';
+          alert('Configuration saved to your Supabase database!');
+        } else {
+          if (statusEl) statusEl.innerText = 'Save error';
+          alert('Could not save to database: ' + (d.error || 'Unknown error'));
+        }
+      } catch (err) {
+        if (statusEl) statusEl.innerText = 'Network error';
+        alert('Error saving config: ' + err.message);
+      }
+    }
+
+    // Fallback localStorage for unauthenticated users
     const STORE_KEY = 'zevray_creds';
-    function loadSaved() {
+    function loadSavedLocal() {
       try {
         const val = localStorage.getItem(STORE_KEY);
         if (val) {
           const d = JSON.parse(val);
-          if (d.highrise_token) document.getElementById('highrise-token').value = d.highrise_token;
-          if (d.room_id) document.getElementById('room-id').value = d.room_id;
-          if (d.room_owner) document.getElementById('room-owner').value = d.room_owner;
-          if (d.room_title) document.getElementById('room-title').value = d.room_title;
-          if (d.render_key) document.getElementById('render-key').value = d.render_key;
-          if (d.cron_key) document.getElementById('cron-key').value = d.cron_key;
+          if (d.highrise_token && !document.getElementById('highrise-token').value) document.getElementById('highrise-token').value = d.highrise_token;
+          if (d.room_id && !document.getElementById('room-id').value) {
+            document.getElementById('room-id').value = d.room_id;
+            updateRoomQuickLink(d.room_id);
+          }
+          if (d.room_owner && !document.getElementById('room-owner').value) document.getElementById('room-owner').value = d.room_owner;
+          if (d.room_title && !document.getElementById('room-title').value) document.getElementById('room-title').value = d.room_title;
+          if (d.render_key && !document.getElementById('render-key').value) document.getElementById('render-key').value = d.render_key;
+          if (d.cron_key && !document.getElementById('cron-key').value) document.getElementById('cron-key').value = d.cron_key;
         }
       } catch (e) {}
     }
 
-    function saveIfPermitted(payload) {
-      if (document.getElementById('save-local-pref').checked) {
-        try { localStorage.setItem(STORE_KEY, JSON.stringify(payload)); } catch (e) {}
+    function saveLocalFallback(payload) {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(payload)); } catch (e) {}
+    }
+
+    // ---------------- LIVE BOT STATUS MONITOR ----------------
+    async function refreshBotStatus() {
+      const dot = document.getElementById('status-dot');
+      dot.className = 'status-dot checking';
+
+      let targetUrl = '';
+      let botInfo = null;
+
+      if (latestDeployedBot) {
+        botInfo = latestDeployedBot;
+        targetUrl = botInfo.health_url || (botInfo.service_url ? `${botInfo.service_url}/health` : '');
+      } else {
+        // Check local server engine status
+        targetUrl = window.location.origin + '/health';
+      }
+
+      try {
+        const res = await fetch(`/api/bot-health-check?url=${encodeURIComponent(targetUrl)}`);
+        const data = await res.json();
+        
+        if (data.online) {
+          dot.className = 'status-dot';
+          if (botInfo) {
+            document.getElementById('bot-status-idle').style.display = 'none';
+            document.getElementById('bot-status-active').style.display = 'block';
+            document.getElementById('active-bot-name').innerText = botInfo.room_title || 'Highrise Bot';
+            document.getElementById('active-bot-room').innerText = `Room: ${botInfo.room_id || '--'}`;
+            document.getElementById('active-bot-ping').innerText = `Latency: ${data.latency_ms}ms • Operational`;
+          } else {
+            document.getElementById('bot-status-title').innerText = 'Engine Online & Ready';
+            document.getElementById('bot-status-desc').innerText = `Cloud engine healthy (${data.latency_ms}ms). Fill in the form on the left to deploy your bot container.`;
+          }
+        } else {
+          dot.className = 'status-dot offline';
+          if (botInfo) {
+            document.getElementById('active-bot-ping').innerText = `Building / Booting • Retrying...`;
+          }
+        }
+      } catch (e) {
+        dot.className = 'status-dot offline';
       }
     }
 
-    // Deploy Submit
+    // ---------------- DEPLOY FORM SUBMISSION ----------------
     const form = document.getElementById('deploy-form');
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2385,7 +2862,14 @@ DEPLOY_HTML = """<!DOCTYPE html>
         user_id: currentUser ? currentUser.id : ''
       };
 
-      saveIfPermitted(payload);
+      // Save to database if checkbox is enabled and user is logged in
+      if (document.getElementById('save-db-pref').checked) {
+        if (currentUser) {
+          saveConfigToDb();
+        } else {
+          saveLocalFallback(payload);
+        }
+      }
 
       try {
         const res = await fetch('/api/deploy-render', {
@@ -2408,6 +2892,16 @@ DEPLOY_HTML = """<!DOCTYPE html>
         document.getElementById('deploy-res').style.display = 'block';
         document.getElementById('deploy-res').scrollIntoView({ behavior: 'smooth' });
 
+        // Update active bot in sidebar
+        latestDeployedBot = {
+          room_title: payload.room_title || 'Highrise Bot',
+          room_id: payload.room_id,
+          room_owner: payload.room_owner,
+          service_url: data.service_url,
+          health_url: data.health_url
+        };
+        refreshBotStatus();
+
         if (currentUser) loadUserBots();
       } catch (err) {
         document.getElementById('deploy-loading').style.display = 'none';
@@ -2418,11 +2912,16 @@ DEPLOY_HTML = """<!DOCTYPE html>
     });
 
     function copyStream() {
-      const val = document.getElementById('res-stream-input').value;
-      if (!val) return;
+      const val = document.getElementById('res-stream-input').value || (window.location.origin + '/radio.mp3');
       navigator.clipboard.writeText(val).then(() => {
-        document.getElementById('copy-stream-lbl').innerText = 'Copied!';
-        setTimeout(() => { document.getElementById('copy-stream-lbl').innerText = 'Copy Link'; }, 2000);
+        const lbl = document.getElementById('copy-stream-lbl');
+        if (lbl) lbl.innerText = 'Copied!';
+        const sideLbl = document.getElementById('sidebar-copy-stream-txt');
+        if (sideLbl) sideLbl.innerText = 'Copied Radio URL!';
+        setTimeout(() => {
+          if (lbl) lbl.innerText = 'Copy Link';
+          if (sideLbl) sideLbl.innerText = 'Copy Radio Stream URL';
+        }, 2000);
       });
     }
 
@@ -2437,7 +2936,11 @@ DEPLOY_HTML = """<!DOCTYPE html>
           return;
         }
         let html = '';
-        data.bots.forEach(b => {
+        data.bots.forEach((b, idx) => {
+          if (idx === 0 && !latestDeployedBot) {
+            latestDeployedBot = b;
+            refreshBotStatus();
+          }
           const stream = b.radio_stream_url || `${b.render_service_url}/radio.mp3`;
           html += `
             <div style="background:#fff; border:1px solid var(--border-dark); border-radius:10px; padding:10px 14px; margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
@@ -2513,7 +3016,9 @@ DEPLOY_HTML = """<!DOCTYPE html>
       const fleetBox = document.getElementById('user-fleet-box');
       if (fleetBox) fleetBox.style.display = 'block';
 
+      // Load bot fleet and cloud config
       loadUserBots();
+      loadUserConfigFromDb(user.id);
     }
 
     function renderLoggedOut() {
@@ -2529,10 +3034,15 @@ DEPLOY_HTML = """<!DOCTYPE html>
 
       const fleetBox = document.getElementById('user-fleet-box');
       if (fleetBox) fleetBox.style.display = 'none';
+
+      const statusEl = document.getElementById('cloud-sync-status');
+      if (statusEl) statusEl.innerText = 'Sign in to sync';
+
+      loadSavedLocal();
+      refreshBotStatus();
     }
 
     async function initUser() {
-      loadSaved();
       if (!sb) {
         renderLoggedOut();
         return;
@@ -2552,13 +3062,14 @@ DEPLOY_HTML = """<!DOCTYPE html>
           renderLoggedOut();
         }
       });
+
+      refreshBotStatus();
     }
     initUser();
   </script>
 </body>
 </html>
 """
-
 
 async def handle_landing_page(request: web.Request) -> web.Response:
     """Serve the Cloudstudio-inspired high-craft landing page on root /."""
@@ -2584,6 +3095,81 @@ async def handle_portal_page(request: web.Request) -> web.Response:
     """Backwards compatibility for /portal redirecting to /deploy."""
     return await handle_deploy_page(request)
 
+
+async def handle_user_config_api(request: web.Request) -> web.Response:
+    """API endpoint to get or save user bot credentials in Supabase database."""
+    if request.method == "GET":
+        user_id = request.query.get("user_id", "").strip()
+        if not user_id:
+            return web.json_response({"success": False, "error": "user_id is required"}, status=400)
+        try:
+            cfg = await db.get_user_config(user_id)
+            return web.json_response({"success": True, "config": cfg or {}})
+        except Exception as e:
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    elif request.method == "POST":
+        try:
+            data = await request.json()
+            user_id = str(data.get("user_id", "")).strip()
+            config_data = data.get("config", {})
+            if not user_id:
+                return web.json_response({"success": False, "error": "user_id is required"}, status=400)
+            success = await db.save_user_config(user_id, config_data)
+            return web.json_response({"success": success})
+        except Exception as e:
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
+async def handle_bot_health_check(request: web.Request) -> web.Response:
+    """Proxy health check to verify live connectivity and latency to a bot endpoint."""
+    url = request.query.get("url", "").strip()
+    if not url or url.startswith("/") or "127.0.0.1" in url or "localhost" in url:
+        # Check current server health directly
+        try:
+            h_resp = await handle_health(request)
+            return web.json_response({
+                "online": True,
+                "latency_ms": 1,
+                "status": 200,
+                "data": {"status": "OK"}
+            })
+        except Exception as e:
+            return web.json_response({
+                "online": False,
+                "latency_ms": 1,
+                "error": str(e)
+            })
+
+    t0 = asyncio.get_event_loop().time()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                elapsed_ms = int((asyncio.get_event_loop().time() - t0) * 1000)
+                if resp.status == 200:
+                    try:
+                        data = await resp.json()
+                    except Exception:
+                        data = {}
+                    return web.json_response({
+                        "online": True,
+                        "latency_ms": elapsed_ms,
+                        "status": resp.status,
+                        "data": data
+                    })
+                else:
+                    return web.json_response({
+                        "online": False,
+                        "latency_ms": elapsed_ms,
+                        "status": resp.status
+                    })
+    except Exception as e:
+        elapsed_ms = int((asyncio.get_event_loop().time() - t0) * 1000)
+        return web.json_response({
+            "online": False,
+            "latency_ms": elapsed_ms,
+            "error": str(e)
+        })
 
 async def handle_user_bots_api(request: web.Request) -> web.Response:
     """Fetch all bots deployed by a specific authenticated user from Supabase."""
@@ -2821,6 +3407,9 @@ def create_app() -> web.Application:
     app.router.add_get("/deploy", handle_deploy_page)
     app.router.add_post("/api/deploy-render", handle_deploy_render)
     app.router.add_get("/api/user-bots", handle_user_bots_api)
+    app.router.add_get("/api/user-config", handle_user_config_api)
+    app.router.add_post("/api/user-config", handle_user_config_api)
+    app.router.add_get("/api/bot-health-check", handle_bot_health_check)
     app.router.add_get("/api/player-state", handle_player_state)
     app.router.add_get("/audio/current.mp3", handle_audio_current)
     app.router.add_get("/audio/current", handle_audio_current)

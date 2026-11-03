@@ -121,3 +121,22 @@ async def get_user_bots_from_db(user_id: str) -> list[dict]:
     if res and isinstance(res, list):
         return res
     return []
+
+# ---------------- USER CONFIG / SETTINGS PERSISTENCE ----------------
+
+async def get_user_config(user_id: str) -> Optional[dict]:
+    """Retrieve saved bot deploy credentials and config for a user from Supabase."""
+    res = await _get("profiles", params={"id": f"eq.{user_id}", "select": "saved_config"})
+    if res and isinstance(res, list) and len(res) > 0:
+        return res[0].get("saved_config")
+    return None
+
+
+async def save_user_config(user_id: str, config_data: dict) -> bool:
+    """Save or update bot deploy credentials and config for a user in Supabase."""
+    payload = {
+        "id": user_id,
+        "saved_config": config_data,
+    }
+    return await _upsert("profiles", payload)
+

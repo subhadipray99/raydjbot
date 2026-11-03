@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     highrise_username TEXT,
     full_name TEXT,
     avatar_url TEXT,
+    saved_config JSONB DEFAULT '{}'::jsonb,
     subscription_status TEXT DEFAULT 'free',
     razorpay_customer_id TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Ensure columns exist if table was already created earlier
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS saved_config JSONB DEFAULT '{}'::jsonb;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
