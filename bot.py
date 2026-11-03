@@ -18,6 +18,8 @@ from music import music_manager
 import outfit
 import position
 import tips
+import casino
+from blackjack import blackjack_manager
 from bot_status import BotStatus
 
 logger = logging.getLogger("HighriseBot")
@@ -427,6 +429,11 @@ class HighriseBot(BaseBot):
                     outfit_data["active_by_room"][config.ROOM_ID] = act_outfit
                     outfit_data["active"] = act_outfit
                     outfit._save_data(outfit_data)
+                # 5. Casino state
+                if cloud_state.get("casino_wallets") and isinstance(cloud_state["casino_wallets"], dict):
+                    casino._save_json(casino.CASINO_WALLETS_FILE, cloud_state["casino_wallets"])
+                if cloud_state.get("casino_payouts") and isinstance(cloud_state["casino_payouts"], dict):
+                    casino._save_json(casino.CASINO_PAYOUTS_FILE, cloud_state["casino_payouts"])
         except Exception as hyd_err:
             logger.debug(f"[DB] Hydration notice: {hyd_err}")
 
@@ -459,6 +466,9 @@ class HighriseBot(BaseBot):
 
         # Start periodic subscription validity watchdog
         asyncio.create_task(self._subscription_watchdog_loop())
+
+        # Start Blackjack 60s inactivity auto-stand watchdog
+        asyncio.create_task(blackjack_manager.auto_stand_watchdog(self))
 
         # Only broadcast welcome message once on initial startup, not on every reconnect
         if not self._has_announced:
@@ -570,6 +580,19 @@ class HighriseBot(BaseBot):
                 is_new_top, top_info = tips.record_tip(
                     config.ROOM_ID, sender.id, sender.username, amount, currency
                 )
+
+                # Casino wallet deposit for Gold tips
+                if currency.lower() == "gold":
+                    new_wallet = casino.deposit(sender.id, sender.username, amount)
+                    try:
+                        await self.highrise.send_whisper(
+                            sender.id,
+                            f"🪙 Deposited {amount} Gold to your Blackjack wallet! (Wallet Balance: {new_wallet} Gold)\n"
+                            f"👉 Type /b play <bet> to play Blackjack!"
+                        )
+                    except Exception:
+                        pass
+
                 if is_new_top:
                     msg = (
                         f"🎉 WOW! Huge thank you @{sender.username} for the tip of {amount} {currency}! ❤️\n"
@@ -699,6 +722,11 @@ class HighriseBot(BaseBot):
             await reply(msg)
 
         elif cmd in ("skip", "s"):
+            # If user has an active Blackjack game, /s stands in the game
+            if cmd == "s" and blackjack_manager.get_game(user.id):
+                res = blackjack_manager.stand(user.id)
+                await reply(res)
+                return
             success, msg = music_manager.skip()
             await reply(msg)
 
@@ -761,6 +789,128 @@ class HighriseBot(BaseBot):
         elif cmd in ("player", "radio", "jukebox"):
             await reply("📻 Custom Room Radio is streaming live 24/7.")
 
+        # ---------------- CASINO & BLACKJACK COMMANDS ----------------
+        elif cmd in ("b", "bj", "blackjack"):
+            subcmd = args[0].lower() if args else ""
+            subargs = args[1:] if len(args) > 1 else []
+
+            if subcmd in ("play", "deal", "start", "bet"):
+                bet_str = subargs[0] if subargs else ""
+                try:
+                    bet_val = int(bet_str)
+                except ValueError:
+                    await reply("Usage: /b play <bet_amount> (e.g. /b play 5)")
+                    return
+                res = blackjack_manager.play(user.id, user.username, bet_val)
+                await reply(res)
+
+            elif subcmd in ("hit", "h"):
+                res = blackjack_manager.hit(user.id)
+                await reply(res)
+
+            elif subcmd in ("stand", "s"):
+                res = blackjack_manager.stand(user.id)
+                await reply(res)
+
+            elif subcmd in ("double", "dd", "d"):
+                res = blackjack_manager.double_down(user.id)
+                await reply(res)
+
+            elif subcmd in ("wallet", "bal", "balance"):
+                w_chips = casino.get_wallet(user.id)
+                w_earn = casino.get_winnings(user.id)
+                await reply(
+                    f"💳 @{user.username}'s Casino Balance:\n"
+                    f"• 🪙 Playing Chips: {w_chips} Gold\n"
+                    f"• 🏆 Earned Winnings: {w_earn} Gold\n\n"
+                    f"Tip bot to deposit chips.\n"
+                    f"Type /b withdraw <amount> to cash out winnings (Min: 50 Gold)!"
+                )
+
+            elif subcmd in ("withdraw", "cashout", "w"):
+                amt_str = subargs[0] if subargs else ""
+                try:
+                    amt_val = int(amt_str)
+                except ValueError:
+                    await reply("Usage: /b withdraw <amount> (e.g. /b withdraw 50)")
+                    return
+                success, msg = casino.request_withdrawal(user.id, user.username, amt_val)
+                await reply(msg)
+                if success:
+                    try:
+                        await self.highrise.chat(
+                            f"🔔 Host Notice: @{user.username} submitted a withdrawal request for {amt_val} Gold!\n"
+                            f"Host (@{config.ROOM_OWNER}), please tip @{user.username} {amt_val} Gold and confirm with !payout @{user.username}"
+                        )
+                    except Exception:
+                        pass
+
+            elif subcmd in ("stats", "bank"):
+                stats = casino.get_casino_stats()
+                await reply(
+                    f"🎰 Casino Stats:\n"
+                    f"• Total Deposited: {stats['total_deposited']} Gold\n"
+                    f"• Total Won by Players: {stats['total_won']} Gold\n"
+                    f"• Active Playing Chips: {stats['total_wallet_chips']} Gold\n"
+                    f"• Unclaimed Winnings: {stats['total_unclaimed_winnings']} Gold\n"
+                    f"• Pending Withdrawals: {stats['pending_payouts_gold']} Gold ({stats['pending_payouts_count']} tickets)"
+                )
+
+            else:
+                w_chips = casino.get_wallet(user.id)
+                w_earn = casino.get_winnings(user.id)
+                await reply(
+                    f"🃏 Highrise Blackjack Commands:\n"
+                    f"• /b play <amount> - Start a hand (e.g. /b play 5)\n"
+                    f"• /b hit - Draw another card\n"
+                    f"• /b stand (or /s) - Hold your cards\n"
+                    f"• /b double - Double bet & receive 1 final card\n"
+                    f"• /b wallet - Check playing chips & winnings\n"
+                    f"• /b withdraw <amount> - Cash out winnings (Min: 50 Gold)\n"
+                    f"• /b stats - View house & game statistics\n\n"
+                    f"Your Balance: 🪙 Chips: {w_chips}G | 🏆 Winnings: {w_earn}G\n"
+                    f"Tip the bot Gold to deposit chips!"
+                )
+
+        elif cmd == "hit":
+            if not blackjack_manager.get_game(user.id):
+                await reply("You don't have an active Blackjack game! Type /b play <bet> to deal.")
+            else:
+                res = blackjack_manager.hit(user.id)
+                await reply(res)
+
+        elif cmd == "stand":
+            if not blackjack_manager.get_game(user.id):
+                await reply("You don't have an active Blackjack game! Type /b play <bet> to deal.")
+            else:
+                res = blackjack_manager.stand(user.id)
+                await reply(res)
+
+        elif cmd == "double":
+            if not blackjack_manager.get_game(user.id):
+                await reply("You don't have an active Blackjack game! Type /b play <bet> to deal.")
+            else:
+                res = blackjack_manager.double_down(user.id)
+                await reply(res)
+
+        elif cmd == "withdraw":
+            amt_str = args[0] if args else ""
+            try:
+                amt_val = int(amt_str)
+            except ValueError:
+                await reply("Usage: /withdraw <amount> (e.g. /withdraw 50) [Minimum: 50 Gold]")
+                return
+            success, msg = casino.request_withdrawal(user.id, user.username, amt_val)
+            await reply(msg)
+            if success:
+                try:
+                    await self.highrise.chat(
+                        f"🔔 Host Notice: @{user.username} requested withdrawal for {amt_val} Gold!\n"
+                        f"Host (@{config.ROOM_OWNER}), tip @{user.username} {amt_val} Gold and type !payout @{user.username}"
+                    )
+                except Exception:
+                    pass
+
         # ---------------- ROOM & BOT COMMANDS ----------------
         elif cmd in ("help", "commands"):
             all_floors = position.get_all_floors(config.ROOM_ID)
@@ -786,6 +936,13 @@ class HighriseBot(BaseBot):
                 f"• /skip (or /s) - Skip to next song in queue\n"
                 f"• /queue (or /q) - View upcoming songs in queue\n"
                 f"• /np - Check currently playing song\n\n"
+                f"🃏 Blackjack & Casino (HR Gold):\n"
+                f"• /b - Casino game menu & wallet\n"
+                f"• /b play <bet> - Deal a hand (e.g. /b play 5)\n"
+                f"• /b hit, /b stand (or /s), /b double\n"
+                f"• /b wallet - Check playing chips & winnings\n"
+                f"• /b withdraw <amount> - Cash out winnings (Min: 50 Gold)\n"
+                f"• (Tip Gold to bot to deposit chips anytime!)\n\n"
                 f"{floors_help_section}"
                 f"✨ Emotes & Fun:\n"
                 f"• !top - View Top Tippers leaderboard 🏆\n"
@@ -814,6 +971,11 @@ class HighriseBot(BaseBot):
                 f"• !delfloor <name> - Remove a floor spawn\n"
                 f"• !settoptipper <user> [gold] - Set top tipper manually\n"
                 f"• !cleartippers - Reset tip leaderboard\n"
+                f"• !payouts - View pending casino withdrawal requests\n"
+                f"• !payout @username - Confirm withdrawal after tipping player\n"
+                f"• !cancelpayout <ticket_id> - Cancel withdrawal & refund winnings\n"
+                f"• !casinobank - Casino ledger & balance statistics\n"
+                f"• !setwallet @username <amount> - Set player chips\n"
                 f"• !setwelcome <message> - Customize welcome greeting\n"
                 f"• !resetwelcome - Reset welcome greeting to default\n"
                 f"• /autoplay on|off - Toggle radio background autoplay"
@@ -1406,3 +1568,111 @@ class HighriseBot(BaseBot):
             except Exception as e:
                 logger.error(f"Error fetching inventory: {e}")
                 await reply(f"Failed to inspect wardrobe: {e}")
+
+        # ---------------- CASINO ADMIN COMMANDS (OWNER / ADMIN ONLY) ----------------
+        elif cmd in ("payout", "completepayout"):
+            if not user_is_admin:
+                await reply(f"🔒 Casino administration is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
+            if not args:
+                await reply("Usage: !payout @username [ticket_id]")
+                return
+            target_str = args[0].lstrip("@")
+            ticket_id = args[1].upper() if len(args) > 1 else None
+            # Find user
+            pending = casino.get_pending_payouts()
+            matched_id = None
+            for p in pending:
+                if p.get("username", "").lower() == target_str.lower():
+                    matched_id = p.get("user_id")
+                    break
+            if not matched_id:
+                try:
+                    room_users_resp = await self.highrise.get_room_users()
+                    for u, _ in room_users_resp.content:
+                        if u.username.lower() == target_str.lower():
+                            matched_id = u.id
+                            break
+                except Exception:
+                    pass
+
+            target_id = matched_id or target_str
+            success, msg = casino.complete_payout(target_id, ticket_id=ticket_id, completed_by=user.username)
+            await reply(msg)
+
+        elif cmd in ("payouts", "withdrawals", "pendingpayouts"):
+            if not user_is_admin:
+                await reply(f"🔒 Casino administration is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
+            pending = casino.get_pending_payouts()
+            if not pending:
+                await reply("✅ No pending withdrawal requests! All payouts are clear.")
+                return
+            lines = [f"📋 Pending Withdrawals ({len(pending)}):"]
+            for p in pending[:8]:
+                lines.append(f"• {p['id']}: @{p['username']} - {p['amount']} Gold ({p['created_at'][:16]})")
+            if len(pending) > 8:
+                lines.append(f"... and {len(pending) - 8} more.")
+            lines.append("Tip user in-room, then type: !payout @username")
+            await reply("\n".join(lines))
+
+        elif cmd in ("cancelpayout", "rejectpayout"):
+            if not user_is_admin:
+                await reply(f"🔒 Casino administration is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
+            if not args:
+                await reply("Usage: !cancelpayout <ticket_id>")
+                return
+            ticket_id = args[0].upper()
+            success, msg = casino.cancel_payout(ticket_id, reason="Cancelled by host")
+            await reply(msg)
+
+        elif cmd in ("casinobank", "casinostats"):
+            if not user_is_admin:
+                await reply(f"🔒 Casino administration is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
+            stats = casino.get_casino_stats()
+            profit = stats['total_deposited'] - stats['total_won']
+            await reply(
+                f"🏛️ Casino Treasury & Ledger:\n"
+                f"• Total Gold Deposited: {stats['total_deposited']} Gold\n"
+                f"• Total Gold Won by Players: {stats['total_won']} Gold\n"
+                f"• Active Playing Chips: {stats['total_wallet_chips']} Gold\n"
+                f"• Unclaimed Winnings: {stats['total_unclaimed_winnings']} Gold\n"
+                f"• Outstanding Payout Tickets: {stats['pending_payouts_gold']} Gold ({stats['pending_payouts_count']} requests)\n"
+                f"• House Gross Margin: {profit:+d} Gold"
+            )
+
+        elif cmd == "setwallet":
+            if not user_is_admin:
+                await reply(f"🔒 Casino administration is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
+            if len(args) < 2:
+                await reply("Usage: !setwallet @username <amount>")
+                return
+            target_name = args[0].lstrip("@")
+            try:
+                amt = int(args[1])
+            except ValueError:
+                await reply("Amount must be a whole number of Gold.")
+                return
+            target_id = None
+            try:
+                room_users_resp = await self.highrise.get_room_users()
+                for u, _ in room_users_resp.content:
+                    if u.username.lower() == target_name.lower():
+                        target_id = u.id
+                        break
+            except Exception:
+                pass
+            if not target_id:
+                wallets = casino.get_all_wallets()
+                for uid, w in wallets.items():
+                    if w.get("username", "").lower() == target_name.lower():
+                        target_id = uid
+                        break
+            if not target_id:
+                await reply(f"Could not find user @{target_name} in room or casino records.")
+                return
+            casino.set_wallet(target_id, target_name, amt)
+            await reply(f"🪙 Updated @{target_name}'s playing wallet to {amt} Gold.")
