@@ -3353,7 +3353,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
         "============================================================================="
       ];
 
-      const text = lines.join("\n");
+      const text = lines.join(String.fromCharCode(10));
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
