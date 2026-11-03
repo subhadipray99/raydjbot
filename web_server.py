@@ -2033,6 +2033,48 @@ DEPLOY_HTML = """<!DOCTYPE html>
       transform: none;
     }
 
+    .deploy-actions-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .deploy-actions-row .btn-submit {
+      flex: 2;
+    }
+    .btn-print-backup {
+      flex: 1;
+      background: #ffffff;
+      color: var(--ink);
+      border: 2px solid var(--ink);
+      border-radius: 100px;
+      padding: 16px 20px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 4px 4px 0 var(--ink);
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-print-backup:hover {
+      background: #faf8f0;
+      box-shadow: 5px 5px 0 var(--ink);
+      transform: translate(-1px, -1px);
+    }
+    .btn-print-backup:active {
+      box-shadow: 1px 1px 0 var(--ink);
+      transform: translate(1px, 1px);
+    }
+    @media (max-width: 640px) {
+      .deploy-actions-row {
+        flex-direction: column;
+      }
+    }
+
     /* Results Card */
     .result-box {
       display: none;
@@ -2467,9 +2509,15 @@ DEPLOY_HTML = """<!DOCTYPE html>
               </div>
             </div>
 
-            <button type="submit" id="btn-submit-deploy" class="btn-submit">
-              <span id="submit-text">Deploy 24/7 Bot to Render &rarr;</span>
-            </button>
+            <div class="deploy-actions-row">
+              <button type="submit" id="btn-submit-deploy" class="btn-submit">
+                <span id="submit-text">Deploy 24/7 Bot to Render &rarr;</span>
+              </button>
+              <button type="button" class="btn-print-backup" onclick="printCredentialsBackup()" title="Print and save a backup of all input field details with date">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                <span>Print / Save Backup</span>
+              </button>
+            </div>
           </form>
 
           <!-- Status Alerts -->
@@ -2632,6 +2680,17 @@ DEPLOY_HTML = """<!DOCTYPE html>
                 <div class="quick-link-sub">For Highrise Room Radio</div>
               </div>
               <div class="quick-link-arrow">&plus;</div>
+            </button>
+
+            <button type="button" class="quick-link-item" onclick="printCredentialsBackup()" style="width:100%; text-align:left; background:none; border:none; cursor:pointer;">
+              <div class="quick-link-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              </div>
+              <div class="quick-link-content">
+                <div class="quick-link-name">Print / Save Backup</div>
+                <div class="quick-link-sub">Save credentials with date</div>
+              </div>
+              <div class="quick-link-arrow">&rarr;</div>
             </button>
           </div>
         </div>
@@ -2926,6 +2985,271 @@ DEPLOY_HTML = """<!DOCTYPE html>
         document.getElementById('deploy-err').style.display = 'block';
       }
     });
+
+    // ---------------- PRINT / EXPORT CREDENTIALS BACKUP ----------------
+    function printCredentialsBackup() {
+      const highriseToken = document.getElementById('highrise-token').value.trim();
+      const roomId = document.getElementById('room-id').value.trim();
+      const roomOwner = document.getElementById('room-owner').value.trim();
+      const roomTitle = document.getElementById('room-title').value.trim();
+      const renderKey = document.getElementById('render-key').value.trim();
+      const cronKey = document.getElementById('cron-key').value.trim();
+      const userEmail = (currentUser && currentUser.email) ? currentUser.email : 'Not signed in';
+
+      if (!highriseToken && !roomId && !roomOwner && !renderKey) {
+        alert("Please enter your bot details or load your saved credentials first before printing.");
+        return;
+      }
+
+      const now = new Date();
+      const dateFormatted = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const timeFormatted = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' });
+      const fullTimestamp = `${dateFormatted} at ${timeFormatted}`;
+
+      const streamUrl = document.getElementById('res-stream-input').value || (window.location.origin + '/radio.mp3');
+      const playerUrl = window.location.origin + '/player';
+      const roomLink = roomId ? `https://highrise.game/room/${roomId}` : 'https://highrise.game';
+
+      // Ask user to save it safely
+      const proceed = confirm(
+        "IMPORTANT SECURITY NOTICE:\n\nPlease make sure to save or print this document somewhere safe (such as your password manager, encrypted notes, or saved file) in case you lose your credentials.\n\nClick OK to open your printable backup."
+      );
+      if (!proceed) return;
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert("Popup was blocked by your browser. Please allow popups for zevray.com to print your backup.");
+        return;
+      }
+
+      const docHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ZevRay Highrise Bot Credentials Backup &bull; ${dateFormatted}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #0e0e0c;
+      background: #ffffff;
+      padding: 40px;
+      max-width: 820px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+    .header {
+      border-bottom: 2px solid #0e0e0c;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .brand {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .brand span { color: #d97706; }
+    .badge-date {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #666;
+      text-align: right;
+    }
+    .alert-box {
+      background: #fefce8;
+      border: 1.5px solid #ca8a04;
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: #713f12;
+      line-height: 1.5;
+    }
+    .alert-box b { color: #991b1b; }
+    .section-title {
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 24px 0 10px 0;
+      color: #333;
+      border-bottom: 1px dashed #ccc;
+      padding-bottom: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid #d1d5db;
+      padding: 10px 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f9fafb;
+      font-weight: 700;
+      width: 32%;
+    }
+    td code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+      word-break: break-all;
+    }
+    .btn-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .btn-action {
+      background: #0e0e0c;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-action:hover { opacity: 0.9; }
+    .footer-note {
+      font-size: 11px;
+      color: #888;
+      margin-top: 32px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 12px;
+      text-align: center;
+    }
+    @media print {
+      body { padding: 0; }
+      .btn-bar { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="btn-bar">
+    <button type="button" class="btn-action" onclick="window.print()">Print Document / Save as PDF</button>
+    <button type="button" class="btn-action" style="background:#4b5563;" onclick="downloadTxtFile()">Download .TXT File</button>
+  </div>
+
+  <div class="header">
+    <div>
+      <div class="brand">zevray<span>*</span> Highrise DJ Bot</div>
+      <div style="font-size:13px; color:#555; margin-top:2px;">Official Credentials & Deployment Configuration Backup</div>
+    </div>
+    <div class="badge-date">
+      <div><b>Exported On:</b></div>
+      <div>${fullTimestamp}</div>
+    </div>
+  </div>
+
+  <div class="alert-box">
+    <b>CRITICAL SECURITY NOTICE:</b> Save this document in a secure location (e.g., your password manager, Apple Notes, or an encrypted drive). It contains your personal bot token and Render API keys. Never share this document publicly.
+  </div>
+
+  <div class="section-title">1. Highrise Room & Bot Information</div>
+  <table>
+    <tr><th>Room Title</th><td><b>${roomTitle || 'My Lounge'}</b></td></tr>
+    <tr><th>Room ID</th><td><code>${roomId || 'Not set'}</code></td></tr>
+    <tr><th>Room Owner</th><td>@${roomOwner || 'Not set'}</td></tr>
+    <tr><th>Room Link</th><td><a href="${roomLink}" target="_blank">${roomLink}</a></td></tr>
+    <tr><th>Highrise Bot API Token</th><td><code>${highriseToken || 'Not set'}</code></td></tr>
+  </table>
+
+  <div class="section-title">2. Cloud Infrastructure & Automation</div>
+  <table>
+    <tr><th>Connected User Account</th><td>${userEmail}</td></tr>
+    <tr><th>Render API Key</th><td><code>${renderKey || 'Not set'}</code></td></tr>
+    <tr><th>Cron-Job.org Key</th><td><code>${cronKey || 'Using Master 24/7 Keep-Alive Network'}</code></td></tr>
+    <tr><th>Cloud Database (Supabase)</th><td><code>https://ahvvanhxbqtcbtuwfxtm.supabase.co</code></td></tr>
+  </table>
+
+  <div class="section-title">3. Live Streaming & Web Jukebox</div>
+  <table>
+    <tr><th>Room Radio (.mp3 Stream URL)</th><td><code>${streamUrl}</code></td></tr>
+    <tr><th>Web Jukebox Player URL</th><td><a href="${playerUrl}" target="_blank">${playerUrl}</a></td></tr>
+  </table>
+
+  <div class="section-title">4. Useful In-Game Commands</div>
+  <table>
+    <tr><th style="width:25%;"><code>!setpos</code></th><td>Stand in your DJ booth and type this to lock bot position & facing direction.</td></tr>
+    <tr><th><code>/play &lt;song&gt;</code></th><td>Queue any song request into the synchronized live radio stream.</td></tr>
+    <tr><th><code>/emotes</code></th><td>Whispers the full catalog of 68+ Highrise emotes.</td></tr>
+    <tr><th><code>/emote &lt;name&gt;</code></th><td>Loops any emote continuously until stopped.</td></tr>
+    <tr><th><code>/stop</code></th><td>Stops your active emote loop.</td></tr>
+    <tr><th><code>/f1, /f2</code></th><td>Teleports you to configured floor spawns.</td></tr>
+    <tr><th><code>!fit</code></th><td>Saves the bot's current outfit permanently.</td></tr>
+  </table>
+
+  <div class="footer-note">
+    Document generated by ZevRay Highrise Cloud Engine &bull; Exported on ${fullTimestamp} &bull; Save and store safely.
+  </div>
+
+  <script>
+    function downloadTxtFile() {
+      const text = `=============================================================================
+ZEVRAY HIGHRISE DJ BOT — CREDENTIALS & DEPLOYMENT BACKUP
+Exported: ${fullTimestamp}
+=============================================================================
+
+PLEASE SAVE THIS FILE IN A SAFE AND SECURE LOCATION (e.g. Password Manager).
+Do not share your API tokens publicly.
+
+--- HIGHRISE BOT CONFIGURATION ---
+Room Title:       ${roomTitle || 'My Lounge'}
+Room ID:          ${roomId || 'N/A'}
+Room Owner:       @${roomOwner || 'N/A'}
+Bot API Token:    ${highriseToken || 'N/A'}
+Room Link:        ${roomLink}
+
+--- CLOUD HOSTING & AUTOMATION ---
+Render API Key:   ${renderKey || 'N/A'}
+Cron-Job Key:     ${cronKey || 'Master Keep-Alive Network (Automated)'}
+Cloud Database:   https://ahvvanhxbqtcbtuwfxtm.supabase.co
+User Account:     ${userEmail}
+
+--- IN-ROOM RADIO & JUKEBOX ---
+Radio Stream URL: ${streamUrl}
+Live Jukebox URL: ${playerUrl}
+
+--- USEFUL IN-GAME COMMANDS ---
+!setpos           - Save DJ booth spot and facing direction
+/play <song>      - Queue any song to live jukebox
+/emotes           - View full 68+ emotes list
+/emote <name>     - Loop animation continuously
+/stop             - Cancel active emote loop
+/f1, /f2          - Multi-floor teleport
+!fit              - Lock bot wardrobe and outfit
+
+=============================================================================
+`;
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'zevray-bot-credentials-backup.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    // Auto-trigger print preview
+    setTimeout(() => { window.print(); }, 400);
+  </script>
+</body>
+</html>`;
+
+      printWindow.document.open();
+      printWindow.document.write(docHtml);
+      printWindow.document.close();
+    }
 
     function copyStream() {
       const val = document.getElementById('res-stream-input').value || (window.location.origin + '/radio.mp3');
