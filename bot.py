@@ -431,74 +431,77 @@ class HighriseBot(BaseBot):
         else:
             logger.info("Bot reconnected silently (avoiding chat spam).")
 
-    async def on_user_join(self, user: User, position: Position | AnchorPosition | None = None) -> None:
+    async def on_user_join(self, user: User, pos: Position | AnchorPosition | None = None) -> None:
         """Triggered when a user joins the room."""
-        logger.info(f"User joined: {user.username} (ID: {user.id})")
-        if position:
-            self.user_positions[user.id] = position
-        if user.id == self.bot_id:
-            return
-
-        self.welcomed_users.add(user.id)
-
-        # 1. Public room chat welcome greeting (ensures user immediately sees the welcome on screen!)
-        custom_welcome = get_custom_welcome(config.ROOM_ID)
-        if custom_welcome:
-            welcome_chat = f"Welcome @{user.username}! {custom_welcome}"
-        else:
-            welcome_chat = f"Welcome to {config.ROOM_TITLE}, @{user.username}! 👋 Type /help for commands or /play to request songs."
-
-        if len(welcome_chat) > 240:
-            welcome_chat = welcome_chat[:237] + "..."
-
         try:
-            await self.highrise.chat(welcome_chat)
-        except Exception as e:
-            logger.warning(f"Error sending room chat welcome greeting to {user.username}: {e}")
+            logger.info(f"User joined: {user.username} (ID: {user.id})")
+            if pos:
+                self.user_positions[user.id] = pos
+            if user.id == self.bot_id:
+                return
 
-        # 2. Detailed private whisper guide (under 250 character limit)
-        w1 = (
-            "🎶 Music Commands:\n"
-            "• /play <song> (or /p) - Request song\n"
-            "• /queue (or /q) - View queue\n"
-            "• /np - Now playing"
-        )
+            self.welcomed_users.add(user.id)
 
-        all_floors = position.get_all_floors(config.ROOM_ID)
-        if all_floors:
-            num_keys = sorted([int(k) for k in all_floors.keys() if k.isdigit()])
-            named_keys = sorted([k for k in all_floors.keys() if not k.isdigit()])
-            floor_items = []
-            for k in num_keys:
-                floor_items.append(f"/f{k} (Ground)" if k == 1 else f"/f{k}")
-            for k in named_keys:
-                floor_items.append(f"/{k}")
-            floors_line = " | ".join(floor_items)
-            floor_section = f"🏢 Floor Teleport:\n• {floors_line}\n\n"
-        else:
-            floor_section = ""
+            # 1. Public room chat welcome greeting (ensures user immediately sees the welcome on screen!)
+            custom_welcome = get_custom_welcome(config.ROOM_ID)
+            if custom_welcome:
+                welcome_chat = f"Welcome @{user.username}! {custom_welcome}"
+            else:
+                welcome_chat = f"Welcome to {config.ROOM_TITLE}, @{user.username}! 👋 Type /help for commands or /play to request songs."
 
-        w2 = (
-            f"{floor_section}"
-            "💃 Emotes & Loop:\n"
-            "• /emotes - View full list of 68+ emotes\n"
-            "• /emote <name> - Loop emote continuously\n"
-            "• /stop - Stop your emote loop"
-        )
+            if len(welcome_chat) > 240:
+                welcome_chat = welcome_chat[:237] + "..."
 
-        try:
-            await asyncio.sleep(0.5)
-            await self.highrise.send_whisper(user.id, w1)
-            await asyncio.sleep(0.5)
-            await self.highrise.send_whisper(user.id, w2)
-        except Exception as e:
-            logger.warning(f"Error sending welcome whisper to {user.username}: {e}")
+            try:
+                await self.highrise.chat(welcome_chat)
+            except Exception as e:
+                logger.warning(f"Error sending room chat welcome greeting to {user.username}: {e}")
 
-        # Wave at the user
-        try:
-            await self.highrise.send_emote("emote-wave")
-        except Exception as e:
-            logger.debug(f"Could not send wave emote on join: {e}")
+            # 2. Detailed private whisper guide (under 250 character limit)
+            w1 = (
+                "🎶 Music Commands:\n"
+                "• /play <song> (or /p) - Request song\n"
+                "• /queue (or /q) - View queue\n"
+                "• /np - Now playing"
+            )
+
+            all_floors = position.get_all_floors(config.ROOM_ID)
+            if all_floors:
+                num_keys = sorted([int(k) for k in all_floors.keys() if k.isdigit()])
+                named_keys = sorted([k for k in all_floors.keys() if not k.isdigit()])
+                floor_items = []
+                for k in num_keys:
+                    floor_items.append(f"/f{k} (Ground)" if k == 1 else f"/f{k}")
+                for k in named_keys:
+                    floor_items.append(f"/{k}")
+                floors_line = " | ".join(floor_items)
+                floor_section = f"🏢 Floor Teleport:\n• {floors_line}\n\n"
+            else:
+                floor_section = ""
+
+            w2 = (
+                f"{floor_section}"
+                "💃 Emotes & Loop:\n"
+                "• /emotes - View full list of 68+ emotes\n"
+                "• /emote <name> - Loop emote continuously\n"
+                "• /stop - Stop your emote loop"
+            )
+
+            try:
+                await asyncio.sleep(0.5)
+                await self.highrise.send_whisper(user.id, w1)
+                await asyncio.sleep(0.5)
+                await self.highrise.send_whisper(user.id, w2)
+            except Exception as e:
+                logger.warning(f"Error sending welcome whisper to {user.username}: {e}")
+
+            # Wave at the user
+            try:
+                await self.highrise.send_emote("emote-wave")
+            except Exception as e:
+                logger.debug(f"Could not send wave emote on join: {e}")
+        except Exception as err:
+            logger.error(f"Error handling on_user_join for {user.username}: {err}", exc_info=True)
 
     async def on_user_move(self, user: User, destination: Position | AnchorPosition) -> None:
         """Track user positions in real-time as they walk or sit."""
@@ -628,7 +631,7 @@ class HighriseBot(BaseBot):
                     f"(Highrise bots can only equip free starter items or items in their account inventory)"
                 )
             else:
-                outfit.save_active_outfit(target_outfit)
+                await outfit.save_active_outfit_async(config.ROOM_ID, target_outfit)
                 try:
                     await self.highrise.send_emote("dance-macarena")
                 except Exception:
@@ -915,7 +918,7 @@ class HighriseBot(BaseBot):
                     y = float(args[1])
                     z = float(args[2])
                     facing = args[3] if len(args) > 3 else "FrontRight"
-                    new_pos = position.save_manual_position(config.ROOM_ID, x, y, z, facing)
+                    new_pos = await position.save_manual_position_async(config.ROOM_ID, x, y, z, facing)
                     await self.move_bot_to(new_pos)
                     await reply(f"📍 Bot position set manually: {position.format_position(new_pos)}!\nBot will return here automatically on restart.")
                     return
@@ -961,7 +964,7 @@ class HighriseBot(BaseBot):
             else:
                 target_pos = user_pos
 
-            position.save_room_position(config.ROOM_ID, target_pos)
+            await position.save_room_position_async(config.ROOM_ID, target_pos)
             await self.move_bot_to(target_pos)
             pos_env = f"{target_pos.x:.2f},{target_pos.y:.2f},{target_pos.z:.2f},{target_pos.facing}" if isinstance(target_pos, Position) else ""
             await reply(
@@ -1308,7 +1311,7 @@ class HighriseBot(BaseBot):
                 if isinstance(res, Error):
                     await reply(f"⚠️ Failed to equip '{preset_name}': {res.message}")
                 else:
-                    outfit.save_active_outfit(new_outfit)
+                    await outfit.save_active_outfit_async(config.ROOM_ID, new_outfit)
                     try:
                         await self.highrise.send_emote("dance-shoppingcart")
                     except Exception:

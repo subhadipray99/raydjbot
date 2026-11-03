@@ -95,6 +95,41 @@ def get_saved_position_dict(room_id: str) -> dict | None:
     return data.get(room_id) or data.get("default")
 
 
+async def save_room_position_async(room_id: str, pos: Position | AnchorPosition) -> bool:
+    """Asynchronously save position or anchor position for a room to local file and Supabase DB."""
+    data = load_all_positions()
+    if isinstance(pos, Position):
+        data[room_id] = {
+            "type": "position",
+            "x": round(float(pos.x), 3),
+            "y": round(float(pos.y), 3),
+            "z": round(float(pos.z), 3),
+            "facing": str(pos.facing) if pos.facing else "FrontRight",
+        }
+    elif isinstance(pos, AnchorPosition):
+        data[room_id] = {
+            "type": "anchor",
+            "entity_id": str(pos.entity_id),
+            "anchor_ix": int(pos.anchor_ix),
+        }
+    else:
+        logger.warning(f"Unrecognized position object: {type(pos)}")
+        return False
+
+    save_all_positions(data)
+    logger.info(f"Saved bot position for room {room_id}: {data[room_id]}")
+    try:
+        import db
+        success = await db.save_room_attribute(room_id, "saved_position", data[room_id])
+        if success:
+            logger.info(f"[DB] Successfully synced saved_position for room {room_id} to Supabase!")
+        else:
+            logger.warning(f"[DB] Supabase saved_position sync returned False for room {room_id}")
+    except Exception as dbe:
+        logger.error(f"[DB] Failed to sync position to Supabase: {dbe}")
+    return True
+
+
 def save_room_position(room_id: str, pos: Position | AnchorPosition) -> bool:
     """Save position or anchor position for a room."""
     data = load_all_positions()
@@ -119,13 +154,24 @@ def save_room_position(room_id: str, pos: Position | AnchorPosition) -> bool:
     save_all_positions(data)
     logger.info(f"Saved bot position for room {room_id}: {data[room_id]}")
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        if loop and loop.is_running():
             import db
-            asyncio.create_task(db.save_room_attribute(room_id, "saved_position", data[room_id]))
-    except Exception:
-        pass
+            loop.create_task(db.save_room_attribute(room_id, "saved_position", data[room_id]))
+    except Exception as e:
+        logger.warning(f"Error queueing position DB sync: {e}")
     return True
+
+
+async def save_manual_position_async(room_id: str, x: float, y: float, z: float, facing: str = "FrontRight") -> Position:
+    """Save a manual 3D coordinate position for a room asynchronously."""
+    pos = Position(x=float(x), y=float(y), z=float(z), facing=facing)
+    await save_room_position_async(room_id, pos)
+    return pos
 
 
 def save_manual_position(room_id: str, x: float, y: float, z: float, facing: str = "FrontRight") -> Position:

@@ -181,6 +181,22 @@ def save_custom_preset(name: str, outfit: list[Item]) -> None:
     _save_data(data)
 
 
+async def save_active_outfit_async(room_id: str, outfit: list[Item]) -> None:
+    """Asynchronously save active equipped outfit to local JSON and Supabase DB."""
+    data = _load_data()
+    data["active"] = [item_to_dict(it) for it in outfit]
+    _save_data(data)
+    try:
+        import db
+        success = await db.save_room_attribute(room_id or config.ROOM_ID, "active_outfit", data["active"])
+        if success:
+            logger.info(f"[DB] Successfully synced active_outfit ({len(outfit)} items) to Supabase!")
+        else:
+            logger.warning(f"[DB] Supabase active_outfit sync returned False for room {room_id}")
+    except Exception as dbe:
+        logger.error(f"[DB] Failed to sync outfit to Supabase: {dbe}")
+
+
 def save_active_outfit(outfit: list[Item]) -> None:
     """Saves the currently equipped outfit so it can be restored on reboot."""
     data = _load_data()
@@ -188,12 +204,16 @@ def save_active_outfit(outfit: list[Item]) -> None:
     _save_data(data)
     try:
         import asyncio
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        if loop and loop.is_running():
             import db
-            asyncio.create_task(db.save_room_attribute(config.ROOM_ID, "active_outfit", data["active"]))
-    except Exception:
-        pass
+            loop.create_task(db.save_room_attribute(config.ROOM_ID, "active_outfit", data["active"]))
+    except Exception as e:
+        logger.warning(f"Error queueing outfit DB sync: {e}")
 
 
 def get_active_outfit() -> list[Item] | None:

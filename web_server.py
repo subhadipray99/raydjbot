@@ -3297,6 +3297,72 @@ DEPLOY_HTML = """<!DOCTYPE html>
     });
 
     // ---------------- PRINT / EXPORT CREDENTIALS BACKUP ----------------
+    function downloadCredentialsTxt() {
+      const highriseToken = document.getElementById('highrise-token').value.trim();
+      const roomId = document.getElementById('room-id').value.trim();
+      const roomOwner = document.getElementById('room-owner').value.trim();
+      const roomTitle = document.getElementById('room-title').value.trim();
+      const renderKey = document.getElementById('render-key').value.trim();
+      const cronKey = document.getElementById('cron-key').value.trim();
+      const userEmail = (currentUser && currentUser.email) ? currentUser.email : 'Not signed in';
+
+      const now = new Date();
+      const dateFormatted = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const timeFormatted = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' });
+      const fullTimestamp = dateFormatted + " at " + timeFormatted;
+
+      const streamUrl = document.getElementById('res-stream-input').value || (window.location.origin + '/radio.mp3');
+      const playerUrl = window.location.origin + '/player';
+      const roomLink = roomId ? ("https://highrise.game/room/" + roomId) : "https://highrise.game";
+
+      const lines = [
+        "=============================================================================",
+        "ZEVRAY HIGHRISE DJ BOT - CREDENTIALS & DEPLOYMENT BACKUP",
+        "Exported: " + fullTimestamp,
+        "=============================================================================",
+        "",
+        "PLEASE SAVE THIS FILE IN A SAFE AND SECURE LOCATION (e.g. Password Manager).",
+        "Do not share your API tokens publicly.",
+        "",
+        "--- HIGHRISE BOT CONFIGURATION ---",
+        "Room Title:       " + (roomTitle || "My Lounge"),
+        "Room ID:          " + (roomId || "N/A"),
+        "Room Owner:       @" + (roomOwner || "N/A"),
+        "Bot API Token:    " + (highriseToken || "N/A"),
+        "Room Link:        " + roomLink,
+        "",
+        "--- CLOUD HOSTING & AUTOMATION ---",
+        "Render API Key:   " + (renderKey || "N/A"),
+        "Cron-Job Key:     " + (cronKey || "Master Keep-Alive Network (Automated)"),
+        "Cloud Database:   Connected & Active",
+        "User Account:     " + userEmail,
+        "",
+        "--- IN-ROOM RADIO & JUKEBOX ---",
+        "Radio Stream URL: " + streamUrl,
+        "Live Jukebox URL: " + playerUrl,
+        "",
+        "--- USEFUL IN-GAME COMMANDS ---",
+        "!setpos           - Save DJ booth spot and facing direction",
+        "/play <song>      - Queue any song to live jukebox",
+        "/emotes           - View full 68+ emotes list",
+        "/emote <name>     - Loop animation continuously",
+        "/stop             - Cancel active emote loop",
+        "/f1, /f2          - Multi-floor teleport",
+        "!fit              - Lock bot wardrobe and outfit",
+        "",
+        "============================================================================="
+      ];
+
+      const text = lines.join("\n");
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'zevray-bot-credentials-backup.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
     function printCredentialsBackup() {
       const highriseToken = document.getElementById('highrise-token').value.trim();
       const roomId = document.getElementById('room-id').value.trim();
@@ -3322,7 +3388,11 @@ DEPLOY_HTML = """<!DOCTYPE html>
 
       // Ask user to save it safely
       const proceed = confirm(
-        "IMPORTANT SECURITY NOTICE:\n\nPlease make sure to save or print this document somewhere safe (such as your password manager, encrypted notes, or saved file) in case you lose your credentials.\n\nClick OK to open your printable backup."
+        `IMPORTANT SECURITY NOTICE:
+
+Please make sure to save or print this document somewhere safe (such as your password manager, encrypted notes, or saved file) in case you lose your credentials.
+
+Click OK to open your printable backup.`
       );
       if (!proceed) return;
 
@@ -3447,7 +3517,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
 
   <div class="btn-bar">
     <button type="button" class="btn-action" onclick="window.print()">Print Document / Save as PDF</button>
-    <button type="button" class="btn-action" style="background:#4b5563;" onclick="downloadTxtFile()">Download .TXT File</button>
+    <button type="button" class="btn-action" style="background:#4b5563;" onclick="if(window.opener&&window.opener.downloadCredentialsTxt){window.opener.downloadCredentialsTxt();}else{window.print();}">Download .TXT Backup</button>
   </div>
 
   <div class="header">
@@ -3502,63 +3572,20 @@ DEPLOY_HTML = """<!DOCTYPE html>
   <div class="footer-note">
     Document generated by ZevRay Highrise Cloud Engine &bull; Exported on ${fullTimestamp} &bull; Save and store safely.
   </div>
-
-  ${'<' + 'script>'}
-    function downloadTxtFile() {
-      const text = `=============================================================================
-ZEVRAY HIGHRISE DJ BOT — CREDENTIALS & DEPLOYMENT BACKUP
-Exported: ${fullTimestamp}
-=============================================================================
-
-PLEASE SAVE THIS FILE IN A SAFE AND SECURE LOCATION (e.g. Password Manager).
-Do not share your API tokens publicly.
-
---- HIGHRISE BOT CONFIGURATION ---
-Room Title:       ${roomTitle || 'My Lounge'}
-Room ID:          ${roomId || 'N/A'}
-Room Owner:       @${roomOwner || 'N/A'}
-Bot API Token:    ${highriseToken || 'N/A'}
-Room Link:        ${roomLink}
-
---- CLOUD HOSTING & AUTOMATION ---
-Render API Key:   ${renderKey || 'N/A'}
-Cron-Job Key:     ${cronKey || 'Master Keep-Alive Network (Automated)'}
-Cloud Database:   Connected & Active
-User Account:     ${userEmail}
-
---- IN-ROOM RADIO & JUKEBOX ---
-Radio Stream URL: ${streamUrl}
-Live Jukebox URL: ${playerUrl}
-
---- USEFUL IN-GAME COMMANDS ---
-!setpos           - Save DJ booth spot and facing direction
-/play <song>      - Queue any song to live jukebox
-/emotes           - View full 68+ emotes list
-/emote <name>     - Loop animation continuously
-/stop             - Cancel active emote loop
-/f1, /f2          - Multi-floor teleport
-!fit              - Lock bot wardrobe and outfit
-
-=============================================================================
-`;
-      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'zevray-bot-credentials-backup.txt';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-
-    // Auto-trigger print preview
-    setTimeout(() => { window.print(); }, 400);
-  ${'<' + '/script>'}
 </body>
 </html>`;
 
       printWindow.document.open();
       printWindow.document.write(docHtml);
       printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        try {
+          printWindow.print();
+        } catch (e) {
+          console.warn("Print preview notice:", e);
+        }
+      }, 500);
     }
 
     function copyStream() {
@@ -3759,7 +3786,7 @@ Live Jukebox URL: ${playerUrl}
       if (statusEl) statusEl.innerText = 'Sign in to sync';
     }
 
-    function initUser() {
+    async function initUser() {
       if (!sb) {
         renderLoggedOut();
         return;
