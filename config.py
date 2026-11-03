@@ -37,3 +37,15 @@ ROOM_OWNER_ID = os.getenv("ROOM_OWNER_ID", "63f3bbdf56dab79de656aea7").strip()
 ROOM_TITLE = os.getenv("ROOM_TITLE", "YouTube").strip()
 ROOM_CREDITS = os.getenv("ROOM_CREDITS", f"Created and maintained by @{ROOM_OWNER}").strip()
 BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "RayDJBot").strip()
+
+# Razorpay Credentials (One-time payment orders)
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "").strip()
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
+
+# Confirmed Pricing Configuration
+PRICE_WEEKLY_INR = int(os.getenv("PRICE_WEEKLY_INR", "78"))
+PRICE_MONTHLY_INR = int(os.getenv("PRICE_MONTHLY_INR", "479"))
+
+PRICE_WEEKLY_USD = float(os.getenv("PRICE_WEEKLY_USD", "1.30"))
+PRICE_MONTHLY_USD = float(os.getenv("PRICE_MONTHLY_USD", "5.70"))
+

@@ -152,3 +152,217 @@ async def save_user_config(user_id: str, config_data: dict) -> bool:
     }
     return await _upsert("profiles", payload)
 
+
+# ---------------- SUBSCRIPTION & PAYMENT MANAGEMENT ----------------
+
+async def get_user_subscription(user_id: str) -> dict:
+    """Check subscription status and expiration for a given user."""
+    from datetime import datetime, timezone
+
+    default_sub = {
+        "is_active": False,
+        "status": "free",
+        "tier": "free",
+        "currency": "INR",
+        "expires_at": None,
+        "days_left": 0,
+        "hours_left": 0,
+    }
+
+    if not user_id:
+        return default_sub
+
+    res = await _get("profiles", params={"id": f"eq.{user_id}", "select": "*"})
+    if not res or not isinstance(res, list) or len(res) == 0:
+        return default_sub
+
+    profile = res[0]
+    status = profile.get("subscription_status") or "free"
+    tier = profile.get("subscription_tier") or "free"
+    currency = profile.get("subscription_currency") or "INR"
+    expires_str = profile.get("subscription_expires_at")
+
+    # Fallback to subscription_data or saved_config if columns not yet migrated
+    if not expires_str and isinstance(profile.get("subscription_data"), dict):
+        sub_d = profile["subscription_data"]
+        expires_str = sub_d.get("expires_at")
+        tier = sub_d.get("tier", tier)
+        status = sub_d.get("status", status)
+        currency = sub_d.get("currency", currency)
+
+    if not expires_str and isinstance(profile.get("saved_config"), dict):
+        cfg = profile["saved_config"]
+        if isinstance(cfg.get("subscription_data"), dict):
+            sub_d = cfg["subscription_data"]
+            expires_str = sub_d.get("expires_at")
+            tier = sub_d.get("tier", tier)
+            status = sub_d.get("status", status)
+            currency = sub_d.get("currency", currency)
+
+    if not expires_str:
+        return {
+            "is_active": False,
+            "status": "free",
+            "tier": "free",
+            "currency": currency,
+            "expires_at": None,
+            "days_left": 0,
+            "hours_left": 0,
+        }
+
+    try:
+        if expires_str.endswith("Z"):
+            expires_dt = datetime.fromisoformat(expires_str[:-1] + "+00:00")
+        else:
+            expires_dt = datetime.fromisoformat(expires_str)
+        if expires_dt.tzinfo is None:
+            expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        diff = expires_dt - now
+
+        if diff.total_seconds() > 0:
+            total_seconds = int(diff.total_seconds())
+            days_left = total_seconds // 86400
+            hours_left = (total_seconds % 86400) // 3600
+            return {
+                "is_active": True,
+                "status": "active",
+                "tier": tier,
+                "currency": currency,
+                "expires_at": expires_dt.isoformat(),
+                "days_left": days_left,
+                "hours_left": hours_left,
+            }
+        else:
+            return {
+                "is_active": False,
+                "status": "expired",
+                "tier": tier,
+                "currency": currency,
+                "expires_at": expires_dt.isoformat(),
+                "days_left": 0,
+                "hours_left": 0,
+            }
+    except Exception as e:
+        logger.warning(f"[DB] Error parsing subscription expires_at '{expires_str}': {e}")
+        return default_sub
+
+
+async def activate_subscription(
+    user_id: str,
+    plan_id: str,
+    currency: str,
+    amount: float,
+    gateway: str,
+    payment_id: str,
+    order_id: str
+) -> dict:
+    """Activate or extend user subscription upon confirmed one-time payment."""
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    duration_days = 7 if plan_id.lower() == "weekly" else 30
+
+    # Cumulative renewal: if user already has an active sub, add to current expires_at
+    current_sub = await get_user_subscription(user_id)
+    if current_sub.get("is_active") and current_sub.get("expires_at"):
+        try:
+            curr_str = current_sub["expires_at"]
+            if curr_str.endswith("Z"):
+                base_dt = datetime.fromisoformat(curr_str[:-1] + "+00:00")
+            else:
+                base_dt = datetime.fromisoformat(curr_str)
+            if base_dt.tzinfo is None:
+                base_dt = base_dt.replace(tzinfo=timezone.utc)
+            new_expires_dt = base_dt + timedelta(days=duration_days)
+        except Exception:
+            new_expires_dt = now + timedelta(days=duration_days)
+    else:
+        new_expires_dt = now + timedelta(days=duration_days)
+
+    expires_iso = new_expires_dt.isoformat()
+
+    sub_data = {
+        "status": "active",
+        "tier": plan_id.lower(),
+        "currency": currency.upper(),
+        "amount": amount,
+        "gateway": gateway,
+        "payment_id": payment_id,
+        "order_id": order_id,
+        "started_at": now.isoformat(),
+        "expires_at": expires_iso,
+    }
+
+    # 1. Update profiles table (with resilient fallback to saved_config)
+    profile_payload = {
+        "id": user_id,
+        "subscription_status": "active",
+        "subscription_tier": plan_id.lower(),
+        "subscription_expires_at": expires_iso,
+        "subscription_currency": currency.upper(),
+        "subscription_data": sub_data,
+    }
+    success = await _upsert("profiles", profile_payload)
+    if not success:
+        # If columns not created yet in PostgreSQL, save into saved_config
+        existing_cfg = await get_user_config(user_id) or {}
+        existing_cfg["subscription_data"] = sub_data
+        await _upsert("profiles", {"id": user_id, "subscription_status": "active", "saved_config": existing_cfg})
+
+    # 2. Record payment in payments table
+    try:
+        payment_payload = {
+            "user_id": user_id,
+            "plan_id": plan_id.lower(),
+            "currency": currency.upper(),
+            "amount": amount,
+            "gateway": gateway,
+            "order_id": order_id,
+            "payment_id": payment_id,
+            "status": "completed",
+            "starts_at": now.isoformat(),
+            "expires_at": expires_iso,
+        }
+        await _upsert("payments", payment_payload)
+    except Exception as pe:
+        logger.warning(f"[DB] Optional payments audit log record notice: {pe}")
+
+    logger.info(f"[DB] Successfully activated {plan_id} subscription for user {user_id} until {expires_iso}")
+    return await get_user_subscription(user_id)
+
+
+async def get_all_expired_user_bots() -> list[dict]:
+    """Find all active bots whose owners have expired subscriptions."""
+    bots = await _get("bots", params={"is_active": "eq.true", "select": "*"})
+    if not bots or not isinstance(bots, list):
+        return []
+
+    expired_bots = []
+    user_cache = {}
+    for b in bots:
+        uid = b.get("user_id")
+        if not uid:
+            continue
+        if uid not in user_cache:
+            user_cache[uid] = await get_user_subscription(uid)
+        sub = user_cache[uid]
+        if not sub.get("is_active"):
+            expired_bots.append({
+                "bot": b,
+                "subscription": sub
+            })
+    return expired_bots
+
+
+async def mark_bot_inactive(bot_id: str, reason: str = "subscription_expired") -> bool:
+    """Mark a bot as inactive in Supabase bots table."""
+    payload = {
+        "id": bot_id,
+        "is_active": False,
+        "updated_at": "now()",
+    }
+    return await _upsert("bots", payload)
+
+

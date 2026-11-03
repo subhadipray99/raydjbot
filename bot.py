@@ -247,6 +247,32 @@ class HighriseBot(BaseBot):
         await asyncio.sleep(1.2)
         await self.move_bot_to(pos)
 
+    async def _subscription_watchdog_loop(self) -> None:
+        """Periodically check if this room's hosting subscription is still active."""
+        await asyncio.sleep(60)  # Wait 1 minute after initial startup
+        while True:
+            try:
+                import db
+                # Query registered bot for current room
+                bots = await db._get("bots", params={"room_id": f"eq.{config.ROOM_ID}", "select": "user_id,is_active"})
+                if bots and isinstance(bots, list) and len(bots) > 0:
+                    bot_record = bots[0]
+                    user_id = bot_record.get("user_id")
+                    is_active = bot_record.get("is_active", True)
+                    if user_id:
+                        sub = await db.get_user_subscription(user_id)
+                        if not sub.get("is_active") or not is_active:
+                            logger.warning(f"[Bot] Subscription expired for room {config.ROOM_ID} (User: {user_id}). Entering sleep mode.")
+                            try:
+                                await self.highrise.chat("⚠️ The 24/7 DJ Bot subscription for this room has expired. Entering sleep mode. Renew at zevray.com/deploy to reactivate.")
+                            except Exception:
+                                pass
+                            BotStatus.is_connected = False
+                            break
+            except Exception as e:
+                logger.debug(f"[Bot] Subscription watchdog notice: {e}")
+            await asyncio.sleep(600)  # Check every 10 minutes
+
     async def _start_user_emote_loop(self, user: User, emote_id: str, emote_name: str, reply, target_user_id: str | None = None) -> None:
         """Continuously loop an emote for a user until /stop or new emote."""
         target_id = target_user_id or user.id
@@ -423,6 +449,9 @@ class HighriseBot(BaseBot):
         if saved_pos:
             logger.info(f"Found saved position for room {config.ROOM_ID}: {position.format_position(saved_pos)}. Relocating bot...")
             asyncio.create_task(self._apply_saved_position_delayed(saved_pos))
+
+        # Start periodic subscription validity watchdog
+        asyncio.create_task(self._subscription_watchdog_loop())
 
         # Only broadcast welcome message once on initial startup, not on every reconnect
         if not self._has_announced:

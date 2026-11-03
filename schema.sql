@@ -67,6 +67,10 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     avatar_url TEXT,
     saved_config JSONB DEFAULT '{}'::jsonb,
     subscription_status TEXT DEFAULT 'free',
+    subscription_tier TEXT DEFAULT 'free',
+    subscription_expires_at TIMESTAMPTZ DEFAULT NULL,
+    subscription_currency TEXT DEFAULT 'INR',
+    subscription_data JSONB DEFAULT '{}'::jsonb,
     razorpay_customer_id TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -75,6 +79,10 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS saved_config JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_tier TEXT DEFAULT 'free';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_currency TEXT DEFAULT 'INR';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_data JSONB DEFAULT '{}'::jsonb;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
@@ -84,6 +92,33 @@ CREATE POLICY "Users read own profile"
 
 CREATE POLICY "Service role full access profiles"
     ON public.profiles FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+-- 4. Payments Audit Log
+CREATE TABLE IF NOT EXISTS public.payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    plan_id TEXT NOT NULL,
+    currency TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    gateway TEXT DEFAULT 'razorpay',
+    order_id TEXT,
+    payment_id TEXT,
+    status TEXT DEFAULT 'completed',
+    starts_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users read own payments"
+    ON public.payments FOR SELECT
+    USING (auth.uid() = user_id OR auth.role() = 'service_role');
+
+CREATE POLICY "Service role full access payments"
+    ON public.payments FOR ALL
     USING (true)
     WITH CHECK (true);
 

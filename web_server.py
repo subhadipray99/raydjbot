@@ -135,6 +135,33 @@ async def run_mesh_keepalive_loop():
                         target_urls.add(b_url.strip())
             except Exception as dbe:
                 logger.debug(f"[Mesh-Pinger] Supabase bots lookup notice: {dbe}")
+
+            # 2b. Check for expired subscriptions and auto-suspend inactive bots
+            try:
+                expired_list = await db.get_all_expired_user_bots()
+                for exp_item in expired_list:
+                    exp_bot = exp_item.get("bot", {})
+                    exp_bot_id = exp_bot.get("id")
+                    srv_id = exp_bot.get("render_service_id")
+                    user_id = exp_bot.get("user_id")
+                    if exp_bot_id:
+                        logger.info(f"[Watchdog] Subscription expired for bot {exp_bot.get('render_service_name')} (User: {user_id}). Suspending...")
+                        await db.mark_bot_inactive(exp_bot_id, "subscription_expired")
+
+                        # Gracefully suspend Render service if user's Render key is on file
+                        if srv_id and user_id:
+                            user_cfg = await db.get_user_config(user_id) or {}
+                            render_key = user_cfg.get("render_key")
+                            if render_key:
+                                try:
+                                    async with aiohttp.ClientSession() as sus_session:
+                                        sus_headers = {"Authorization": f"Bearer {render_key}", "Accept": "application/json"}
+                                        async with sus_session.post(f"https://api.render.com/v1/services/{srv_id}/suspend", headers=sus_headers, timeout=aiohttp.ClientTimeout(total=8)) as sus_resp:
+                                            logger.info(f"[Watchdog] Render suspend call for service {srv_id} returned HTTP {sus_resp.status}")
+                                except Exception as s_err:
+                                    logger.debug(f"[Watchdog] Render suspend notice: {s_err}")
+            except Exception as exp_scan_err:
+                logger.debug(f"[Watchdog] Expired bots scan notice: {exp_scan_err}")
                 
             # 3. Always include master server zevray.com
             target_urls.add("https://zevray.com/health")
@@ -732,6 +759,8 @@ LANDING_HTML = """<!DOCTYPE html>
   
   <!-- Cloud Auth & DB Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Razorpay Standard Checkout SDK -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
   <style>
     :root {
@@ -1818,6 +1847,8 @@ DEPLOY_HTML = """<!DOCTYPE html>
   
   <!-- Cloud Auth & DB Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Razorpay Standard Checkout SDK -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
   <style>
     :root {
@@ -2217,6 +2248,227 @@ DEPLOY_HTML = """<!DOCTYPE html>
       font-size: 14px;
     }
 
+    /* ---------------- PRICING & SUBSCRIPTION STYLES ---------------- */
+    .pricing-section {
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 6px 6px 0 var(--ink);
+    }
+    .pricing-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .currency-pill-box {
+      display: inline-flex;
+      background: var(--paper);
+      border: 1.5px solid var(--ink);
+      border-radius: 100px;
+      padding: 3px;
+      gap: 4px;
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+    .currency-pill-btn {
+      border: none;
+      background: transparent;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 800;
+      font-family: inherit;
+      color: var(--ink-mute);
+      border-radius: 100px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .currency-pill-btn.active {
+      background: var(--ink);
+      color: var(--accent);
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 820px) {
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .plan-card {
+      background: #faf8f0;
+      border: 1.5px solid var(--border-dark);
+      border-radius: 16px;
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      transition: all 0.2s cubic-bezier(.34, 1.56, .64, 1);
+    }
+    .plan-card:hover {
+      border-color: var(--ink);
+      transform: translateY(-2px);
+    }
+    .plan-card.popular {
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+    .plan-badge {
+      position: absolute;
+      top: -11px;
+      right: 14px;
+      background: var(--bg);
+      color: var(--ink);
+      border: 1.5px solid var(--ink);
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 100px;
+      box-shadow: 1px 1px 0 var(--ink);
+    }
+    .plan-badge-soon {
+      background: #f1f5f9;
+      color: #64748b;
+      border: 1.5px solid #cbd5e1;
+      box-shadow: none;
+    }
+    .plan-name {
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--ink-soft);
+      margin-bottom: 6px;
+    }
+    .plan-price-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .plan-price {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--ink);
+      line-height: 1;
+    }
+    .plan-duration {
+      font-size: 12px;
+      color: var(--ink-mute);
+      font-family: 'Geist Mono', monospace;
+    }
+    .plan-features {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 18px 0;
+      font-size: 12px;
+      color: var(--ink-soft);
+      line-height: 1.5;
+    }
+    .plan-features li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 5px;
+    }
+    .btn-plan {
+      width: 100%;
+      border: 2px solid var(--ink);
+      background: #ffffff;
+      color: var(--ink);
+      font-weight: 800;
+      font-size: 13px;
+      font-family: inherit;
+      padding: 12px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 3px 3px 0 var(--ink);
+      transition: all 0.15s ease;
+      text-align: center;
+      display: block;
+    }
+    .btn-plan:hover {
+      background: var(--bg);
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+    .btn-plan.popular {
+      background: var(--ink);
+      color: var(--accent);
+    }
+    .btn-plan.popular:hover {
+      background: #252520;
+    }
+    .btn-plan:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      background: #f1f5f9;
+      color: #94a3b8;
+      box-shadow: none;
+      border-color: #cbd5e1;
+      transform: none;
+    }
+    .payment-notice-bar {
+      margin-top: 18px;
+      padding: 12px 16px;
+      background: #f7f6ed;
+      border: 1.5px solid var(--border-dark);
+      border-radius: 12px;
+      font-size: 12px;
+      font-family: 'Geist Mono', monospace;
+      color: var(--ink-soft);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* Lock Banners & Form States */
+    .deploy-locked-banner {
+      background: #fef3c7;
+      border: 2px solid #d97706;
+      color: #92400e;
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 4px 4px 0 #d97706;
+    }
+    .deploy-active-banner {
+      background: #ecfdf5;
+      border: 2px solid #059669;
+      color: #065f46;
+      border-radius: 14px;
+      padding: 14px 20px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 4px 4px 0 #059669;
+    }
+    .form-locked-state {
+      opacity: 0.5;
+      pointer-events: none;
+      filter: grayscale(0.2);
+      user-select: none;
+    }
+
     /* ---------------- RIGHT SIDEBAR STYLES ---------------- */
     .deploy-sidebar {
       display: flex;
@@ -2605,6 +2857,95 @@ DEPLOY_HTML = """<!DOCTYPE html>
           <div id="fleet-list">Loading bots...</div>
         </div>
 
+        <!-- Pricing & Subscription Section -->
+        <div class="pricing-section" id="pricing-plans-section">
+          <div class="pricing-header-row">
+            <div>
+              <div class="kicker" style="margin-bottom:4px;">( 24/7 BOT HOSTING PLANS )</div>
+              <h2 style="font-size:24px; font-weight:800; letter-spacing:-0.02em; margin:0;">Choose Your Hosting Access</h2>
+              <div style="font-size:13px; color:var(--ink-mute); margin-top:4px;">
+                One-time purchase &bull; Non-recurring manual renewal &bull; Extend anytime
+              </div>
+            </div>
+
+            <!-- Currency Switcher Pill -->
+            <div class="currency-pill-box">
+              <button type="button" id="curr-inr-btn" class="currency-pill-btn active" onclick="setCurrency('INR')">🇮🇳 INR (₹)</button>
+              <button type="button" id="curr-usd-btn" class="currency-pill-btn" onclick="setCurrency('USD')">🌐 USD ($)</button>
+            </div>
+          </div>
+
+          <!-- 3 Plan Cards Grid -->
+          <div class="pricing-grid">
+            <!-- 1. Weekly Plan -->
+            <div class="plan-card">
+              <div>
+                <div class="plan-name">Weekly Access</div>
+                <div class="plan-price-wrap">
+                  <span class="plan-price" id="price-weekly-val">₹78</span>
+                  <span class="plan-duration">/ 7 days</span>
+                </div>
+                <ul class="plan-features">
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> 24/7 Cloud Bot on Render</li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> In-Room MP3 Radio Stream</li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> 68+ Highrise Emote Loops</li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Multi-Floor Teleports</li>
+                </ul>
+              </div>
+              <button type="button" id="btn-plan-weekly" class="btn-plan" onclick="startPayment('weekly')">
+                Get 7 Days Access &rarr;
+              </button>
+            </div>
+
+            <!-- 2. Monthly Plan (Featured Popular) -->
+            <div class="plan-card popular">
+              <div class="plan-badge">MOST POPULAR</div>
+              <div>
+                <div class="plan-name">Monthly Access</div>
+                <div class="plan-price-wrap">
+                  <span class="plan-price" id="price-monthly-val">₹479</span>
+                  <span class="plan-duration">/ 30 days</span>
+                </div>
+                <ul class="plan-features">
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> <b>Everything in Weekly</b></li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Full 30-Day Uninterrupted Uptime</li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Master Keep-Alive Priority Pings</li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Persistent Outfit & Position Sync</li>
+                </ul>
+              </div>
+              <button type="button" id="btn-plan-monthly" class="btn-plan popular" onclick="startPayment('monthly')">
+                Get 30 Days Access &rarr;
+              </button>
+            </div>
+
+            <!-- 3. Annual Plan (Coming Soon) -->
+            <div class="plan-card">
+              <div class="plan-badge plan-badge-soon">COMING SOON</div>
+              <div>
+                <div class="plan-name" style="color:#64748b;">Annual Pass</div>
+                <div class="plan-price-wrap">
+                  <span class="plan-price" style="font-size:22px; color:#64748b;">Coming Soon</span>
+                  <span class="plan-duration">/ 365 days</span>
+                </div>
+                <ul class="plan-features" style="color:#64748b;">
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Best Value Yearly Rate</li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> VIP Lounge Custom Themes</li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Dedicated Stream Transcoder</li>
+                </ul>
+              </div>
+              <button type="button" class="btn-plan" disabled>
+                Coming Soon
+              </button>
+            </div>
+          </div>
+
+          <!-- Payment Method Notice -->
+          <div class="payment-notice-bar" id="payment-notice-bar">
+            <span id="payment-method-notice">⚡ <b>Razorpay:</b> UPI (GPay, PhonePe, Paytm), All Cards, Netbanking & Wallets</span>
+            <span style="font-weight:700;">🔒 Instant Activation &bull; Zero Recurring Fees</span>
+          </div>
+        </div>
+
         <!-- The 60-Second Setup Form Card -->
         <div class="deploy-container">
           <div class="kicker">( 60-Second Cloud Deployer )</div>
@@ -2613,7 +2954,30 @@ DEPLOY_HTML = """<!DOCTYPE html>
             Follow each step below. Your bot container will be created on your Render account and will connect to your room automatically.
           </p>
 
-          <form id="deploy-form">
+          <!-- Subscription State Banners -->
+          <div id="sub-locked-banner" class="deploy-locked-banner" style="display:flex;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:20px;">🔒</span>
+              <div>
+                <div><b>Active Hosting Subscription Required</b></div>
+                <div style="font-size:12px; font-weight:500; opacity:0.9;">Choose a weekly (₹78 / $1.30) or monthly (₹479 / $5.70) plan above to unlock deployment.</div>
+              </div>
+            </div>
+            <button type="button" onclick="scrollToPricing()" class="btn-plan popular" style="width:auto; padding:8px 16px; font-size:12px;">Choose Plan &uarr;</button>
+          </div>
+
+          <div id="sub-active-banner" class="deploy-active-banner" style="display:none;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:20px;">✓</span>
+              <div>
+                <div><b>Active Subscription: <span id="sub-active-tier">PRO PLAN</span></b></div>
+                <div style="font-size:12px; font-weight:500; opacity:0.9;">Expires in <span id="sub-active-days">--</span>. Bot is unlocked for hosting.</div>
+              </div>
+            </div>
+            <button type="button" onclick="scrollToPricing()" class="btn-sidebar-sync" style="padding:6px 14px; font-size:11px;">Extend / Renew</button>
+          </div>
+
+          <form id="deploy-form" class="form-locked-state">
             <!-- Step 1: Highrise Token -->
             <div class="form-step">
               <div class="step-header">
@@ -2806,6 +3170,21 @@ DEPLOY_HTML = """<!DOCTYPE html>
 
       <!-- Right Column: Sidebar (Live Bot Status, Quick Links, Cheat Sheet) -->
       <aside class="deploy-sidebar">
+        <!-- Card 0: Hosting Subscription Status -->
+        <div class="sidebar-card" id="sidebar-sub-card">
+          <div class="sidebar-card-header">
+            <span class="sidebar-card-title">Hosting Subscription</span>
+            <span id="sidebar-sub-badge" style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; background:#fef3c7; color:#92400e; border:1px solid #d97706;">CHECKING...</span>
+          </div>
+          <div id="sidebar-sub-desc" style="font-size:12px; color:var(--ink-soft); line-height:1.5;">
+            Active subscription required to keep your bot 24/7 online.
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;">
+            <span id="sidebar-sub-expires" style="font-family:'Geist Mono',monospace; font-size:11px; font-weight:700; color:var(--ink);"></span>
+            <button type="button" id="sidebar-sub-action-btn" onclick="scrollToPricing()" class="btn-sidebar-sync" style="background:var(--ink); color:var(--accent);">Upgrade to Pro</button>
+          </div>
+        </div>
+
         <!-- Card 1: Bot System Status -->
         <div class="sidebar-card">
           <div class="sidebar-card-header">
@@ -3216,6 +3595,13 @@ DEPLOY_HTML = """<!DOCTYPE html>
     const form = document.getElementById('deploy-form');
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+
+      if (!currentSubscription || !currentSubscription.is_active) {
+        scrollToPricing();
+        alert("Active hosting subscription required to deploy your bot. Please choose a weekly (₹78 / $1.30) or monthly (₹479 / $5.70) plan above.");
+        return;
+      }
+
       document.getElementById('deploy-err').style.display = 'none';
       document.getElementById('deploy-res').style.display = 'none';
       document.getElementById('deploy-loading').style.display = 'block';
@@ -3717,6 +4103,256 @@ Click OK to open your printable backup.`
       }
     }
 
+    // ---------------- PRICING & PAYMENT GATEWAY (RAZORPAY) ----------------
+    let currentCurrency = 'INR';
+    let currentSubscription = null;
+
+    function setCurrency(curr) {
+      currentCurrency = curr;
+      const inrBtn = document.getElementById('curr-inr-btn');
+      const usdBtn = document.getElementById('curr-usd-btn');
+      if (inrBtn) inrBtn.classList.toggle('active', curr === 'INR');
+      if (usdBtn) usdBtn.classList.toggle('active', curr === 'USD');
+
+      const weeklyPriceEl = document.getElementById('price-weekly-val');
+      const monthlyPriceEl = document.getElementById('price-monthly-val');
+      const methodNoticeEl = document.getElementById('payment-method-notice');
+
+      if (curr === 'INR') {
+        if (weeklyPriceEl) weeklyPriceEl.innerHTML = '₹78';
+        if (monthlyPriceEl) monthlyPriceEl.innerHTML = '₹479';
+        if (methodNoticeEl) methodNoticeEl.innerHTML = '⚡ <b>Razorpay:</b> UPI (GPay, PhonePe, Paytm), All Cards, Netbanking & Wallets';
+      } else {
+        if (weeklyPriceEl) weeklyPriceEl.innerHTML = '$1.30';
+        if (monthlyPriceEl) monthlyPriceEl.innerHTML = '$5.70';
+        if (methodNoticeEl) methodNoticeEl.innerHTML = '🌐 <b>Razorpay:</b> PayPal Only';
+      }
+    }
+
+    async function checkUserSubscription() {
+      if (!currentUser) return;
+      try {
+        const res = await fetch('/api/subscription-status?user_id=' + encodeURIComponent(currentUser.id));
+        const data = await res.json();
+        if (data && data.success && data.subscription) {
+          currentSubscription = data.subscription;
+          applySubscriptionUI(data.subscription);
+        }
+      } catch (e) {
+        console.warn("Could not check subscription:", e);
+      }
+    }
+
+    function applySubscriptionUI(sub) {
+      const isActive = sub && sub.is_active;
+      const lockedBanner = document.getElementById('sub-locked-banner');
+      const activeBanner = document.getElementById('sub-active-banner');
+      const deployForm = document.getElementById('deploy-form');
+      const submitBtn = document.getElementById('btn-submit-deploy');
+      const submitText = document.getElementById('submit-text');
+
+      const sbBadge = document.getElementById('sidebar-sub-badge');
+      const sbDesc = document.getElementById('sidebar-sub-desc');
+      const sbExpires = document.getElementById('sidebar-sub-expires');
+      const sbActionBtn = document.getElementById('sidebar-sub-action-btn');
+
+      if (isActive) {
+        if (lockedBanner) lockedBanner.style.display = 'none';
+        if (activeBanner) activeBanner.style.display = 'flex';
+        if (deployForm) deployForm.classList.remove('form-locked-state');
+
+        const activeTierEl = document.getElementById('sub-active-tier');
+        const activeDaysEl = document.getElementById('sub-active-days');
+        const tierName = (sub.tier || 'pro').toUpperCase();
+        if (activeTierEl) activeTierEl.innerText = tierName + ' PLAN';
+
+        let remainingTxt = '';
+        if (sub.days_left > 0) {
+          remainingTxt = sub.days_left + ' day' + (sub.days_left === 1 ? '' : 's') + ' (' + sub.hours_left + 'h)';
+        } else {
+          remainingTxt = sub.hours_left + ' hours';
+        }
+        if (activeDaysEl) activeDaysEl.innerText = remainingTxt;
+
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.innerHTML = 'Deploy 24/7 Bot to Render &rarr;';
+
+        if (sbBadge) {
+          sbBadge.innerText = 'ACTIVE • ' + tierName;
+          sbBadge.style.background = '#dcfce7';
+          sbBadge.style.color = '#15803d';
+          sbBadge.style.border = '1px solid #16a34a';
+        }
+        if (sbDesc) sbDesc.innerText = 'Your 24/7 Highrise bot hosting is fully activated.';
+        if (sbExpires) sbExpires.innerText = remainingTxt + ' left';
+        if (sbActionBtn) {
+          sbActionBtn.innerText = 'Extend / Renew';
+          sbActionBtn.style.background = '#0e0e0c';
+          sbActionBtn.style.color = '#FFF48D';
+        }
+      } else {
+        if (lockedBanner) lockedBanner.style.display = 'flex';
+        if (activeBanner) activeBanner.style.display = 'none';
+        if (deployForm) deployForm.classList.add('form-locked-state');
+
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.innerHTML = 'Subscribe to Unlock Deployment 🔒';
+
+        if (sbBadge) {
+          const isExpired = sub && sub.status === 'expired';
+          sbBadge.innerText = isExpired ? 'EXPIRED' : 'FREE TIER';
+          sbBadge.style.background = isExpired ? '#fee2e2' : '#fef3c7';
+          sbBadge.style.color = isExpired ? '#b91c1c' : '#92400e';
+          sbBadge.style.border = isExpired ? '1px solid #dc2626' : '1px solid #d97706';
+        }
+        if (sbDesc) sbDesc.innerText = 'Active subscription is required to deploy and keep your bot 24/7 online.';
+        if (sbExpires) sbExpires.innerText = '0 days remaining';
+        if (sbActionBtn) {
+          sbActionBtn.innerText = 'Upgrade to Pro';
+          sbActionBtn.style.background = '#0e0e0c';
+          sbActionBtn.style.color = '#FFF48D';
+        }
+      }
+    }
+
+    function scrollToPricing() {
+      const el = document.getElementById('pricing-plans-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.transform = 'scale(1.02)';
+        el.style.transition = 'transform 0.3s ease';
+        setTimeout(() => { el.style.transform = 'none'; }, 600);
+      }
+    }
+
+    async function startPayment(planId) {
+      if (!currentUser) {
+        alert("Please sign in or create an account first to purchase a subscription.");
+        return;
+      }
+      const currency = currentCurrency;
+      const btn = document.getElementById('btn-plan-' + planId);
+      const originalText = btn ? btn.innerText : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Creating Order...';
+      }
+
+      try {
+        const res = await fetch('/api/create-razorpay-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan_id: planId,
+            currency: currency,
+            user_id: currentUser.id
+          })
+        });
+        const data = await res.json();
+        if (!data || !data.success) {
+          alert("Could not create Razorpay order: " + (data ? data.error : 'Unknown error'));
+          if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalText;
+          }
+          return;
+        }
+
+        const options = {
+          key: data.key_id,
+          amount: data.amount,
+          currency: data.currency,
+          name: "ZevRay Highrise DJ Bot",
+          description: (planId === 'weekly' ? '7-Day' : '30-Day') + ' 24/7 Bot Hosting Access',
+          order_id: data.order_id,
+          prefill: {
+            email: currentUser.email || '',
+            name: (currentUser.user_metadata && (currentUser.user_metadata.full_name || currentUser.user_metadata.name)) || ''
+          },
+          theme: { color: "#0e0e0c" },
+          handler: async function (response) {
+            try {
+              if (btn) btn.innerText = 'Verifying...';
+              const vRes = await fetch('/api/verify-razorpay-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  plan_id: planId,
+                  currency: currency,
+                  user_id: currentUser.id
+                })
+              });
+              const vData = await vRes.json();
+              if (vData && vData.success) {
+                alert("🎉 Payment Successful! Your " + planId.toUpperCase() + " subscription is now active!");
+                await checkUserSubscription();
+              } else {
+                alert("Payment verification issue: " + (vData ? vData.error : 'Verification error. Contact support.'));
+              }
+            } catch (vErr) {
+              alert("Network error verifying payment: " + vErr.message);
+            } finally {
+              if (btn) {
+                btn.disabled = false;
+                btn.innerText = originalText;
+              }
+            }
+          }
+        };
+
+        // When currency is USD: configure Razorpay modal to show PayPal only!
+        if (currency === 'USD') {
+          options.config = {
+            display: {
+              blocks: {
+                paypal_block: {
+                  name: "Pay with PayPal",
+                  instruments: [
+                    {
+                      method: "wallet",
+                      wallets: ["paypal"]
+                    }
+                  ]
+                }
+              },
+              sequence: ["block.paypal_block"],
+              preferences: {
+                show_default_blocks: false
+              }
+            }
+          };
+        }
+
+        if (typeof window.Razorpay === 'undefined') {
+          alert("Razorpay checkout failed to load. Please check your internet connection.");
+          if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalText;
+          }
+          return;
+        }
+
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (resp) {
+          alert("Payment failed or cancelled: " + (resp.error.description || resp.error.reason || 'Payment cancelled'));
+          if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalText;
+          }
+        });
+        rzp.open();
+      } catch (err) {
+        alert("Checkout error: " + err.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = originalText;
+        }
+      }
+    }
+
     function renderUserSession(user) {
       currentUser = user;
       const meta = user.user_metadata || {};
@@ -3755,9 +4391,10 @@ Click OK to open your printable backup.`
       const fleetBox = document.getElementById('user-fleet-box');
       if (fleetBox) fleetBox.style.display = 'block';
 
-      // Load bot fleet and cloud config
+      // Load bot fleet, cloud config, and subscription status
       loadUserBots();
       loadUserConfigFromDb(user.id);
+      checkUserSubscription();
       refreshBotStatus();
     }
 
@@ -3928,6 +4565,156 @@ async def handle_user_bots_api(request: web.Request) -> web.Response:
         return web.json_response({"success": False, "error": str(e)}, status=500)
 
 
+# ---------------- SUBSCRIPTION & PAYMENT API ENDPOINTS ----------------
+
+async def handle_subscription_status(request: web.Request) -> web.Response:
+    """Return active subscription details, plan tier, and remaining days for a user."""
+    user_id = request.query.get("user_id", "").strip()
+    if not user_id:
+        return web.json_response({"success": False, "error": "user_id is required"}, status=400)
+    try:
+        sub = await db.get_user_subscription(user_id)
+        return web.json_response({"success": True, "subscription": sub})
+    except Exception as e:
+        logger.error(f"[API] Error checking subscription status: {e}")
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
+async def handle_create_razorpay_order(request: web.Request) -> web.Response:
+    """Create a one-time product order via Razorpay Orders API (INR or USD)."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"success": False, "error": "Invalid JSON payload."}, status=400)
+
+    plan_id = str(data.get("plan_id", "")).lower().strip()
+    currency = str(data.get("currency", "INR")).upper().strip()
+    user_id = str(data.get("user_id", "")).strip()
+
+    if not user_id:
+        return web.json_response({"success": False, "error": "User authentication required. Please sign in."}, status=401)
+    if plan_id not in ("weekly", "monthly"):
+        return web.json_response({"success": False, "error": "Invalid plan selected. Choose weekly or monthly."}, status=400)
+    if currency not in ("INR", "USD"):
+        return web.json_response({"success": False, "error": "Invalid currency. Must be INR or USD."}, status=400)
+
+    if not config.RAZORPAY_KEY_ID or not config.RAZORPAY_KEY_SECRET:
+        return web.json_response({
+            "success": False,
+            "error": "Razorpay payment keys are not configured on the server. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to environment."
+        }, status=500)
+
+    # Compute exact amount in smallest currency subunit (paise for INR, cents for USD)
+    if currency == "INR":
+        amount_val = config.PRICE_WEEKLY_INR if plan_id == "weekly" else config.PRICE_MONTHLY_INR
+        subunits = int(amount_val * 100)
+    else:
+        amount_val = config.PRICE_WEEKLY_USD if plan_id == "weekly" else config.PRICE_MONTHLY_USD
+        subunits = int(round(amount_val * 100))
+
+    receipt = f"rcpt_{plan_id[:4]}_{user_id[:8]}_{int(time.time())}"
+    order_payload = {
+        "amount": subunits,
+        "currency": currency,
+        "receipt": receipt,
+        "notes": {
+            "user_id": user_id,
+            "plan_id": plan_id,
+            "currency": currency,
+            "product": f"Highrise DJ Bot 24/7 ({plan_id.title()} Plan)"
+        }
+    }
+
+    import base64
+    auth_str = f"{config.RAZORPAY_KEY_ID}:{config.RAZORPAY_KEY_SECRET}"
+    auth_header = base64.b64encode(auth_str.encode("utf-8")).decode("utf-8")
+    headers = {
+        "Authorization": f"Basic {auth_header}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.razorpay.com/v1/orders",
+                headers=headers,
+                json=order_payload,
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
+                resp_json = await resp.json()
+                if resp.status not in (200, 201):
+                    err_msg = resp_json.get("error", {}).get("description") or str(resp_json)
+                    logger.error(f"[Razorpay] Order creation failed ({resp.status}): {err_msg}")
+                    return web.json_response({"success": False, "error": f"Razorpay error: {err_msg}"}, status=400)
+
+                order_id = resp_json.get("id")
+                return web.json_response({
+                    "success": True,
+                    "order_id": order_id,
+                    "key_id": config.RAZORPAY_KEY_ID,
+                    "amount": subunits,
+                    "currency": currency,
+                    "plan_id": plan_id,
+                    "display_amount": amount_val
+                })
+    except Exception as e:
+        logger.error(f"[Razorpay] Network exception during order creation: {e}")
+        return web.json_response({"success": False, "error": f"Failed to connect to Razorpay: {e}"}, status=500)
+
+
+async def handle_verify_razorpay_payment(request: web.Request) -> web.Response:
+    """Verify HMAC SHA256 payment signature and activate user's subscription."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"success": False, "error": "Invalid JSON payload."}, status=400)
+
+    order_id = str(data.get("razorpay_order_id", "")).strip()
+    payment_id = str(data.get("razorpay_payment_id", "")).strip()
+    signature = str(data.get("razorpay_signature", "")).strip()
+    plan_id = str(data.get("plan_id", "weekly")).lower().strip()
+    currency = str(data.get("currency", "INR")).upper().strip()
+    user_id = str(data.get("user_id", "")).strip()
+
+    if not order_id or not payment_id or not signature or not user_id:
+        return web.json_response({"success": False, "error": "Missing payment verification parameters."}, status=400)
+
+    if not config.RAZORPAY_KEY_SECRET:
+        return web.json_response({"success": False, "error": "Server payment secret not configured."}, status=500)
+
+    import hmac
+    import hashlib
+    msg = f"{order_id}|{payment_id}".encode("utf-8")
+    expected_sig = hmac.new(config.RAZORPAY_KEY_SECRET.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected_sig, signature):
+        logger.warning(f"[Razorpay] Signature mismatch for order {order_id}, payment {payment_id}")
+        return web.json_response({"success": False, "error": "Payment verification failed. Invalid signature."}, status=400)
+
+    amount = config.PRICE_WEEKLY_INR if (currency == "INR" and plan_id == "weekly") else (
+        config.PRICE_MONTHLY_INR if currency == "INR" else (
+            config.PRICE_WEEKLY_USD if plan_id == "weekly" else config.PRICE_MONTHLY_USD
+        )
+    )
+
+    updated_sub = await db.activate_subscription(
+        user_id=user_id,
+        plan_id=plan_id,
+        currency=currency,
+        amount=amount,
+        gateway="razorpay",
+        payment_id=payment_id,
+        order_id=order_id
+    )
+
+    logger.info(f"[Razorpay] Verified payment {payment_id} for user {user_id}. Plan: {plan_id} ({currency} {amount})")
+    return web.json_response({
+        "success": True,
+        "message": f"Successfully activated {plan_id.title()} subscription!",
+        "subscription": updated_sub
+    })
+
+
 async def handle_deploy_render(request: web.Request) -> web.Response:
     """Automated backend API to validate credentials and deploy a web service on buyer's Render account."""
     try:
@@ -3943,6 +4730,20 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
     room_title = str(data.get("room_title", "the room")).strip() or "the room"
     bot_name = str(data.get("bot_name", "")).strip()
     user_id = str(data.get("user_id", "")).strip() or None
+
+    # Paywall verification: require active subscription to deploy or manage bot
+    if user_id:
+        sub = await db.get_user_subscription(user_id)
+        if not sub.get("is_active"):
+            return web.json_response({
+                "success": False,
+                "error": "Active subscription required. Please choose a weekly (₹78 / $1.30) or monthly (₹479 / $5.70) plan to host your 24/7 bot."
+            }, status=403)
+    else:
+        return web.json_response({
+            "success": False,
+            "error": "Authentication required. Please sign in and activate your subscription to deploy your 24/7 bot."
+        }, status=401)
 
     if not render_key:
         return web.json_response({"success": False, "error": "Render API Key is required."}, status=400)
@@ -4193,6 +4994,9 @@ def create_app() -> web.Application:
     app.router.add_get("/portal", handle_portal_page)
     app.router.add_get("/deploy", handle_deploy_page)
     app.router.add_post("/api/deploy-render", handle_deploy_render)
+    app.router.add_get("/api/subscription-status", handle_subscription_status)
+    app.router.add_post("/api/create-razorpay-order", handle_create_razorpay_order)
+    app.router.add_post("/api/verify-razorpay-payment", handle_verify_razorpay_payment)
     app.router.add_get("/api/user-bots", handle_user_bots_api)
     app.router.add_get("/api/user-config", handle_user_config_api)
     app.router.add_post("/api/user-config", handle_user_config_api)
