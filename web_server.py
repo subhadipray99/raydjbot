@@ -1221,6 +1221,56 @@ LANDING_HTML = """<!DOCTYPE html>
       border-color: var(--ink);
       box-shadow: 2px 2px 0 var(--ink);
     }
+
+    .btn-google-auth {
+      width: 100%;
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      border-radius: 100px;
+      padding: 12px 18px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+      box-shadow: 2px 2px 0 var(--ink);
+      transition: all 0.15s ease;
+      margin-bottom: 16px;
+    }
+    .btn-google-auth:hover {
+      background: #faf8f0;
+      box-shadow: 4px 4px 0 var(--ink);
+      transform: translate(-1px, -1px);
+    }
+    .btn-google-auth:active {
+      box-shadow: 0 0 0 var(--ink);
+      transform: translate(1px, 1px);
+    }
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 16px 0;
+      color: var(--ink-mute);
+      font-size: 11px;
+      font-family: 'Geist Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 700;
+    }
+    .auth-divider::before,
+    .auth-divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid var(--border-dark);
+    }
+    .auth-divider span {
+      padding: 0 12px;
+    }
   </style>
 </head>
 <body>
@@ -1519,6 +1569,21 @@ LANDING_HTML = """<!DOCTYPE html>
         <button onclick="document.getElementById('auth-dialog').close()" style="background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
       </div>
 
+      <!-- Google OAuth Button -->
+      <button type="button" class="btn-google-auth" onclick="signInWithGoogle()">
+        <svg width="18" height="18" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span>Continue with Google</span>
+      </button>
+
+      <div class="auth-divider">
+        <span>or with email</span>
+      </div>
+
       <div class="auth-tabs-row">
         <button type="button" class="auth-tab active" id="tab-login" onclick="setAuthTab('login')">Sign In</button>
         <button type="button" class="auth-tab" id="tab-signup" onclick="setAuthTab('signup')">Create Account</button>
@@ -1596,13 +1661,57 @@ LANDING_HTML = """<!DOCTYPE html>
       }
     }
 
+    async function signInWithGoogle() {
+      if (!sb) {
+        alert("Authentication client not initialized.");
+        return;
+      }
+      try {
+        const { data, error } = await sb.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin + '/deploy'
+          }
+        });
+        if (error) throw error;
+      } catch (err) {
+        const errBox = document.getElementById('auth-err');
+        if (errBox) {
+          errBox.innerText = err.message;
+          errBox.style.display = 'block';
+        } else {
+          alert(err.message);
+        }
+      }
+    }
+
+    function renderUserNav(user) {
+      const navBtn = document.getElementById('nav-auth-btn');
+      if (!navBtn) return;
+      const meta = user.user_metadata || {};
+      const name = meta.full_name || meta.name || user.email.split('@')[0];
+      const avatar = meta.avatar_url || meta.picture || '';
+
+      let avatarHtml = '';
+      if (avatar) {
+        avatarHtml = `<img src="${avatar}" alt="" style="width:22px; height:22px; border-radius:50%; border:1px solid var(--ink); object-fit:cover;">`;
+      }
+      navBtn.innerHTML = `<span style="display:inline-flex; align-items:center; gap:8px;">${avatarHtml} Dashboard (${name})</span>`;
+      navBtn.onclick = () => { window.location.href = '/deploy'; };
+    }
+
     async function checkUser() {
       if (!sb) return;
       const { data: { session } } = await sb.auth.getSession();
       if (session && session.user) {
-        document.getElementById('nav-auth-btn').innerText = 'Dashboard (' + session.user.email.split('@')[0] + ')';
-        document.getElementById('nav-auth-btn').onclick = () => { window.location.href = '/deploy'; };
+        renderUserNav(session.user);
       }
+
+      sb.auth.onAuthStateChange((event, session) => {
+        if (session && session.user) {
+          renderUserNav(session.user);
+        }
+      });
     }
     checkUser();
   </script>
@@ -1938,19 +2047,85 @@ DEPLOY_HTML = """<!DOCTYPE html>
       border-radius: 18px;
       padding: 20px;
     }
+    .btn-google-auth-nav {
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      border-radius: 100px;
+      padding: 7px 16px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 2px 2px 0 var(--ink);
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .btn-google-auth-nav:hover {
+      background: #f7f6ed;
+      box-shadow: 3px 3px 0 var(--ink);
+      transform: translate(-1px, -1px);
+    }
+    .auth-banner {
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      border-radius: 18px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      box-shadow: 4px 4px 0 var(--ink);
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
 
   <header class="deploy-nav">
     <a href="/" class="brand-link">zevray<span>*</span></a>
-    <div style="display: flex; gap: 16px; align-items: center;">
-      <a href="/" class="back-link">&larr; Back to Landing Page</a>
-      <span id="nav-user-label" style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700;"></span>
+    <div style="display: flex; gap: 14px; align-items: center;">
+      <a href="/" class="back-link">&larr; Home</a>
+      
+      <!-- Logged Out Google Auth Button in Nav -->
+      <button type="button" class="btn-google-auth-nav" id="nav-login-google-btn" onclick="signInWithGoogle()" style="display:none;">
+        <svg width="15" height="15" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span>Sign In with Google</span>
+      </button>
+
+      <!-- Logged In User Pill -->
+      <div id="nav-user-badge" style="display:none; align-items:center; gap:8px; background:#fff; border:1.5px solid var(--ink); border-radius:100px; padding:4px 12px 4px 6px;">
+        <img id="nav-user-avatar" src="" alt="" style="width:22px; height:22px; border-radius:50%; display:none; object-fit:cover;">
+        <span id="nav-user-label" style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700;"></span>
+        <button onclick="handleSignOut()" title="Sign Out" style="background:none; border:none; color:var(--ink-mute); cursor:pointer; font-size:11px; font-weight:700; padding-left:4px;">(Sign Out)</button>
+      </div>
     </div>
   </header>
 
   <main style="max-width: 900px; margin: 0 auto; width: 100%; padding: 0 16px;">
+    <!-- Prompt Banner for Unauthenticated Visitors -->
+    <div id="auth-prompt-banner" class="auth-banner" style="display:none;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+        <div>
+          <b>Save & track your bot fleet</b> &bull; Sign in with Google so your deployed bots, room radios, and 24/7 health pings are linked to your account.
+        </div>
+        <button type="button" class="btn-google-auth-nav" onclick="signInWithGoogle()">
+          <svg width="15" height="15" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span>Continue with Google</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Active Fleet if Logged In -->
     <div class="fleet-box" id="user-fleet-box">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -2282,16 +2457,101 @@ DEPLOY_HTML = """<!DOCTYPE html>
       }
     }
 
+    async function signInWithGoogle() {
+      if (!sb) {
+        alert("Authentication client not initialized.");
+        return;
+      }
+      try {
+        const { data, error } = await sb.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin + '/deploy'
+          }
+        });
+        if (error) throw error;
+      } catch (err) {
+        alert("Google Sign-In failed: " + err.message);
+      }
+    }
+
+    async function handleSignOut() {
+      if (sb) {
+        await sb.auth.signOut();
+        window.location.reload();
+      }
+    }
+
+    function renderUserSession(user) {
+      currentUser = user;
+      const meta = user.user_metadata || {};
+      const name = meta.full_name || meta.name || user.email.split('@')[0];
+      const avatar = meta.avatar_url || meta.picture || '';
+
+      const loginBtn = document.getElementById('nav-login-google-btn');
+      if (loginBtn) loginBtn.style.display = 'none';
+
+      const badge = document.getElementById('nav-user-badge');
+      if (badge) badge.style.display = 'inline-flex';
+
+      const avatarEl = document.getElementById('nav-user-avatar');
+      if (avatarEl) {
+        if (avatar) {
+          avatarEl.src = avatar;
+          avatarEl.style.display = 'inline-block';
+        } else {
+          avatarEl.style.display = 'none';
+        }
+      }
+
+      const labelEl = document.getElementById('nav-user-label');
+      if (labelEl) labelEl.innerText = name;
+
+      const banner = document.getElementById('auth-prompt-banner');
+      if (banner) banner.style.display = 'none';
+
+      const fleetBox = document.getElementById('user-fleet-box');
+      if (fleetBox) fleetBox.style.display = 'block';
+
+      loadUserBots();
+    }
+
+    function renderLoggedOut() {
+      currentUser = null;
+      const loginBtn = document.getElementById('nav-login-google-btn');
+      if (loginBtn) loginBtn.style.display = 'inline-flex';
+
+      const badge = document.getElementById('nav-user-badge');
+      if (badge) badge.style.display = 'none';
+
+      const banner = document.getElementById('auth-prompt-banner');
+      if (banner) banner.style.display = 'block';
+
+      const fleetBox = document.getElementById('user-fleet-box');
+      if (fleetBox) fleetBox.style.display = 'none';
+    }
+
     async function initUser() {
       loadSaved();
-      if (!sb) return;
+      if (!sb) {
+        renderLoggedOut();
+        return;
+      }
+
       const { data: { session } } = await sb.auth.getSession();
       if (session && session.user) {
-        currentUser = session.user;
-        document.getElementById('nav-user-label').innerText = session.user.email;
-        document.getElementById('user-fleet-box').style.display = 'block';
-        loadUserBots();
+        renderUserSession(session.user);
+      } else {
+        renderLoggedOut();
       }
+
+      sb.auth.onAuthStateChange((event, session) => {
+        if (session && session.user) {
+          renderUserSession(session.user);
+        } else {
+          renderLoggedOut();
+        }
+      });
     }
     initUser();
   </script>
