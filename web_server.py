@@ -730,7 +730,7 @@ LANDING_HTML = """<!DOCTYPE html>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <!-- Supabase JS Client v2 -->
+  <!-- Cloud Auth & DB Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -1425,7 +1425,7 @@ LANDING_HTML = """<!DOCTYPE html>
     <div class="hero-ticker">
       <div class="ticker-item"><span>&bull;</span> 100% Free Cloud Hosting</div>
       <div class="ticker-item"><span>&bull;</span> 24/7 Keep-Alive Auto-Pinger</div>
-      <div class="ticker-item"><span>&bull;</span> Permanent Supabase Cloud State</div>
+      <div class="ticker-item"><span>&bull;</span> Permanent Cloud State Sync</div>
       <div class="ticker-item"><span>&bull;</span> Zero Coding Required</div>
     </div>
   </header>
@@ -1533,7 +1533,7 @@ LANDING_HTML = """<!DOCTYPE html>
           </div>
           <h3 class="card-title">Permanent Outfits & Memory</h3>
           <p class="card-body">
-            Cloud-backed state via Supabase. Your bot never forgets its wardrobe (<code>!fit</code>), DJ booth anchor (<code>!setpos</code>), or welcome message when the cloud container updates or redeploys.
+            Cloud-backed encrypted state. Your bot never forgets its wardrobe (<code>!fit</code>), DJ booth anchor (<code>!setpos</code>), or welcome message when the cloud container updates or redeploys.
           </p>
         </div>
       </div>
@@ -1816,7 +1816,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <!-- Supabase JS Client v2 -->
+  <!-- Cloud Auth & DB Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -2360,6 +2360,107 @@ DEPLOY_HTML = """<!DOCTYPE html>
       color: var(--ink-mute);
     }
 
+
+    /* Auth Gate Screen */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .auth-gate-card {
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      border-radius: 24px;
+      padding: clamp(24px, 5vw, 40px);
+      box-shadow: 6px 6px 0 var(--ink);
+    }
+    .btn-gate-google {
+      width: 100%;
+      background: #ffffff;
+      color: var(--ink);
+      border: 2px solid var(--ink);
+      border-radius: 14px;
+      padding: 13px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+      box-shadow: 3px 3px 0 var(--ink);
+      transition: all 0.15s ease;
+    }
+    .btn-gate-google:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--ink);
+      background: #fdfdfc;
+    }
+    .btn-gate-google:active {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 var(--ink);
+    }
+    .gate-divider {
+      display: flex;
+      align-items: center;
+      margin: 22px 0 18px;
+      color: var(--ink-mute);
+      font-size: 12px;
+      font-family: 'Geist Mono', monospace;
+    }
+    .gate-divider::before, .gate-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border-dark);
+    }
+    .gate-divider span {
+      padding: 0 12px;
+    }
+    .gate-tabs {
+      display: flex;
+      background: var(--paper);
+      border: 1.5px solid var(--border-dark);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 20px;
+      gap: 4px;
+    }
+    .gate-tab {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 9px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      color: var(--ink-mute);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .gate-tab.active {
+      background: #ffffff;
+      color: var(--ink);
+      border: 1.5px solid var(--ink);
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+    .gate-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--ink);
+    }
+    .gate-back-link {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-soft);
+      text-decoration: none;
+    }
+    .gate-back-link:hover {
+      color: var(--ink);
+      text-decoration: underline;
+    }
+
     /* Cheat Sheet Commands */
     .cmd-row {
       display: flex;
@@ -2417,14 +2518,24 @@ DEPLOY_HTML = """<!DOCTYPE html>
   </header>
 
   <main style="max-width: 1160px; margin: 0 auto; width: 100%; padding: 0 16px;">
-    <!-- Prompt Banner for Unauthenticated Visitors -->
-    <div id="auth-prompt-banner" class="auth-banner" style="display:none; margin-bottom:24px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
-        <div>
-          <b>Save & sync your bot credentials</b> &bull; Sign in with Google so your tokens, room IDs, and deployed fleets are saved safely to your cloud account database.
-        </div>
-        <button type="button" class="btn-google-auth-nav" onclick="signInWithGoogle()">
-          <svg width="15" height="15" viewBox="0 0 24 24">
+    <!-- 1. Checking Session Skeleton / Spinner -->
+    <div id="deploy-auth-loading" style="max-width:480px; margin:70px auto; text-align:center; font-family:'Geist Mono',monospace; font-size:13px; font-weight:700; color:var(--ink-mute);">
+      <div style="display:inline-block; width:26px; height:26px; border:3px solid var(--ink); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:12px;"></div>
+      <div>Verifying account credentials...</div>
+    </div>
+
+    <!-- 2. Auth Gate Screen (Deploy page only accessible after login/signup) -->
+    <div id="deploy-auth-gate" style="display:none; max-width:480px; margin:40px auto 60px; width:100%;">
+      <div class="auth-gate-card">
+        <div class="kicker" style="text-align:center;">( MEMBER ACCESS ONLY )</div>
+        <h1 style="font-size:32px; font-weight:800; text-align:center; letter-spacing:-0.03em; line-height:1.1; margin-bottom:8px;">Sign In to Deploy</h1>
+        <p style="font-size:14px; color:var(--ink-soft); text-align:center; line-height:1.5; margin-bottom:24px;">
+          Connect your account to access the 60-second Highrise DJ bot studio, cloud jukebox, and persistent configurations.
+        </p>
+
+        <!-- Google OAuth Button -->
+        <button type="button" class="btn-gate-google" onclick="signInWithGoogle()">
+          <svg width="18" height="18" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
@@ -2432,11 +2543,57 @@ DEPLOY_HTML = """<!DOCTYPE html>
           </svg>
           <span>Continue with Google</span>
         </button>
+
+        <div class="gate-divider">
+          <span>or sign in with email</span>
+        </div>
+
+        <!-- Auth Tabs: Sign In / Create Account -->
+        <div class="gate-tabs">
+          <button type="button" id="gate-tab-login" class="gate-tab active" onclick="setGateTab('login')">Sign In</button>
+          <button type="button" id="gate-tab-signup" class="gate-tab" onclick="setGateTab('signup')">Create Account</button>
+        </div>
+
+        <form id="gate-auth-form" onsubmit="handleGateAuth(event)">
+          <div style="margin-bottom:14px;">
+            <label class="gate-label" for="gate-email">Email Address</label>
+            <input type="email" id="gate-email" class="app-input" placeholder="you@domain.com" required autocomplete="email">
+          </div>
+
+          <div style="margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <label class="gate-label" for="gate-password">Password</label>
+            </div>
+            <div class="input-box">
+              <input type="password" id="gate-password" class="app-input" placeholder="••••••••" required autocomplete="current-password">
+              <button type="button" class="btn-reveal" onclick="toggleVisibility('gate-password', this)" aria-label="Toggle password visibility">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Sign Up Only: Highrise Username -->
+          <div id="gate-signup-extra" style="display:none; margin-bottom:16px;">
+            <label class="gate-label" for="gate-hr-user">Highrise Username (Optional)</label>
+            <input type="text" id="gate-hr-user" class="app-input" placeholder="e.g. shuvodip">
+          </div>
+
+          <!-- Error Alert -->
+          <div id="gate-auth-err" style="display:none; background:#fee2e2; border:1.5px solid var(--ink); border-radius:10px; padding:10px 14px; font-size:12px; font-weight:600; color:#b91c1c; margin-bottom:16px;"></div>
+
+          <button type="submit" id="btn-gate-submit" class="btn-submit" style="width:100%; padding:14px; font-size:15px;">
+            <span id="gate-btn-txt">Sign In & Access Studio &rarr;</span>
+          </button>
+        </form>
+
+        <div style="text-align:center; margin-top:20px;">
+          <a href="/" class="gate-back-link">&larr; Return to Overview</a>
+        </div>
       </div>
     </div>
 
-    <!-- 2-Column Responsive Dashboard Layout -->
-    <div class="deploy-grid-layout">
+    <!-- 3. The Protected 2-Column Responsive Dashboard Layout (Only visible after login/signup) -->
+    <div class="deploy-grid-layout" id="deploy-grid-layout" style="display:none;">
       <!-- Main Column: Deploy Form & Results -->
       <div class="deploy-main-col">
         <!-- Active Fleet if Logged In -->
@@ -2578,7 +2735,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
               <div>
                 <div style="font-size:14px; font-weight:700; display:flex; align-items:center; gap:8px;">
                   <span>Save & sync credentials to Cloud Database</span>
-                  <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; background:var(--ink); color:var(--accent); padding:2px 6px; border-radius:4px;">SUPABASE</span>
+                  <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; background:var(--ink); color:var(--accent); padding:2px 6px; border-radius:4px;">CLOUD SYNC</span>
                 </div>
                 <div style="font-size:12px; color:var(--ink-mute); margin-top:2px;">
                   Saves to your user account so your credentials and room settings persist across all your devices.
@@ -2816,11 +2973,11 @@ DEPLOY_HTML = """<!DOCTYPE html>
         <!-- Card 3: Cloud Database Sync Status -->
         <div class="sidebar-card">
           <div class="sidebar-card-header">
-            <span class="sidebar-card-title">Cloud Database</span>
-            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; color:#27ae60;">SUPABASE</span>
+            <span class="sidebar-card-title">Cloud Account Sync</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; color:#27ae60;">ACTIVE</span>
           </div>
           <div style="font-size:12px; color:var(--ink-soft); line-height:1.5;">
-            Credentials & configurations are synced to your Supabase account so you never lose them.
+            Credentials & configurations are securely synced to your cloud account so you never lose them.
           </div>
           <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;">
             <span id="cloud-sync-status" style="font-family:'Geist Mono',monospace; font-size:11px; font-weight:700; color:var(--ink);">Checking sync...</span>
@@ -2918,7 +3075,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
 
     async function saveConfigToDb() {
       if (!currentUser) {
-        alert('Please sign in with Google first to save your credentials to your personal cloud database.');
+        alert('Please sign in first to save your credentials to your personal cloud account.');
         return;
       }
       const payload = {
@@ -2941,8 +3098,8 @@ DEPLOY_HTML = """<!DOCTYPE html>
         });
         const d = await res.json();
         if (d.success) {
-          if (statusEl) statusEl.innerText = 'Saved to Supabase';
-          alert('Configuration saved to your Supabase database!');
+          if (statusEl) statusEl.innerText = 'Saved to Cloud';
+          alert('Configuration saved to your cloud account!');
         } else {
           if (statusEl) statusEl.innerText = 'Save error';
           alert('Could not save to database: ' + (d.error || 'Unknown error'));
@@ -3322,7 +3479,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
     <tr><th>Connected User Account</th><td>${userEmail}</td></tr>
     <tr><th>Render API Key</th><td><code>${renderKey || 'Not set'}</code></td></tr>
     <tr><th>Cron-Job.org Key</th><td><code>${cronKey || 'Using Master 24/7 Keep-Alive Network'}</code></td></tr>
-    <tr><th>Cloud Database (Supabase)</th><td><code>https://ahvvanhxbqtcbtuwfxtm.supabase.co</code></td></tr>
+    <tr><th>Cloud Database Sync</th><td><code>Connected & Active</code></td></tr>
   </table>
 
   <div class="section-title">3. Live Streaming & Web Jukebox</div>
@@ -3366,7 +3523,7 @@ Room Link:        ${roomLink}
 --- CLOUD HOSTING & AUTOMATION ---
 Render API Key:   ${renderKey || 'N/A'}
 Cron-Job Key:     ${cronKey || 'Master Keep-Alive Network (Automated)'}
-Cloud Database:   https://ahvvanhxbqtcbtuwfxtm.supabase.co
+Cloud Database:   Connected & Active
 User Account:     ${userEmail}
 
 --- IN-ROOM RADIO & JUKEBOX ---
@@ -3478,6 +3635,61 @@ Live Jukebox URL: ${playerUrl}
       }
     }
 
+    let gateAuthMode = 'login';
+
+    function setGateTab(mode) {
+      gateAuthMode = mode;
+      document.getElementById('gate-tab-login').classList.toggle('active', mode === 'login');
+      document.getElementById('gate-tab-signup').classList.toggle('active', mode === 'signup');
+      document.getElementById('gate-signup-extra').style.display = mode === 'signup' ? 'block' : 'none';
+      document.getElementById('gate-btn-txt').innerText = mode === 'signup' ? 'Create Account & Access Studio →' : 'Sign In & Access Studio →';
+      document.getElementById('gate-auth-err').style.display = 'none';
+    }
+
+    async function handleGateAuth(e) {
+      e.preventDefault();
+      if (!sb) {
+        alert('Authentication service not ready.');
+        return;
+      }
+      const email = document.getElementById('gate-email').value.trim();
+      const password = document.getElementById('gate-password').value;
+      const hrUser = document.getElementById('gate-hr-user') ? document.getElementById('gate-hr-user').value.trim() : '';
+      const errBox = document.getElementById('gate-auth-err');
+      const submitBtn = document.getElementById('btn-gate-submit');
+
+      errBox.style.display = 'none';
+      submitBtn.disabled = true;
+
+      try {
+        if (gateAuthMode === 'signup') {
+          const { data, error } = await sb.auth.signUp({
+            email,
+            password,
+            options: { data: { highrise_username: hrUser } }
+          });
+          if (error) throw error;
+          if (data.session && data.session.user) {
+            renderUserSession(data.session.user);
+          } else {
+            alert('Account created! Please check your email inbox to verify your account, then sign in.');
+            setGateTab('login');
+          }
+        } else {
+          const { data, error } = await sb.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          if (data.user) {
+            renderUserSession(data.user);
+          }
+        }
+      } catch (err) {
+        errBox.innerText = err.message || 'Authentication error. Please check your credentials.';
+        errBox.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
     function renderUserSession(user) {
       currentUser = user;
       const meta = user.user_metadata || {};
@@ -3503,8 +3715,15 @@ Live Jukebox URL: ${playerUrl}
       const labelEl = document.getElementById('nav-user-label');
       if (labelEl) labelEl.innerText = name;
 
-      const banner = document.getElementById('auth-prompt-banner');
-      if (banner) banner.style.display = 'none';
+      // HIDE AUTH LOADING & AUTH GATE
+      const loadingEl = document.getElementById('deploy-auth-loading');
+      if (loadingEl) loadingEl.style.display = 'none';
+      const gateEl = document.getElementById('deploy-auth-gate');
+      if (gateEl) gateEl.style.display = 'none';
+
+      // REVEAL PROTECTED DEPLOY STUDIO
+      const gridLayout = document.getElementById('deploy-grid-layout');
+      if (gridLayout) gridLayout.style.display = 'grid';
 
       const fleetBox = document.getElementById('user-fleet-box');
       if (fleetBox) fleetBox.style.display = 'block';
@@ -3512,6 +3731,7 @@ Live Jukebox URL: ${playerUrl}
       // Load bot fleet and cloud config
       loadUserBots();
       loadUserConfigFromDb(user.id);
+      refreshBotStatus();
     }
 
     function renderLoggedOut() {
@@ -3522,20 +3742,24 @@ Live Jukebox URL: ${playerUrl}
       const badge = document.getElementById('nav-user-badge');
       if (badge) badge.style.display = 'none';
 
-      const banner = document.getElementById('auth-prompt-banner');
-      if (banner) banner.style.display = 'block';
+      // HIDE AUTH LOADING & DEPLOY STUDIO
+      const loadingEl = document.getElementById('deploy-auth-loading');
+      if (loadingEl) loadingEl.style.display = 'none';
+      const gridLayout = document.getElementById('deploy-grid-layout');
+      if (gridLayout) gridLayout.style.display = 'none';
+
+      // SHOW AUTH GATE
+      const gateEl = document.getElementById('deploy-auth-gate');
+      if (gateEl) gateEl.style.display = 'block';
 
       const fleetBox = document.getElementById('user-fleet-box');
       if (fleetBox) fleetBox.style.display = 'none';
 
       const statusEl = document.getElementById('cloud-sync-status');
       if (statusEl) statusEl.innerText = 'Sign in to sync';
-
-      loadSavedLocal();
-      refreshBotStatus();
     }
 
-    async function initUser() {
+    function initUser() {
       if (!sb) {
         renderLoggedOut();
         return;
