@@ -31,15 +31,7 @@ def save_all_positions(data: dict) -> None:
         logger.error(f"Error saving bot positions: {e}")
 
 
-DEFAULT_ROOM_POSITIONS = {
-    "64005ecfb3d3644258e0040e": {
-        "type": "position",
-        "x": 11.0,
-        "y": 12.056,
-        "z": 25.71,
-        "facing": "FrontRight",
-    }
-}
+DEFAULT_ROOM_POSITIONS = {}
 
 
 def get_saved_position(room_id: str) -> Position | AnchorPosition | None:
@@ -60,7 +52,7 @@ def get_saved_position(room_id: str) -> Position | AnchorPosition | None:
 
     # 2. Check saved room position in JSON
     data = load_all_positions()
-    room_data = data.get(room_id) or DEFAULT_ROOM_POSITIONS.get(room_id) or data.get("default")
+    room_data = data.get(room_id) or data.get("default")
     if not room_data:
         return None
 
@@ -179,6 +171,23 @@ def save_manual_position(room_id: str, x: float, y: float, z: float, facing: str
     pos = Position(x=float(x), y=float(y), z=float(z), facing=facing)
     save_room_position(room_id, pos)
     return pos
+
+
+async def clear_room_position_async(room_id: str) -> bool:
+    """Asynchronously clear saved position for a room from local file and Supabase DB."""
+    data = load_all_positions()
+    existed = room_id in data
+    if existed:
+        del data[room_id]
+        save_all_positions(data)
+        logger.info(f"Cleared saved position for room {room_id}")
+    try:
+        import db
+        await db.save_room_attribute(room_id, "saved_position", None)
+        logger.info(f"[DB] Successfully cleared saved_position for room {room_id} in Supabase.")
+    except Exception as dbe:
+        logger.error(f"[DB] Failed to clear position in Supabase: {dbe}")
+    return existed
 
 
 def clear_room_position(room_id: str) -> bool:

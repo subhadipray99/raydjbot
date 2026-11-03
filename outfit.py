@@ -142,10 +142,17 @@ def _load_data() -> dict:
     if os.path.exists(OUTFITS_FILE):
         try:
             with open(OUTFITS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                d = json.load(f)
+                if not isinstance(d, dict):
+                    d = {}
+                if "active_by_room" not in d:
+                    d["active_by_room"] = {}
+                if "custom_presets" not in d:
+                    d["custom_presets"] = {}
+                return d
         except Exception as e:
             logger.error(f"Error loading outfits file: {e}")
-    return {"active": None, "custom_presets": {}}
+    return {"active": None, "active_by_room": {}, "custom_presets": {}}
 
 
 def _save_data(data: dict) -> None:
@@ -184,15 +191,22 @@ def save_custom_preset(name: str, outfit: list[Item]) -> None:
 async def save_active_outfit_async(room_id: str, outfit: list[Item]) -> None:
     """Asynchronously save active equipped outfit to local JSON and Supabase DB."""
     data = _load_data()
-    data["active"] = [item_to_dict(it) for it in outfit]
+    item_dicts = [item_to_dict(it) for it in outfit]
+    if "active_by_room" not in data:
+        data["active_by_room"] = {}
+    if room_id:
+        data["active_by_room"][room_id] = item_dicts
+    data["active"] = item_dicts
     _save_data(data)
     try:
         import db
-        success = await db.save_room_attribute(room_id or config.ROOM_ID, "active_outfit", data["active"])
-        if success:
-            logger.info(f"[DB] Successfully synced active_outfit ({len(outfit)} items) to Supabase!")
-        else:
-            logger.warning(f"[DB] Supabase active_outfit sync returned False for room {room_id}")
+        target_room = room_id or getattr(config, "ROOM_ID", "")
+        if target_room:
+            success = await db.save_room_attribute(target_room, "active_outfit", item_dicts)
+            if success:
+                logger.info(f"[DB] Successfully synced active_outfit ({len(outfit)} items) for room {target_room} to Supabase!")
+            else:
+                logger.warning(f"[DB] Supabase active_outfit sync returned False for room {target_room}")
     except Exception as dbe:
         logger.error(f"[DB] Failed to sync outfit to Supabase: {dbe}")
 
@@ -200,7 +214,13 @@ async def save_active_outfit_async(room_id: str, outfit: list[Item]) -> None:
 def save_active_outfit(outfit: list[Item]) -> None:
     """Saves the currently equipped outfit so it can be restored on reboot."""
     data = _load_data()
-    data["active"] = [item_to_dict(it) for it in outfit]
+    item_dicts = [item_to_dict(it) for it in outfit]
+    if "active_by_room" not in data:
+        data["active_by_room"] = {}
+    target_room = getattr(config, "ROOM_ID", "")
+    if target_room:
+        data["active_by_room"][target_room] = item_dicts
+    data["active"] = item_dicts
     _save_data(data)
     try:
         import asyncio
@@ -211,12 +231,13 @@ def save_active_outfit(outfit: list[Item]) -> None:
             pass
         if loop and loop.is_running():
             import db
-            loop.create_task(db.save_room_attribute(config.ROOM_ID, "active_outfit", data["active"]))
+            if target_room:
+                loop.create_task(db.save_room_attribute(target_room, "active_outfit", item_dicts))
     except Exception as e:
         logger.warning(f"Error queueing outfit DB sync: {e}")
 
 
-def get_active_outfit() -> list[Item] | None:
+def get_active_outfit(room_id: str | None = None) -> list[Item] | None:
     """Gets the previously active saved outfit if available."""
     # 1. Check environment variable override (e.g. BOT_OUTFIT=suit or dj)
     env_outfit = getattr(config, "BOT_OUTFIT", None)
@@ -225,10 +246,16 @@ def get_active_outfit() -> list[Item] | None:
         if preset:
             return preset
 
-    # 2. Check saved active outfit in JSON
+    # 2. Check saved active outfit for specific room in JSON
     data = _load_data()
+    if room_id and "active_by_room" in data:
+        room_active = data["active_by_room"].get(room_id)
+        if room_active and len(room_active) > 0:
+            return [dict_to_item(d) for d in room_active]
+
+    # 3. Fallback to general active if set and not empty
     active = data.get("active")
-    if active:
+    if active and len(active) > 0:
         return [dict_to_item(d) for d in active]
     return None
 

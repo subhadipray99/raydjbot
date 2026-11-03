@@ -235,7 +235,7 @@ class HighriseBot(BaseBot):
         self.user_emote_loops: dict[str, asyncio.Task] = {}
         self.welcomed_users: set[str] = set()
 
-    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 0.5) -> None:
+    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 1.0) -> None:
         """Wait briefly after room connect for world registration, then move bot to saved spot."""
         await asyncio.sleep(delay)
         success = await self.move_bot_to(pos)
@@ -243,9 +243,6 @@ class HighriseBot(BaseBot):
             logger.info(f"Successfully relocated bot to saved position: {position.format_position(pos)}")
         else:
             logger.warning(f"Failed to relocate bot to saved position: {position.format_position(pos)}")
-        # Re-apply after 1.2s to ensure facing direction takes effect firmly
-        await asyncio.sleep(1.2)
-        await self.move_bot_to(pos)
 
     async def _subscription_watchdog_loop(self) -> None:
         """Periodically check if this room's hosting subscription is still active."""
@@ -309,16 +306,15 @@ class HighriseBot(BaseBot):
             if isinstance(target_pos, Position) and self.bot_id:
                 try:
                     await self.highrise.teleport(self.bot_id, target_pos)
-                    # Also walk to ensure facing direction takes effect immediately
-                    try:
-                        await self.highrise.walk_to(target_pos)
-                    except Exception:
-                        pass
                     return True
                 except Exception as tp_err:
-                    logger.debug(f"Teleport bot failed ({tp_err}), falling back to walk_to")
-            await self.highrise.walk_to(target_pos)
-            return True
+                    logger.warning(f"Teleport bot failed ({tp_err}), falling back to walk_to")
+            if isinstance(target_pos, Position):
+                await self.highrise.walk_to(target_pos)
+                return True
+            elif isinstance(target_pos, AnchorPosition) and self.bot_id:
+                await self.highrise.teleport(self.bot_id, target_pos)
+                return True
         except Exception as e:
             logger.error(f"Error moving bot to {target_pos}: {e}")
             return False
@@ -412,10 +408,9 @@ class HighriseBot(BaseBot):
                 # 1. Position
                 if cloud_state.get("saved_position") and isinstance(cloud_state["saved_position"], dict):
                     p_data = cloud_state["saved_position"]
-                    if p_data.get("type") == "position":
-                        all_pos = position.load_all_positions()
-                        all_pos[config.ROOM_ID] = p_data
-                        position.save_all_positions(all_pos)
+                    all_pos = position.load_all_positions()
+                    all_pos[config.ROOM_ID] = p_data
+                    position.save_all_positions(all_pos)
                 # 2. Floors
                 if cloud_state.get("floors") and isinstance(cloud_state["floors"], dict):
                     all_fl = position.load_all_floors()
@@ -425,16 +420,20 @@ class HighriseBot(BaseBot):
                 if cloud_state.get("custom_welcome"):
                     set_custom_welcome(config.ROOM_ID, str(cloud_state["custom_welcome"]))
                 # 4. Outfit
-                if cloud_state.get("active_outfit") and isinstance(cloud_state["active_outfit"], list):
+                act_outfit = cloud_state.get("active_outfit")
+                if act_outfit and isinstance(act_outfit, list) and len(act_outfit) > 0:
                     outfit_data = outfit._load_data()
-                    outfit_data["active"] = cloud_state["active_outfit"]
+                    if "active_by_room" not in outfit_data:
+                        outfit_data["active_by_room"] = {}
+                    outfit_data["active_by_room"][config.ROOM_ID] = act_outfit
+                    outfit_data["active"] = act_outfit
                     outfit._save_data(outfit_data)
         except Exception as hyd_err:
             logger.debug(f"[DB] Hydration notice: {hyd_err}")
 
         # Restore saved active outfit on connect (ensures !fit and !copyfit persist across room reloads)
-        saved_outfit = outfit.get_active_outfit()
-        if saved_outfit:
+        saved_outfit = outfit.get_active_outfit(config.ROOM_ID)
+        if saved_outfit and len(saved_outfit) > 0:
             try:
                 res = await self.highrise.set_outfit(saved_outfit)
                 if isinstance(res, Error):
@@ -443,6 +442,15 @@ class HighriseBot(BaseBot):
                     logger.info(f"Successfully restored saved bot outfit ({len(saved_outfit)} items).")
             except Exception as e:
                 logger.warning(f"Error restoring outfit on start: {e}")
+        else:
+            # First-time run or no active outfit saved yet: capture current avatar from Highrise and persist it!
+            try:
+                my_outfit_resp = await self.highrise.get_my_outfit()
+                if hasattr(my_outfit_resp, "outfit") and my_outfit_resp.outfit:
+                    await outfit.save_active_outfit_async(config.ROOM_ID, my_outfit_resp.outfit)
+                    logger.info(f"Auto-captured and persisted initial bot outfit ({len(my_outfit_resp.outfit)} items) to Supabase.")
+            except Exception as e:
+                logger.debug(f"Initial outfit auto-capture notice: {e}")
 
         # Restore saved room position if available
         saved_pos = position.get_saved_position(config.ROOM_ID)
@@ -1048,7 +1056,7 @@ class HighriseBot(BaseBot):
                     z=saved_pos.z,
                     facing=new_facing
                 )
-                position.save_room_position(config.ROOM_ID, new_pos)
+                await position.save_room_position_async(config.ROOM_ID, new_pos)
                 await self.move_bot_to(new_pos)
                 await reply(f"🔄 Bot turned! Now facing: {new_facing}. (Saved to room config)")
 
@@ -1070,7 +1078,7 @@ class HighriseBot(BaseBot):
             if not user_is_admin:
                 await reply(f"🔒 This command is reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
-            cleared = position.clear_room_position(config.ROOM_ID)
+            cleared = await position.clear_room_position_async(config.ROOM_ID)
             if cleared:
                 await reply("🗑️ Custom bot position cleared for this room! Bot will spawn at the default entrance on next start.")
             else:
@@ -1269,19 +1277,41 @@ class HighriseBot(BaseBot):
             await self.highrise.chat(to_say)
 
         # ---------------- OUTFIT & WARDROBE COMMANDS (OWNER / ADMIN ONLY) ----------------
-        elif cmd in ("fit", "outfit"):
+        elif cmd in ("fit", "outfit", "savefit"):
             if not user_is_admin:
                 await reply(f"🔒 Outfit commands are reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
 
-            if not args or args[0].lower() in ("help", "info"):
+            # If user types !savefit, or !fit (no args), or !fit save (with no preset name) -> SAVE CURRENT LOOK!
+            if cmd == "savefit" or not args or (len(args) == 1 and args[0].lower() == "save"):
+                try:
+                    my_outfit_resp = await self.highrise.get_my_outfit()
+                    if hasattr(my_outfit_resp, "outfit") and my_outfit_resp.outfit:
+                        await outfit.save_active_outfit_async(config.ROOM_ID, my_outfit_resp.outfit)
+                        try:
+                            await self.highrise.send_emote("emote-pose1")
+                        except Exception:
+                            pass
+                        await reply(
+                            f"👗 Current bot outfit saved permanently! ({len(my_outfit_resp.outfit)} items)\n"
+                            f"✅ Bot will now wear this exact look across all room reloads and redeploys."
+                        )
+                    else:
+                        await reply("⚠️ Could not retrieve current outfit from Highrise. Please try again.")
+                except Exception as e:
+                    logger.error(f"Error saving bot outfit: {e}")
+                    await reply(f"⚠️ Error saving outfit: {e}")
+                return
+
+            if args[0].lower() in ("help", "info"):
                 presets_dict = outfit.list_available_presets()
                 preset_names = ", ".join(presets_dict.keys())
                 await reply(
                     f"👗 Bot Wardrobe Commands (Owner: @{config.ROOM_OWNER}):\n"
-                    f"• !fit <preset> - Change dress (Presets: {preset_names})\n"
+                    f"• !fit - Save whatever the bot is currently wearing\n"
+                    f"• !fit <preset> - Equip preset (Presets: {preset_names})\n"
                     f"• !copyfit [@user] - Clone someone's outfit onto bot\n"
-                    f"• !fit save <name> - Save current look as a preset\n"
+                    f"• !fit save <name> - Save current look as a named preset\n"
                     f"• !fit load <name> - Equip saved preset\n"
                     f"• !fit list - View all presets with details\n"
                     f"• !wardrobe - Check owned items in bot inventory"

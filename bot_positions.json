@@ -1,9 +1,16 @@
 {
   "64005ecfb3d3644258e0040e": {
     "type": "position",
-    "x": 11.0,
-    "y": 12.056,
-    "z": 25.71,
+    "x": 14.071,
+    "y": 1.0,
+    "z": 9.799,
     "facing": "FrontRight"
+  },
+  "664c59c8e388acf4267c8ec8": {
+    "type": "position",
+    "x": 15.007,
+    "y": 0.0,
+    "z": 3.993,
+    "facing": "FrontLeft"
   }
 }
