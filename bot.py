@@ -339,20 +339,19 @@ class HighriseBot(BaseBot):
         return False
 
     async def _get_user_position(self, target_user: User) -> Position | AnchorPosition | None:
-        """Find the freshest position for a user (cache first, then room users API)."""
-        if target_user.id in self.user_positions:
-            return self.user_positions[target_user.id]
-
+        """Find the freshest position for a user directly from the live Highrise server."""
         try:
             response = await self.highrise.get_room_users()
             if isinstance(response, GetRoomUsersRequest.GetRoomUsersResponse):
                 for room_user, pos in response.content:
+                    self.user_positions[room_user.id] = pos
                     if room_user.id == target_user.id:
-                        self.user_positions[room_user.id] = pos
                         return pos
         except Exception as e:
-            logger.error(f"Error fetching user position: {e}")
-        return None
+            logger.error(f"Error fetching user position from server: {e}")
+
+        # Fallback to cached position only if live server query fails
+        return self.user_positions.get(target_user.id)
 
     async def teleport_user_to_floor(self, user: User, floor_input: str, reply) -> None:
         """Teleport a user to the specified floor spawn position."""
@@ -1085,6 +1084,9 @@ class HighriseBot(BaseBot):
                 await reply("No custom position was saved for this room.")
 
         elif cmd in ("come", "bring"):
+            if not user_is_admin:
+                await reply(f"🔒 Moving the bot is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
             user_pos = await self._get_user_position(user)
             if user_pos:
                 await self.move_bot_to(user_pos)
@@ -1184,6 +1186,9 @@ class HighriseBot(BaseBot):
         elif cmd in ("teleport", "tp"):
             target_arg = args[0].lstrip("@").lower() if args else ""
             if target_arg in ("bot", "dj", "raydjbot"):
+                if not user_is_admin:
+                    await reply(f"🔒 Moving the bot is reserved for the room owner (@{config.ROOM_OWNER}).")
+                    return
                 # Bring bot to caller
                 user_pos = await self._get_user_position(user)
                 if user_pos:
