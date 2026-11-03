@@ -13,6 +13,7 @@ from broadcaster import broadcaster
 import position
 import tips
 import db
+from bot_status import BotStatus
 
 logger = logging.getLogger("WebServer")
 start_time = time.time()
@@ -66,35 +67,109 @@ def register_bot_url(url: str):
             logger.error(f"[Pinger] Failed to save {REGISTERED_BOTS_FILE}: {e}")
 
 
-async def run_master_pinger_loop():
-    """Background task pinging all registered buyer bots every 10 minutes (600s) to keep them awake 24/7."""
-    await asyncio.sleep(45)  # Initial grace delay after server startup
+async def run_self_pinger_loop():
+    """Continuously pings this service's own public Render URL every 3 minutes (180s).
+    
+    Render's Free Tier spins down web services after 15 minutes without incoming HTTP traffic.
+    Pinging our own public /health endpoint over HTTPS triggers Render's router to record an
+    incoming HTTP request, continuously resetting the 15-minute inactivity timer to keep the
+    Python process and Highrise WebSocket connection alive 24/7.
+    """
+    await asyncio.sleep(20)  # Wait for web server to start up completely
+    
+    my_url = (
+        os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+        or config.RENDER_EXTERNAL_URL
+        or (f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com" if os.getenv("RENDER_SERVICE_NAME") else "")
+        or (config.CUSTOM_DOMAIN if config.CUSTOM_DOMAIN and "localhost" not in config.CUSTOM_DOMAIN else "")
+    )
+    
+    if not my_url or "localhost" in my_url or "127.0.0.1" in my_url:
+        logger.info("[Self-Pinger] Running locally (no public Render URL). Self-watchdog resting.")
+        return
+
+    logger.info(f"[Self-Pinger] Started 3-minute keep-alive self-watchdog for {my_url}/health")
+    ping_url = f"{my_url}/health" if not my_url.endswith("/health") else my_url
+    
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                t0 = time.time()
+                async with session.get(ping_url, timeout=aiohttp.ClientTimeout(total=12)) as resp:
+                    elapsed_ms = int((time.time() - t0) * 1000)
+                    BotStatus.last_self_ping_time = time.time()
+                    logger.info(f"[Self-Pinger] Self-ping {ping_url} -> HTTP {resp.status} in {elapsed_ms}ms (Render 15m idle timer reset)")
+            except Exception as e:
+                logger.warning(f"[Self-Pinger] Self-ping notice ({ping_url}): {e}")
+            await asyncio.sleep(180)  # Exactly 3 minutes (180s)
+
+
+async def run_mesh_keepalive_loop():
+    """Decentralized keep-alive mesh network.
+    
+    Every 3.5 minutes (210s), queries Supabase and pings all active bot instances in the fleet,
+    as well as the master portal (zevray.com). Even if a bot temporarily slept during maintenance,
+    peer pings will wake it back up immediately.
+    """
+    await asyncio.sleep(40)  # Stagger startup with self-pinger
+    my_url = (
+        os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+        or config.RENDER_EXTERNAL_URL
+        or (config.CUSTOM_DOMAIN if config.CUSTOM_DOMAIN and "localhost" not in config.CUSTOM_DOMAIN else "")
+    )
+    
     while True:
         try:
-            bots = list(set(get_registered_bots()))
-            # Also combine with bots stored in Supabase
+            target_urls = set()
+            # 1. Local registered bots file
+            for b in get_registered_bots():
+                cleaned = b.strip().rstrip("/")
+                if cleaned:
+                    target_urls.add(f"{cleaned}/health" if not cleaned.endswith("/health") else cleaned)
+                    
+            # 2. Supabase DB registered active bots
             try:
                 db_bots = await db.get_all_active_bots_from_db()
                 for b_url in db_bots:
-                    base = b_url.replace("/health", "").rstrip("/")
-                    if base and base not in bots:
-                        bots.append(base)
+                    if b_url:
+                        target_urls.add(b_url.strip())
             except Exception as dbe:
-                logger.debug(f"[Pinger] Supabase bots lookup notice: {dbe}")
-
-            if bots:
-                logger.info(f"[Pinger] Starting 10-minute keep-alive ping cycle for {len(bots)} registered bot(s)...")
-                async with aiohttp.ClientSession() as session:
-                    for base_url in bots:
-                        ping_url = f"{base_url}/health" if not base_url.endswith("/health") else base_url
+                logger.debug(f"[Mesh-Pinger] Supabase bots lookup notice: {dbe}")
+                
+            # 3. Always include master server zevray.com
+            target_urls.add("https://zevray.com/health")
+            
+            # Remove our own URL if present (self-pinger handles self)
+            filtered_targets = [u for u in target_urls if not (my_url and my_url in u)]
+            BotStatus.mesh_nodes_count = len(filtered_targets)
+            
+            if filtered_targets:
+                logger.info(f"[Mesh-Pinger] Starting 3.5m keep-alive wave for {len(filtered_targets)} node(s)...")
+                sem = asyncio.Semaphore(5)  # Max 5 concurrent pings
+                
+                async def _ping_one(session, url):
+                    async with sem:
                         try:
-                            async with session.get(ping_url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
-                                logger.info(f"[Pinger] Pinged {ping_url} -> HTTP {resp.status}")
+                            t0 = time.time()
+                            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                elapsed_ms = int((time.time() - t0) * 1000)
+                                logger.info(f"[Mesh-Pinger] Pinged node {url} -> HTTP {resp.status} ({elapsed_ms}ms)")
                         except Exception as p_err:
-                            logger.warning(f"[Pinger] Ping to {ping_url} failed: {p_err}")
+                            logger.debug(f"[Mesh-Pinger] Node ping notice {url}: {p_err}")
+
+                async with aiohttp.ClientSession() as session:
+                    tasks = [_ping_one(session, u) for u in filtered_targets]
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    
+                BotStatus.last_mesh_ping_time = time.time()
         except Exception as loop_err:
-            logger.error(f"[Pinger] Unexpected error in master pinger loop: {loop_err}")
-        await asyncio.sleep(600)  # Exactly 10 minutes
+            logger.error(f"[Mesh-Pinger] Unexpected error in mesh pinger loop: {loop_err}")
+            
+        await asyncio.sleep(210)  # Ping every 3.5 minutes (210s)
+
+
+# Backwards compatibility alias
+run_master_pinger_loop = run_mesh_keepalive_loop
 
 
 def get_uptime() -> str:
@@ -118,11 +193,16 @@ def get_base_url(request: web.Request) -> str:
 async def handle_status_api(request: web.Request) -> web.Response:
     """JSON status API endpoint."""
     base_url = get_base_url(request)
+    summary = BotStatus.get_summary()
     return web.json_response({
         "status": "online",
         "service": "ZevRay Highrise Bot SaaS & Jukebox",
         "domain": base_url,
         "uptime": get_uptime(),
+        "highrise_connected": BotStatus.is_connected,
+        "bot_id": BotStatus.bot_id,
+        "connection_uptime": summary["connection_uptime"],
+        "reconnect_count": BotStatus.reconnect_count,
         "room_configured": bool(config.ROOM_ID),
         "room_id": config.ROOM_ID,
         "saved_position": position.get_saved_position_dict(config.ROOM_ID),
@@ -133,7 +213,11 @@ async def handle_status_api(request: web.Request) -> web.Response:
         "player_url": f"{base_url}/player",
         "deploy_portal_url": f"{base_url}/",
         "registered_bots_count": len(get_registered_bots()),
-        "master_pinger": "active (10m interval)",
+        "master_pinger": "active (3.5m mesh interval)",
+        "keepalive_self_pinger": "active (3m interval)",
+        "keepalive_mesh_nodes": BotStatus.mesh_nodes_count,
+        "last_self_ping": summary["last_self_ping"],
+        "last_mesh_ping": summary["last_mesh_ping"],
         "music_state": music_manager.get_state(),
     })
 
@@ -2590,10 +2674,18 @@ DEPLOY_HTML = """<!DOCTYPE html>
                 </div>
               </div>
 
-              <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+              <div style="display:flex; flex-direction:column; gap:7px; font-size:12px;">
                 <div style="display:flex; justify-content:space-between;">
-                  <span style="color:var(--ink-mute);">Uptime Pinger:</span>
-                  <span style="font-weight:700; color:#27ae60;">Active (Every 10m)</span>
+                  <span style="color:var(--ink-mute);">Highrise In-Room:</span>
+                  <span style="font-weight:700;" id="active-bot-hr-status"><span style="color:#27ae60;">🟢 Connected</span></span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--ink-mute);">Auto Keep-Alive:</span>
+                  <span style="font-weight:700; color:#27ae60;">Active (Every 3m)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--ink-mute);">Fleet Mesh Pinger:</span>
+                  <span style="font-weight:700; color:#27ae60;">Active</span>
                 </div>
                 <div style="display:flex; justify-content:space-between;">
                   <span style="color:var(--ink-mute);">Radio Stream:</span>
@@ -2604,6 +2696,32 @@ DEPLOY_HTML = """<!DOCTYPE html>
                   <span style="font-weight:700; color:#27ae60;">Connected</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 1b: 24/7 Keep-Alive Shield -->
+        <div class="sidebar-card" style="border-left: 3.5px solid #27ae60;">
+          <div class="sidebar-card-header">
+            <span class="sidebar-card-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              24/7 Keep-Alive Shield
+            </span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:800; color:#27ae60; background:#e8f8f0; padding:2px 6px; border-radius:4px;">ENABLED</span>
+          </div>
+          <div style="font-size:12px; color:var(--ink-soft); line-height:1.5;">
+            <p style="margin-bottom:8px;">
+              Your bot automatically pings itself every <b>3 minutes</b> and syncs with the mesh fleet so Render free tier never spins down to sleep.
+            </p>
+            <div style="background:#f7f6ed; border:1px solid var(--border-dark); border-radius:8px; padding:8px 10px; margin-bottom:8px;">
+              <div style="font-size:11px; font-weight:700; color:var(--ink); margin-bottom:4px;">Bot Health URL:</div>
+              <div style="display:flex; gap:6px;">
+                <input type="text" id="sidebar-health-url" readonly value="" placeholder="Deploy bot to reveal" style="width:100%; font-family:'Geist Mono',monospace; font-size:11px; padding:4px 6px; border:1px solid var(--border-dark); border-radius:4px; background:#fff;">
+                <button type="button" onclick="copySidebarHealthUrl()" style="background:var(--ink); color:#fff; border:none; border-radius:4px; font-size:11px; font-weight:700; padding:4px 8px; cursor:pointer; white-space:nowrap;">Copy</button>
+              </div>
+            </div>
+            <div style="font-size:11px; color:var(--ink-mute);">
+              <b>Want 100% fail-safe backup?</b> Paste this URL into <a href="https://console.cron-job.org" target="_blank" style="color:var(--ink); font-weight:700; text-decoration:underline;">cron-job.org</a> or <a href="https://uptimerobot.com" target="_blank" style="color:var(--ink); font-weight:700; text-decoration:underline;">UptimeRobot</a> for free external monitoring.
             </div>
           </div>
         </div>
@@ -2864,29 +2982,50 @@ DEPLOY_HTML = """<!DOCTYPE html>
       const dot = document.getElementById('status-dot');
       dot.className = 'status-dot checking';
 
-      let targetUrl = '';
+      let targetHealthUrl = '';
+      let targetStatusUrl = '';
       let botInfo = null;
 
       if (latestDeployedBot) {
         botInfo = latestDeployedBot;
-        targetUrl = botInfo.health_url || (botInfo.service_url ? `${botInfo.service_url}/health` : '');
+        const base = (botInfo.render_service_url || botInfo.service_url || '').replace(/[/]+$/, '');
+        targetHealthUrl = botInfo.health_url || (base ? `${base}/health` : '');
+        targetStatusUrl = base ? `${base}/api/status` : targetHealthUrl;
+        
+        const healthInput = document.getElementById('sidebar-health-url');
+        if (healthInput && targetHealthUrl) {
+          healthInput.value = targetHealthUrl;
+        }
       } else {
-        // Check local server engine status
-        targetUrl = window.location.origin + '/health';
+        targetHealthUrl = window.location.origin + '/health';
+        targetStatusUrl = window.location.origin + '/api/status';
       }
 
       try {
-        const res = await fetch(`/api/bot-health-check?url=${encodeURIComponent(targetUrl)}`);
+        const res = await fetch(`/api/bot-health-check?url=${encodeURIComponent(targetStatusUrl || targetHealthUrl)}`);
         const data = await res.json();
         
         if (data.online) {
           dot.className = 'status-dot';
+          const botData = data.data || {};
+          
           if (botInfo) {
             document.getElementById('bot-status-idle').style.display = 'none';
             document.getElementById('bot-status-active').style.display = 'block';
             document.getElementById('active-bot-name').innerText = botInfo.room_title || 'Highrise Bot';
             document.getElementById('active-bot-room').innerText = `Room: ${botInfo.room_id || '--'}`;
-            document.getElementById('active-bot-ping').innerText = `Latency: ${data.latency_ms}ms • Operational`;
+            
+            const isHrConnected = botData.highrise_connected;
+            const hrStatusEl = document.getElementById('active-bot-hr-status');
+            if (hrStatusEl) {
+              if (isHrConnected) {
+                hrStatusEl.innerHTML = `<span style="color:#27ae60; font-weight:700;">🟢 In-Room (${botData.connection_uptime || 'Active'})</span>`;
+              } else {
+                hrStatusEl.innerHTML = `<span style="color:#e67e22; font-weight:700;">🟡 Connecting (Retry #${botData.reconnect_count || 1})</span>`;
+              }
+            }
+            
+            document.getElementById('active-bot-ping').innerText = `Latency: ${data.latency_ms}ms • Web Uptime: ${botData.uptime || 'Active'}`;
           } else {
             document.getElementById('bot-status-title').innerText = 'Engine Online & Ready';
             document.getElementById('bot-status-desc').innerText = `Cloud engine healthy (${data.latency_ms}ms). Fill in the form on the left to deploy your bot container.`;
@@ -2894,12 +3033,26 @@ DEPLOY_HTML = """<!DOCTYPE html>
         } else {
           dot.className = 'status-dot offline';
           if (botInfo) {
-            document.getElementById('active-bot-ping').innerText = `Building / Booting • Retrying...`;
+            document.getElementById('active-bot-ping').innerText = `Container Asleep / Starting • Retrying...`;
+            const hrStatusEl = document.getElementById('active-bot-hr-status');
+            if (hrStatusEl) {
+              hrStatusEl.innerHTML = `<span style="color:#e74c3c; font-weight:700;">🔴 Offline (Waking up...)</span>`;
+            }
           }
         }
       } catch (e) {
         dot.className = 'status-dot offline';
       }
+    }
+
+    function copySidebarHealthUrl() {
+      const input = document.getElementById('sidebar-health-url');
+      if (!input || !input.value) {
+        alert('Please deploy your bot first or wait for the service URL to generate.');
+        return;
+      }
+      navigator.clipboard.writeText(input.value);
+      alert('Copied Bot Health URL to clipboard! Paste it into cron-job.org or UptimeRobot.');
     }
 
     // ---------------- DEPLOY FORM SUBMISSION ----------------
@@ -3619,6 +3772,7 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
                 "env": "python",
                 "plan": "free",
                 "region": "oregon",
+                "healthCheckPath": "/health",
                 "envSpecificDetails": {
                     "buildCommand": "pip install -r requirements.txt",
                     "startCommand": "python main.py",
@@ -3713,7 +3867,7 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
                     }
                     if user_id:
                         bot_record["user_id"] = user_id
-                    asyncio.create_task(db.register_bot_in_db(bot_record))
+                    await db.register_bot_in_db(bot_record)
                 except Exception as db_err:
                     logger.warning(f"Failed to queue db.register_bot_in_db: {db_err}")
 
@@ -3806,7 +3960,8 @@ def create_app() -> web.Application:
 async def start_web_server(port: int) -> web.AppRunner:
     music_manager.start()
     broadcaster.start()
-    asyncio.create_task(run_master_pinger_loop())
+    asyncio.create_task(run_self_pinger_loop())
+    asyncio.create_task(run_mesh_keepalive_loop())
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()

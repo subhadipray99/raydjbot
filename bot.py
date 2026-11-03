@@ -18,6 +18,7 @@ from music import music_manager
 import outfit
 import position
 import tips
+from bot_status import BotStatus
 
 logger = logging.getLogger("HighriseBot")
 
@@ -368,6 +369,10 @@ class HighriseBot(BaseBot):
         """Triggered when connection to room is established."""
         self.session_metadata = session_metadata
         self.bot_id = str(session_metadata.user_id)
+        import time as _t
+        BotStatus.is_connected = True
+        BotStatus.bot_id = self.bot_id
+        BotStatus.connected_at = _t.time()
         logger.info(f"Bot successfully connected to room! Bot User ID: {self.bot_id}")
 
         # Start the music queue runner with this bot instance for room announcements
