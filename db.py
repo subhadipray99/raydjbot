@@ -98,7 +98,19 @@ async def save_room_attribute(room_id: str, field: str, value: Any) -> bool:
 # ---------------- BOTS REGISTRY PERSISTENCE ----------------
 
 async def register_bot_in_db(bot_data: dict) -> bool:
-    """Record newly deployed bot in Supabase bots table."""
+    """Record or update deployed bot in Supabase bots table without duplicating rows."""
+    srv_name = bot_data.get("render_service_name")
+    room_id = bot_data.get("room_id")
+    existing = None
+    if srv_name:
+        existing = await _get("bots", params={"render_service_name": f"eq.{srv_name}", "select": "id"})
+    if not existing and room_id:
+        existing = await _get("bots", params={"room_id": f"eq.{room_id}", "select": "id"})
+
+    if existing and isinstance(existing, list) and len(existing) > 0:
+        bot_data["id"] = existing[0]["id"]
+        bot_data["updated_at"] = "now()"
+
     return await _upsert("bots", bot_data)
 
 

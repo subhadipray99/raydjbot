@@ -2480,9 +2480,9 @@ DEPLOY_HTML = """<!DOCTYPE html>
 
           <!-- Result Card -->
           <div id="deploy-res" class="result-box">
-            <div style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700; margin-bottom:6px;">SUCCESS &bull; DEPLOYMENT INITIATED</div>
-            <h2 style="font-size:26px; font-weight:800; margin-bottom:8px;">Your Bot is Building on Render!</h2>
-            <p style="font-size:14px; color:var(--ink-soft); margin-bottom:16px;">
+            <div id="res-badge-kicker" style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:700; margin-bottom:6px;">SUCCESS &bull; DEPLOYMENT INITIATED</div>
+            <h2 id="res-title-h2" style="font-size:26px; font-weight:800; margin-bottom:8px;">Your Bot is Building on Render!</h2>
+            <p id="res-desc-p" style="font-size:14px; color:var(--ink-soft); margin-bottom:16px;">
               Render is compiling your container. It will join your Highrise room in 60-90 seconds.
             </p>
 
@@ -2885,6 +2885,22 @@ DEPLOY_HTML = """<!DOCTYPE html>
           document.getElementById('deploy-err').innerText = data.error || 'Deployment failed. Check credentials.';
           document.getElementById('deploy-err').style.display = 'block';
           return;
+        }
+
+        if (data.already_existed) {
+          const badgeEl = document.getElementById('res-badge-kicker');
+          if (badgeEl) badgeEl.innerText = 'CONNECTED • EXISTING BOT FOUND';
+          const titleEl = document.getElementById('res-title-h2');
+          if (titleEl) titleEl.innerText = 'Your Bot is Live on Render!';
+          const descEl = document.getElementById('res-desc-p');
+          if (descEl) descEl.innerText = data.message || 'Connected to your existing service on Render. Credentials and 24/7 keep-alive network synced.';
+        } else {
+          const badgeEl = document.getElementById('res-badge-kicker');
+          if (badgeEl) badgeEl.innerText = 'SUCCESS • DEPLOYMENT INITIATED';
+          const titleEl = document.getElementById('res-title-h2');
+          if (titleEl) titleEl.innerText = 'Your Bot is Building on Render!';
+          const descEl = document.getElementById('res-desc-p');
+          if (descEl) descEl.innerText = 'Render is compiling your container. It will join your Highrise room in 60-90 seconds.';
         }
 
         document.getElementById('res-stream-input').value = data.radio_url;
@@ -3291,17 +3307,43 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
         try:
             async with session.post("https://api.render.com/v1/services", headers=headers, json=create_payload, timeout=aiohttp.ClientTimeout(total=20)) as resp:
                 resp_json = await resp.json()
+                already_existed = False
+
                 if resp.status not in (200, 201):
                     err_msg = resp_json.get("message") or str(resp_json)
-                    return web.json_response({
-                        "success": False,
-                        "error": f"Render rejected service creation: {err_msg}"
-                    }, status=400)
+                    # Handle duplicate/existing service gracefully
+                    if "already in use" in err_msg.lower() or "already exists" in err_msg.lower() or resp.status == 409:
+                        already_existed = True
+                        logger.info(f"Render service '{slug}' already exists. Resolving existing service details...")
+                        srv_id = ""
+                        srv_name = slug
+                        srv_url = f"https://{slug}.onrender.com"
 
-                srv_data = resp_json
-                srv_id = srv_data.get("id", "")
-                srv_name = srv_data.get("name", slug)
-                srv_url = srv_data.get("serviceDetails", {}).get("url") or f"https://{srv_name}.onrender.com"
+                        # Query Render services list to find the exact service ID and URL
+                        try:
+                            async with session.get("https://api.render.com/v1/services?limit=100", headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as srv_list_resp:
+                                if srv_list_resp.status == 200:
+                                    srv_list_data = await srv_list_resp.json()
+                                    for item in srv_list_data:
+                                        svc = item.get("service") if isinstance(item, dict) and "service" in item else item
+                                        if svc.get("name") == slug:
+                                            srv_id = svc.get("id", "")
+                                            srv_name = svc.get("name", slug)
+                                            srv_url = svc.get("serviceDetails", {}).get("url") or f"https://{srv_name}.onrender.com"
+                                            logger.info(f"Found existing Render service ID: {srv_id}, URL: {srv_url}")
+                                            break
+                        except Exception as srv_find_err:
+                            logger.warning(f"Could not list services from Render: {srv_find_err}")
+                    else:
+                        return web.json_response({
+                            "success": False,
+                            "error": f"Render rejected service creation: {err_msg}"
+                        }, status=400)
+                else:
+                    srv_data = resp_json
+                    srv_id = srv_data.get("id", "")
+                    srv_name = srv_data.get("name", slug)
+                    srv_url = srv_data.get("serviceDetails", {}).get("url") or f"https://{srv_name}.onrender.com"
 
                 # Step 3: Firmly commit environment variables via dedicated endpoint
                 if srv_id:
@@ -3312,8 +3354,22 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
                             json=env_vars_list,
                             timeout=aiohttp.ClientTimeout(total=10),
                         )
+                        logger.info(f"Successfully synced env vars to Render service {srv_id}")
                     except Exception as ev_err:
                         logger.warning(f"Secondary env-vars sync notice: {ev_err}")
+
+                    # If service already existed, trigger a redeploy so latest code/env vars apply
+                    if already_existed:
+                        try:
+                            await session.post(
+                                f"https://api.render.com/v1/services/{srv_id}/deploys",
+                                headers=headers,
+                                json={"clearCache": "do_not_clear"},
+                                timeout=aiohttp.ClientTimeout(total=10),
+                            )
+                            logger.info(f"Triggered re-deploy for existing service {srv_name} ({srv_id})")
+                        except Exception as dep_err:
+                            logger.debug(f"Redeploy trigger notice: {dep_err}")
 
                 # Step 4: Automatically enroll in 10-minute master keep-alive network
                 register_bot_url(srv_url)
@@ -3391,6 +3447,8 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
                     "cron_job_created": cron_job_created,
                     "cron_job_notice": cron_job_notice,
                     "master_pinger_enrolled": True,
+                    "already_existed": already_existed,
+                    "message": f"Connected to existing Render service '{srv_name}'. Bot credentials and keep-alive updated!" if already_existed else "Bot container created successfully on Render."
                 })
         except Exception as e:
             return web.json_response({"success": False, "error": f"Error communicating with Render: {e}"}, status=500)
