@@ -974,65 +974,6 @@ LANDING_HTML = """<!DOCTYPE html>
       transform: scale(1.08);
     }
 
-    .hero-creator-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      background: #ffffff;
-      border: 1.5px solid var(--ink);
-      padding: 6px 16px 6px 6px;
-      border-radius: 100px;
-      box-shadow: 3px 3px 0 var(--ink);
-      margin-bottom: 24px;
-      text-decoration: none;
-      transition: all 0.2s ease;
-      width: fit-content;
-    }
-    .hero-creator-pill:hover {
-      transform: translateY(-2px);
-      box-shadow: 4px 4px 0 var(--ink);
-    }
-    .hero-creator-img {
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 1.5px solid var(--ink);
-      background: var(--bg);
-    }
-    .hero-creator-meta {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.25;
-    }
-    .hero-creator-label {
-      font-family: 'Geist Mono', monospace;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--ink-mute);
-    }
-    .hero-creator-links {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      font-weight: 800;
-    }
-    .hero-creator-hr {
-      color: var(--ink);
-    }
-    .hero-creator-ig {
-      color: #e1306c;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-weight: 700;
-    }
-    .hero-creator-ig:hover { text-decoration: underline; }
-
     .nav-ig-pill {
       display: inline-flex;
       align-items: center;
@@ -1821,36 +1762,20 @@ LANDING_HTML = """<!DOCTYPE html>
 
   <!-- Hero Section -->
   <header class="hero-wrap">
-    <!-- Rotating Circular Stamp Seal with Avatar -->
+    <!-- Rotating Circular Stamp Seal with Highrise HR Logo -->
     <div class="hero-badge-stamp">
       <div class="spin-ring">
         <svg viewBox="0 0 100 100" style="width:100%; height:100%">
           <defs>
             <path id="circle-path" d="M50,50 m-40,0 a40,40 0 1,1 80,0 a40,40 0 1,1 -80,0"></path>
           </defs>
-          <text style="font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:2px; fill:var(--ink); text-transform:uppercase; font-weight:800;">
-            <textPath href="#circle-path" startOffset="0">AUTONOMOUS BUTLER &bull; @SHUVODIP &bull; HIGHRISE 24/7 &bull; </textPath>
+          <text style="font-family:'Geist Mono',monospace; font-size:8.4px; letter-spacing:2.1px; fill:var(--ink); text-transform:uppercase; font-weight:800;">
+            <textPath href="#circle-path" startOffset="0">AUTONOMOUS BUTLER &bull; 24/7 ONLINE &bull; HIGHRISE &bull; </textPath>
           </text>
         </svg>
       </div>
       <div class="stamp-avatar-wrap">
-        <img src="https://cdn.highrisegame.com/user/63f3bbdf56dab79de656aea7/1a1a294c813_avatar.png" alt="@shuvodip" class="stamp-avatar-img">
-      </div>
-    </div>
-
-    <!-- Creator Pill in Hero -->
-    <div class="hero-creator-pill">
-      <img src="https://cdn.highrisegame.com/user/63f3bbdf56dab79de656aea7/1a1a294c813_avatar.png" alt="@shuvodip" class="hero-creator-img">
-      <div class="hero-creator-meta">
-        <span class="hero-creator-label">Architect & Creator</span>
-        <div class="hero-creator-links">
-          <span class="hero-creator-hr"><b>@shuvodip</b> on Highrise</span>
-          <span style="opacity:0.4;">&bull;</span>
-          <a href="https://www.instagram.com/shuvodipray99/" target="_blank" class="hero-creator-ig">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-            @shuvodipray99
-          </a>
-        </div>
+        <img src="/hr-logo.jpg" alt="Highrise" class="stamp-avatar-img" onerror="this.src='https://chainplay.gg/wp-content/uploads/2025/10/highrise_20221225172806.jpeg'">
       </div>
     </div>
 
@@ -5852,6 +5777,7 @@ def create_app() -> web.Application:
             "android-chrome-192x192.png",
             "android-chrome-512x512.png",
             "site.webmanifest",
+            "hr-logo.jpg",
         ]:
             fpath = os.path.join(STATIC_DIR, fav_file)
             if os.path.isfile(fpath):
