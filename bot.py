@@ -239,14 +239,32 @@ class HighriseBot(BaseBot):
         self.user_emote_loops: dict[str, asyncio.Task] = {}
         self.welcomed_users: set[str] = set()
 
-    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 1.0) -> None:
-        """Wait briefly after room connect for world registration, then move bot to saved spot."""
+    async def _apply_saved_position_delayed(self, pos: Position | AnchorPosition, delay: float = 2.5) -> None:
+        """Wait after room connect for world registration, then move bot to saved spot and verify."""
         await asyncio.sleep(delay)
         success = await self.move_bot_to(pos)
         if success:
             logger.info(f"Successfully relocated bot to saved position: {position.format_position(pos)}")
         else:
             logger.warning(f"Failed to relocate bot to saved position: {position.format_position(pos)}")
+
+        # Verification step: after 1.5 seconds, check if bot actually reached the position; retry if server dropped it
+        await asyncio.sleep(1.5)
+        try:
+            bot_pos = None
+            resp = await self.highrise.get_room_users()
+            if isinstance(resp, GetRoomUsersRequest.GetRoomUsersResponse):
+                for r_u, r_p in resp.content:
+                    if r_u.id == self.bot_id:
+                        bot_pos = r_p
+                        break
+            if bot_pos and isinstance(pos, Position) and isinstance(bot_pos, Position):
+                dist = ((bot_pos.x - pos.x)**2 + (bot_pos.z - pos.z)**2)**0.5
+                if dist > 1.0:
+                    logger.info(f"Bot position drift detected (dist={dist:.2f}m). Re-applying saved position...")
+                    await self.move_bot_to(pos)
+        except Exception as v_err:
+            logger.debug(f"Position verification notice: {v_err}")
 
     async def _subscription_watchdog_loop(self) -> None:
         """Periodically check if this room's hosting subscription is still active."""
@@ -307,17 +325,17 @@ class HighriseBot(BaseBot):
     async def move_bot_to(self, target_pos: Position | AnchorPosition) -> bool:
         """Move or teleport the bot to target position, falling back gracefully to walk_to."""
         try:
-            if isinstance(target_pos, Position) and self.bot_id:
-                try:
-                    await self.highrise.teleport(self.bot_id, target_pos)
-                    return True
-                except Exception as tp_err:
-                    logger.warning(f"Teleport bot failed ({tp_err}), falling back to walk_to")
-            if isinstance(target_pos, Position):
+            if isinstance(target_pos, AnchorPosition):
                 await self.highrise.walk_to(target_pos)
                 return True
-            elif isinstance(target_pos, AnchorPosition) and self.bot_id:
-                await self.highrise.teleport(self.bot_id, target_pos)
+            elif isinstance(target_pos, Position):
+                if self.bot_id:
+                    try:
+                        await self.highrise.teleport(self.bot_id, target_pos)
+                        return True
+                    except Exception as tp_err:
+                        logger.warning(f"Teleport bot failed ({tp_err}), falling back to walk_to")
+                await self.highrise.walk_to(target_pos)
                 return True
         except Exception as e:
             logger.error(f"Error moving bot to {target_pos}: {e}")
@@ -501,6 +519,11 @@ class HighriseBot(BaseBot):
             if pos:
                 self.user_positions[user.id] = pos
             if user.id == self.bot_id:
+                # Bot avatar officially spawned in room by Highrise server
+                saved_pos = position.get_saved_position(config.ROOM_ID)
+                if saved_pos:
+                    logger.info("Bot avatar spawned in room. Triggering relocation to saved position...")
+                    asyncio.create_task(self._apply_saved_position_delayed(saved_pos, delay=1.5))
                 return
 
             self.welcomed_users.add(user.id)
