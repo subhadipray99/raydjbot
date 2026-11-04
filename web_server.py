@@ -264,9 +264,9 @@ async def handle_casino_api(request: web.Request) -> web.Response:
 async def handle_root(request: web.Request) -> web.Response:
     """Root homepage: serves SaaS portal to browsers and JSON status to API clients."""
     accept_header = request.headers.get("Accept", "")
-    if "text/html" in accept_header and request.query.get("format") != "json":
-        return await handle_landing_page(request)
-    return await handle_status_api(request)
+    if request.query.get("format") == "json" or (accept_header == "application/json" and "text/html" not in accept_header):
+        return await handle_status_api(request)
+    return await handle_landing_page(request)
 
 
 async def handle_health(request: web.Request) -> web.Response:
@@ -285,6 +285,12 @@ PLAYER_HTML = """<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Highrise Live Room Jukebox</title>
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="shortcut icon" href="/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -764,6 +770,13 @@ LANDING_HTML = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ZevRay &bull; Autonomous 24/7 Highrise Butler & DJ</title>
   
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="shortcut icon" href="/favicon.ico">
+  
   <!-- Cloudstudio Typography: Bricolage Grotesque + Geist Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -939,6 +952,106 @@ LANDING_HTML = """<!DOCTYPE html>
       height: 36%;
       border-radius: 50%;
       background: var(--ink);
+    }
+    .stamp-avatar-wrap {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stamp-avatar-img {
+      width: 58%;
+      height: 58%;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--ink);
+      box-shadow: 0 4px 12px rgba(14, 14, 12, 0.22);
+      background: #ffffff;
+      transition: transform 0.3s ease;
+    }
+    .stamp-avatar-img:hover {
+      transform: scale(1.08);
+    }
+
+    .hero-creator-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      padding: 6px 16px 6px 6px;
+      border-radius: 100px;
+      box-shadow: 3px 3px 0 var(--ink);
+      margin-bottom: 24px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      width: fit-content;
+    }
+    .hero-creator-pill:hover {
+      transform: translateY(-2px);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+    .hero-creator-img {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid var(--ink);
+      background: var(--bg);
+    }
+    .hero-creator-meta {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.25;
+    }
+    .hero-creator-label {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ink-mute);
+    }
+    .hero-creator-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .hero-creator-hr {
+      color: var(--ink);
+    }
+    .hero-creator-ig {
+      color: #e1306c;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 700;
+    }
+    .hero-creator-ig:hover { text-decoration: underline; }
+
+    .nav-ig-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 100px;
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      text-decoration: none;
+      box-shadow: 2px 2px 0 var(--ink);
+      transition: all 0.15s ease;
+    }
+    .nav-ig-pill:hover {
+      background: var(--bg);
+      transform: translate(-1px, -1px);
+      box-shadow: 3px 3px 0 var(--ink);
     }
 
     .hero-kicker {
@@ -1255,6 +1368,286 @@ LANDING_HTML = """<!DOCTYPE html>
       font-weight: 500;
     }
 
+    /* ---------------- PRICING & HOSTING PLANS STYLES ---------------- */
+    .currency-pill-box {
+      display: inline-flex;
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      border-radius: 100px;
+      padding: 3px;
+      gap: 4px;
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+    .currency-pill-btn {
+      border: none;
+      background: transparent;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 800;
+      font-family: inherit;
+      color: var(--ink-mute);
+      border-radius: 100px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .currency-pill-btn.active {
+      background: var(--ink);
+      color: var(--accent);
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 10px;
+    }
+    @media (max-width: 860px) {
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .plan-card {
+      background: #ffffff;
+      border: 1.5px solid var(--border-dark);
+      border-radius: 20px;
+      padding: 26px 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      transition: all 0.2s cubic-bezier(.34, 1.56, .64, 1);
+    }
+    .plan-card:hover {
+      border-color: var(--ink);
+      transform: translateY(-3px);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+    .plan-card.popular {
+      border: 2px solid var(--ink);
+      box-shadow: 6px 6px 0 var(--ink);
+      background: #faf8f0;
+    }
+    .plan-badge {
+      position: absolute;
+      top: -12px;
+      right: 18px;
+      background: var(--bg);
+      color: var(--ink);
+      border: 1.5px solid var(--ink);
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 9px;
+      border-radius: 100px;
+      box-shadow: 1.5px 1.5px 0 var(--ink);
+    }
+    .plan-badge-soon {
+      background: #f1f5f9;
+      color: #64748b;
+      border: 1.5px solid #cbd5e1;
+      box-shadow: none;
+    }
+    .plan-name {
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--ink-soft);
+      margin-bottom: 8px;
+    }
+    .plan-price-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      margin-bottom: 16px;
+    }
+    .plan-price {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--ink);
+      line-height: 1;
+    }
+    .plan-duration {
+      font-size: 13px;
+      color: var(--ink-mute);
+      font-family: 'Geist Mono', monospace;
+    }
+    .plan-features {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 24px 0;
+      font-size: 13px;
+      color: var(--ink-soft);
+      line-height: 1.55;
+    }
+    .plan-features li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .btn-plan {
+      width: 100%;
+      border: 2px solid var(--ink);
+      background: #ffffff;
+      color: var(--ink);
+      font-weight: 800;
+      font-size: 14px;
+      font-family: inherit;
+      padding: 13px 16px;
+      border-radius: 14px;
+      cursor: pointer;
+      box-shadow: 3px 3px 0 var(--ink);
+      transition: all 0.15s ease;
+      text-align: center;
+      text-decoration: none;
+      display: block;
+      box-sizing: border-box;
+    }
+    .btn-plan:hover {
+      background: var(--bg);
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+    .btn-plan.popular {
+      background: var(--ink);
+      color: var(--accent);
+    }
+    .btn-plan.popular:hover {
+      background: #252520;
+    }
+    .btn-plan:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      background: #f1f5f9;
+      color: #94a3b8;
+      box-shadow: none;
+      border-color: #cbd5e1;
+      transform: none;
+    }
+
+    /* Highrise Gold Banner */
+    .hr-gold-banner {
+      margin-top: 36px;
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      border-radius: 20px;
+      padding: 24px 28px;
+      box-shadow: 6px 6px 0 var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .hr-gold-banner-badge {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: var(--accent);
+      border: 2px solid var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 3px 3px 0 var(--ink);
+      flex-shrink: 0;
+    }
+
+    /* Creator Spotlight Card */
+    .creator-spotlight-card {
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      border-radius: 24px;
+      padding: clamp(24px, 4vw, 44px);
+      box-shadow: 8px 8px 0 var(--ink);
+      display: flex;
+      gap: clamp(24px, 4vw, 48px);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .creator-spotlight-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .creator-spotlight-avatar {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid var(--ink);
+      box-shadow: 5px 5px 0 var(--ink);
+      background: var(--bg);
+    }
+    .creator-spotlight-badge {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      font-weight: 800;
+      background: var(--bg);
+      border: 1.5px solid var(--ink);
+      padding: 3px 10px;
+      border-radius: 100px;
+      box-shadow: 2px 2px 0 var(--ink);
+      text-transform: uppercase;
+    }
+    .creator-spotlight-right {
+      flex: 1;
+      min-width: 280px;
+    }
+    .creator-contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+    .contact-card-mini {
+      background: #faf8f0;
+      border: 1.5px solid var(--border-dark);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.2s ease;
+    }
+    .contact-card-mini.link-card:hover {
+      border-color: var(--ink);
+      background: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .contact-card-icon {
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .contact-card-text {
+      line-height: 1.3;
+    }
+    .contact-card-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink-mute);
+      text-transform: uppercase;
+      font-family: 'Geist Mono', monospace;
+    }
+    .contact-card-val {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--ink);
+      margin-top: 2px;
+    }
+    .contact-card-hint {
+      font-size: 11px;
+      color: var(--ink-mute);
+      margin-top: 2px;
+    }
+
     /* ---------------- FOOTER ---------------- */
     .cs-footer {
       padding: 48px clamp(18px, 4vw, 44px);
@@ -1409,11 +1802,16 @@ LANDING_HTML = """<!DOCTYPE html>
     <div class="nav-links">
       <a href="#work" class="nav-link">What We Do</a>
       <a href="#how" class="nav-link">How It Works</a>
+      <a href="#pricing" class="nav-link">Plans & Gold</a>
       <a href="/player" target="_blank" class="nav-link">Live Jukebox</a>
-      <a href="#faq" class="nav-link">FAQ</a>
+      <a href="#contact" class="nav-link">Contact</a>
     </div>
 
-    <div style="display: flex; align-items: center; gap: 12px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <a href="https://www.instagram.com/shuvodipray99/" target="_blank" class="nav-ig-pill" title="Follow @shuvodipray99 on Instagram">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+        <span>@shuvodipray99</span>
+      </a>
       <button class="nav-link" onclick="openAuthModal()" style="background:none; border:none; cursor:pointer;" id="nav-auth-btn">Sign In</button>
       <a href="/deploy" class="btn-pill-ink">
         <span>Deploy Bot &rarr;</span>
@@ -1423,20 +1821,36 @@ LANDING_HTML = """<!DOCTYPE html>
 
   <!-- Hero Section -->
   <header class="hero-wrap">
-    <!-- Rotating Circular Stamp Seal -->
+    <!-- Rotating Circular Stamp Seal with Avatar -->
     <div class="hero-badge-stamp">
       <div class="spin-ring">
         <svg viewBox="0 0 100 100" style="width:100%; height:100%">
           <defs>
             <path id="circle-path" d="M50,50 m-40,0 a40,40 0 1,1 80,0 a40,40 0 1,1 -80,0"></path>
           </defs>
-          <text style="font-family:'Geist Mono',monospace; font-size:8.4px; letter-spacing:2.1px; fill:var(--ink); text-transform:uppercase; font-weight:700;">
-            <textPath href="#circle-path" startOffset="0">AUTONOMOUS BUTLER &bull; 24/7 ONLINE &bull; HIGHRISE &bull; </textPath>
+          <text style="font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:2px; fill:var(--ink); text-transform:uppercase; font-weight:800;">
+            <textPath href="#circle-path" startOffset="0">AUTONOMOUS BUTLER &bull; @SHUVODIP &bull; HIGHRISE 24/7 &bull; </textPath>
           </text>
         </svg>
       </div>
-      <div class="stamp-dot">
-        <span></span>
+      <div class="stamp-avatar-wrap">
+        <img src="https://cdn.highrisegame.com/user/63f3bbdf56dab79de656aea7/1a1a294c813_avatar.png" alt="@shuvodip" class="stamp-avatar-img">
+      </div>
+    </div>
+
+    <!-- Creator Pill in Hero -->
+    <div class="hero-creator-pill">
+      <img src="https://cdn.highrisegame.com/user/63f3bbdf56dab79de656aea7/1a1a294c813_avatar.png" alt="@shuvodip" class="hero-creator-img">
+      <div class="hero-creator-meta">
+        <span class="hero-creator-label">Architect & Creator</span>
+        <div class="hero-creator-links">
+          <span class="hero-creator-hr"><b>@shuvodip</b> on Highrise</span>
+          <span style="opacity:0.4;">&bull;</span>
+          <a href="https://www.instagram.com/shuvodipray99/" target="_blank" class="hero-creator-ig">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+            @shuvodipray99
+          </a>
+        </div>
       </div>
     </div>
 
@@ -1622,7 +2036,170 @@ LANDING_HTML = """<!DOCTYPE html>
     </div>
   </section>
 
-  <!-- Section 03: FAQ -->
+  <!-- Section 03: Hosting Plans & Highrise Gold Plans -->
+  <section class="section-wrap" id="pricing">
+    <div class="sec-kicker">
+      <span class="hero-kicker-dot"></span>
+      <span>Hosting Plans &bull; Real-time Activation</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:28px;">
+      <div>
+        <h2 class="sec-h2" style="margin-bottom:8px;">Choose your room's hosting plan.</h2>
+        <p style="color:var(--ink-soft); font-size:16px; max-width:620px;">
+          Pay with standard methods (UPI, Cards, PayPal) or directly with <b>Highrise Gold</b>. 100% manual renewal &mdash; no surprise recurring charges.
+        </p>
+      </div>
+      <!-- Currency Switcher -->
+      <div class="currency-pill-box">
+        <button type="button" id="lp-curr-inr" class="currency-pill-btn active" onclick="setLandingCurrency('INR')">🇮🇳 INR (₹)</button>
+        <button type="button" id="lp-curr-usd" class="currency-pill-btn" onclick="setLandingCurrency('USD')">🌐 USD ($)</button>
+        <button type="button" id="lp-curr-hrg" class="currency-pill-btn" onclick="setLandingCurrency('HRG')">🪙 HR Gold</button>
+      </div>
+    </div>
+
+    <div class="pricing-grid">
+      <!-- Weekly -->
+      <div class="plan-card">
+        <div>
+          <div class="plan-name">Weekly Access</div>
+          <div class="plan-price-wrap">
+            <span class="plan-price" id="lp-price-weekly">₹78</span>
+            <span class="plan-duration">/ 7 days</span>
+          </div>
+          <ul class="plan-features">
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> 24/7 Cloud Bot on Render</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> In-Room MP3 Radio Stream</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> 68+ Highrise Emote Loops</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Dynamic Multi-Floor Teleports</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> In-Room Blackjack Casino</li>
+          </ul>
+        </div>
+        <a href="/deploy" id="lp-btn-weekly" class="btn-plan">
+          Get 7 Days Access &rarr;
+        </a>
+      </div>
+
+      <!-- Monthly (Popular) -->
+      <div class="plan-card popular">
+        <div class="plan-badge">MOST POPULAR</div>
+        <div>
+          <div class="plan-name">Monthly Access</div>
+          <div class="plan-price-wrap">
+            <span class="plan-price" id="lp-price-monthly">₹479</span>
+            <span class="plan-duration">/ 30 days</span>
+          </div>
+          <ul class="plan-features">
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> <b>Everything in Weekly</b></li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> 30-Day Uninterrupted Cloud Uptime</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Master Keep-Alive Priority Pings</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Permanent Outfits & Position Memory</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> VIP Support from @shuvodip</li>
+          </ul>
+        </div>
+        <a href="/deploy" id="lp-btn-monthly" class="btn-plan popular">
+          Get 30 Days Access &rarr;
+        </a>
+      </div>
+
+      <!-- Annual Pass -->
+      <div class="plan-card">
+        <div class="plan-badge plan-badge-soon">COMING SOON</div>
+        <div>
+          <div class="plan-name" style="color:#64748b;">Annual Pass</div>
+          <div class="plan-price-wrap">
+            <span class="plan-price" style="font-size:22px; color:#64748b;">Coming Soon</span>
+            <span class="plan-duration">/ 365 days</span>
+          </div>
+          <ul class="plan-features" style="color:#64748b;">
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Maximum Value Yearly Pass</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Dedicated Transcoding Node</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Priority Custom Feature Requests</li>
+          </ul>
+        </div>
+        <button type="button" class="btn-plan" disabled>Coming Soon</button>
+      </div>
+    </div>
+
+    <!-- Highrise Gold Highlight Banner -->
+    <div class="hr-gold-banner">
+      <div class="hr-gold-banner-badge">
+        <span style="font-size:32px;">🪙</span>
+      </div>
+      <div style="flex:1;">
+        <div style="font-weight:800; font-size:18px; margin-bottom:4px; display:flex; align-items:center; gap:8px;">
+          Prefer to pay in Highrise Gold?
+          <span style="background:var(--accent); font-size:11px; font-weight:800; padding:2px 8px; border-radius:100px; border:1px solid var(--ink);">IN-GAME CURRENCY</span>
+        </div>
+        <div style="font-size:14px; color:var(--ink-soft); line-height:1.5;">
+          You can buy any hosting plan with Highrise Gold: <b>Weekly = 400 Gold</b> &bull; <b>Monthly = 1,000 Gold</b>.<br>
+          Say contact <b>@shuvodip</b> on HR (or whisper in-game) or DM on Instagram <a href="https://www.instagram.com/shuvodipray99/" target="_blank" style="color:var(--ink); font-weight:800; text-decoration:underline;">@shuvodipray99</a> to activate your plan right away!
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a href="https://www.instagram.com/shuvodipray99/" target="_blank" class="btn-pill-ink" style="font-size:14px; padding:10px 18px;">
+          <span>DM on Instagram &rarr;</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 04: Creator Spotlight & Contact -->
+  <section class="section-wrap" id="contact" style="background:#fdfcf7; border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+    <div class="sec-kicker">
+      <span class="hero-kicker-dot"></span>
+      <span>Creator &bull; Support &bull; Direct Contact</span>
+    </div>
+    <h2 class="sec-h2">Talk to the architect behind ZevRay.</h2>
+
+    <div class="creator-spotlight-card">
+      <div class="creator-spotlight-left">
+        <img src="https://cdn.highrisegame.com/user/63f3bbdf56dab79de656aea7/1a1a294c813_avatar.png" alt="@shuvodip" class="creator-spotlight-avatar">
+        <div class="creator-spotlight-badge">FOUNDER & DEVELOPER</div>
+      </div>
+      <div class="creator-spotlight-right">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+          <h3 style="font-size:26px; font-weight:800; letter-spacing:-0.02em; margin:0;">@shuvodip</h3>
+          <span style="background:#dcfce7; color:#15803d; font-family:'Geist Mono',monospace; font-size:11px; font-weight:700; padding:2px 8px; border-radius:100px; border:1px solid #16a34a;">VERIFIED CREATOR</span>
+        </div>
+        <p style="font-size:15px; color:var(--ink-soft); line-height:1.6; margin-bottom:18px;">
+          Hey! I built ZevRay to give Highrise creators a reliable, beautiful, and fully autonomous 24/7 room presence. From synchronous MP3 in-room sound and multi-floor teleports to real-time blackjack casino games and wardrobe sync, I maintain and update the platform continuously.
+        </p>
+
+        <div class="creator-contact-grid">
+          <div class="contact-card-mini">
+            <div class="contact-card-icon">🪙</div>
+            <div class="contact-card-text">
+              <div class="contact-card-label">Highrise Gold Orders</div>
+              <div class="contact-card-val">Contact <b>@shuvodip</b> in HR</div>
+              <div class="contact-card-hint">Weekly: 400G &bull; Monthly: 1000G</div>
+            </div>
+          </div>
+
+          <a href="https://www.instagram.com/shuvodipray99/" target="_blank" class="contact-card-mini link-card">
+            <div class="contact-card-icon" style="color:#e1306c;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+            </div>
+            <div class="contact-card-text">
+              <div class="contact-card-label">Instagram Direct Message</div>
+              <div class="contact-card-val">@shuvodipray99 &rarr;</div>
+              <div class="contact-card-hint">DM for Gold activations & support</div>
+            </div>
+          </a>
+
+          <div class="contact-card-mini">
+            <div class="contact-card-icon">⚡</div>
+            <div class="contact-card-text">
+              <div class="contact-card-label">Highrise Room Testing</div>
+              <div class="contact-card-val">Live In-Game Room</div>
+              <div class="contact-card-hint">Test Radio, /bj & /emotes live</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 05: FAQ -->
   <section class="section-wrap" id="faq">
     <div class="sec-kicker">
       <span class="hero-kicker-dot"></span>
@@ -1676,12 +2253,15 @@ LANDING_HTML = """<!DOCTYPE html>
   <footer class="cs-footer">
     <div class="cs-footer-inner">
       <div>
-        <b>zevray*</b> &bull; Autonomous Highrise Platform &bull; &copy; 2026 All rights reserved.
+        <b>zevray*</b> &bull; Built by <a href="https://www.instagram.com/shuvodipray99/" target="_blank" style="color:var(--ink); font-weight:800; text-decoration:none;">@shuvodip</a> on Highrise &bull; &copy; 2026 All rights reserved.
       </div>
       <div class="footer-nav">
+        <a href="#work">What We Do</a>
+        <a href="#pricing">Plans & Gold</a>
+        <a href="#contact">Contact</a>
+        <a href="https://www.instagram.com/shuvodipray99/" target="_blank" style="color:#e1306c; font-weight:700;">Instagram (@shuvodipray99)</a>
         <a href="/deploy">Deployer</a>
         <a href="/player" target="_blank">Jukebox</a>
-        <a href="https://create.highrise.game" target="_blank">Highrise Developer Hub</a>
       </div>
     </div>
   </footer>
@@ -1838,6 +2418,39 @@ LANDING_HTML = """<!DOCTYPE html>
         }
       });
     }
+    let landingCurrency = 'INR';
+    function setLandingCurrency(curr) {
+      landingCurrency = curr;
+      const inrBtn = document.getElementById('lp-curr-inr');
+      const usdBtn = document.getElementById('lp-curr-usd');
+      const hrgBtn = document.getElementById('lp-curr-hrg');
+      if (inrBtn) inrBtn.classList.toggle('active', curr === 'INR');
+      if (usdBtn) usdBtn.classList.toggle('active', curr === 'USD');
+      if (hrgBtn) hrgBtn.classList.toggle('active', curr === 'HRG');
+
+      const weeklyPriceEl = document.getElementById('lp-price-weekly');
+      const monthlyPriceEl = document.getElementById('lp-price-monthly');
+      const weeklyBtn = document.getElementById('lp-btn-weekly');
+      const monthlyBtn = document.getElementById('lp-btn-monthly');
+
+      if (curr === 'INR') {
+        if (weeklyPriceEl) weeklyPriceEl.innerHTML = '₹78';
+        if (monthlyPriceEl) monthlyPriceEl.innerHTML = '₹479';
+        if (weeklyBtn) { weeklyBtn.innerHTML = 'Get 7 Days Access &rarr;'; weeklyBtn.href = '/deploy'; weeklyBtn.target = '_self'; }
+        if (monthlyBtn) { monthlyBtn.innerHTML = 'Get 30 Days Access &rarr;'; monthlyBtn.href = '/deploy'; monthlyBtn.target = '_self'; }
+      } else if (curr === 'USD') {
+        if (weeklyPriceEl) weeklyPriceEl.innerHTML = '$1.30';
+        if (monthlyPriceEl) monthlyPriceEl.innerHTML = '$5.70';
+        if (weeklyBtn) { weeklyBtn.innerHTML = 'Get 7 Days Access &rarr;'; weeklyBtn.href = '/deploy'; weeklyBtn.target = '_self'; }
+        if (monthlyBtn) { monthlyBtn.innerHTML = 'Get 30 Days Access &rarr;'; monthlyBtn.href = '/deploy'; monthlyBtn.target = '_self'; }
+      } else if (curr === 'HRG') {
+        if (weeklyPriceEl) weeklyPriceEl.innerHTML = '400 <span style="font-size:18px; font-weight:700;">Gold</span>';
+        if (monthlyPriceEl) monthlyPriceEl.innerHTML = '1,000 <span style="font-size:18px; font-weight:700;">Gold</span>';
+        if (weeklyBtn) { weeklyBtn.innerHTML = '🪙 Buy for 400 Gold (Contact @shuvodip) &rarr;'; weeklyBtn.href = 'https://www.instagram.com/shuvodipray99/'; weeklyBtn.target = '_blank'; }
+        if (monthlyBtn) { monthlyBtn.innerHTML = '🪙 Buy for 1,000 Gold (Contact @shuvodip) &rarr;'; monthlyBtn.href = 'https://www.instagram.com/shuvodipray99/'; monthlyBtn.target = '_blank'; }
+      }
+    }
+
     checkUser();
   </script>
 </body>
@@ -1851,6 +2464,13 @@ DEPLOY_HTML = """<!DOCTYPE html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Deploy Bot &bull; ZevRay Highrise Cloud Engine</title>
+  
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="shortcut icon" href="/favicon.ico">
   
   <!-- Cloudstudio Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2444,6 +3064,50 @@ DEPLOY_HTML = """<!DOCTYPE html>
       flex-wrap: wrap;
       gap: 8px;
     }
+    .nav-ig-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 100px;
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      text-decoration: none;
+      box-shadow: 2px 2px 0 var(--ink);
+      transition: all 0.15s ease;
+    }
+    .nav-ig-pill:hover {
+      background: var(--bg);
+      transform: translate(-1px, -1px);
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .hr-gold-banner {
+      margin-top: 18px;
+      background: #ffffff;
+      border: 2px solid var(--ink);
+      border-radius: 16px;
+      padding: 18px 22px;
+      box-shadow: 4px 4px 0 var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .hr-gold-banner-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--accent);
+      border: 1.5px solid var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 2px 2px 0 var(--ink);
+      flex-shrink: 0;
+    }
 
     /* Lock Banners & Form States */
     .deploy-locked-banner {
@@ -2760,6 +3424,10 @@ DEPLOY_HTML = """<!DOCTYPE html>
     <a href="/" class="brand-link">zevray<span>*</span></a>
     <div style="display: flex; gap: 14px; align-items: center;">
       <a href="/" class="back-link">&larr; Home</a>
+      <a href="https://www.instagram.com/shuvodipray99/" target="_blank" class="nav-ig-pill" title="Follow @shuvodipray99 on Instagram">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+        <span>@shuvodipray99</span>
+      </a>
       
       <!-- Logged Out Google Auth Button in Nav -->
       <button type="button" class="btn-google-auth-nav" id="nav-login-google-btn" onclick="signInWithGoogle()" style="display:none;">
@@ -2884,6 +3552,7 @@ DEPLOY_HTML = """<!DOCTYPE html>
             <div class="currency-pill-box">
               <button type="button" id="curr-inr-btn" class="currency-pill-btn active" onclick="setCurrency('INR')">🇮🇳 INR (₹)</button>
               <button type="button" id="curr-usd-btn" class="currency-pill-btn" onclick="setCurrency('USD')">🌐 USD ($)</button>
+              <button type="button" id="curr-hrg-btn" class="currency-pill-btn" onclick="setCurrency('HRG')">🪙 HR Gold</button>
             </div>
           </div>
 
@@ -2955,6 +3624,26 @@ DEPLOY_HTML = """<!DOCTYPE html>
           <div class="payment-notice-bar" id="payment-notice-bar">
             <span id="payment-method-notice">⚡ <b>Razorpay:</b> UPI (GPay, PhonePe, Paytm), All Cards, Netbanking & Wallets</span>
             <span style="font-weight:700;">🔒 Instant Activation &bull; Zero Recurring Fees</span>
+          </div>
+
+          <!-- Permanent Highrise Gold Callout Banner -->
+          <div class="hr-gold-banner">
+            <div class="hr-gold-banner-badge">
+              <span style="font-size:28px;">🪙</span>
+            </div>
+            <div style="flex:1;">
+              <div style="font-weight:800; font-size:15px; margin-bottom:2px; display:flex; align-items:center; gap:8px;">
+                Pay with Highrise Gold
+                <span style="background:var(--accent); font-size:10px; font-weight:800; padding:1px 7px; border-radius:100px; border:1px solid var(--ink);">IN-GAME</span>
+              </div>
+              <div style="font-size:13px; color:var(--ink-soft); line-height:1.45;">
+                Hosting is available in Highrise Gold: <b>Weekly = 400 Gold</b> &bull; <b>Monthly = 1,000 Gold</b>.<br>
+                Say contact <b>@shuvodip</b> on HR or DM on Instagram <a href="https://www.instagram.com/shuvodipray99/" target="_blank" style="color:var(--ink); font-weight:800; text-decoration:underline;">@shuvodipray99</a> for instant activation!
+              </div>
+            </div>
+            <button type="button" onclick="openGoldModal('weekly', 400)" class="btn-sidebar-sync" style="background:var(--ink); color:var(--accent); padding:10px 18px; font-size:13px; border-radius:100px; cursor:pointer;">
+              Pay via Gold &rarr;
+            </button>
           </div>
         </div>
 
@@ -3392,9 +4081,105 @@ DEPLOY_HTML = """<!DOCTYPE html>
             <div class="cmd-row"><code>!fit</code><span>Save current bot outfit</span></div>
           </div>
         </div>
+
+        <!-- Card 5: Creator & Gold Hosting Support -->
+        <div class="sidebar-card">
+          <div class="sidebar-card-header">
+            <span class="sidebar-card-title">Creator & Support</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:700; color:var(--ink);">DEVELOPER</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+            <img src="https://cdn.highrisegame.com/user/63f3bbdf56dab79de656aea7/1a1a294c813_avatar.png" alt="@shuvodip" style="width:44px; height:44px; border-radius:50%; border:1.5px solid var(--ink); object-fit:cover; background:var(--bg);">
+            <div>
+              <div style="font-weight:800; font-size:14px; display:flex; align-items:center; gap:4px;">
+                @shuvodip
+                <span style="font-size:10px; background:#dcfce7; color:#15803d; padding:1px 6px; border-radius:100px; border:1px solid #16a34a;">BUILDER</span>
+              </div>
+              <div style="font-size:11px; color:var(--ink-mute);">Highrise Bot Architect</div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--ink-soft); line-height:1.45; margin-bottom:12px;">
+            Pay with HR Gold: <b>400 Gold (Weekly)</b> &bull; <b>1,000 Gold (Monthly)</b>.<br>
+            Say contact <b>@shuvodip</b> on HR or message on Instagram for instant activation.
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <a href="https://www.instagram.com/shuvodipray99/" target="_blank" class="quick-link-item" style="border:1px solid var(--border-dark); padding:8px 10px;">
+              <div class="quick-link-icon" style="color:#e1306c;">
+                <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+              </div>
+              <div class="quick-link-content">
+                <div class="quick-link-name">DM on Instagram</div>
+                <div class="quick-link-sub">@shuvodipray99</div>
+              </div>
+              <div class="quick-link-arrow">&rarr;</div>
+            </a>
+            <button type="button" class="quick-link-item" onclick="openGoldModal('weekly', 400)" style="width:100%; text-align:left; background:none; border:1px solid var(--border-dark); cursor:pointer; padding:8px 10px;">
+              <div class="quick-link-icon" style="color:#d97706;">🪙</div>
+              <div class="quick-link-content">
+                <div class="quick-link-name">Buy with Highrise Gold</div>
+                <div class="quick-link-sub">Contact @shuvodip on HR</div>
+              </div>
+              <div class="quick-link-arrow">&rarr;</div>
+            </button>
+          </div>
+        </div>
       </aside>
     </div>
   </main>
+
+  <!-- Highrise Gold Payment Instructions Dialog -->
+  <dialog id="gold-modal" closedby="any" aria-labelledby="gold-modal-title">
+    <div class="auth-box" style="max-width:440px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <span style="font-weight:800; font-size:18px; display:flex; align-items:center; gap:6px;" id="gold-modal-title">
+          <span>🪙</span> Pay with Highrise Gold
+        </span>
+        <button onclick="document.getElementById('gold-modal').close()" style="background:none; border:none; font-size:22px; cursor:pointer;">&times;</button>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:14px; background:#faf8f0; border:1.5px solid var(--border-dark); border-radius:14px; padding:12px; margin-bottom:16px;">
+        <img src="https://cdn.highrisegame.com/user/63f3bbdf56dab79de656aea7/1a1a294c813_avatar.png" alt="@shuvodip" style="width:52px; height:52px; border-radius:50%; border:2px solid var(--ink); object-fit:cover; background:var(--bg);">
+        <div>
+          <div style="font-weight:800; font-size:15px;">Contact @shuvodip on Highrise</div>
+          <div style="font-size:12px; color:var(--ink-mute);">Selected Plan: <b id="gold-modal-plan-name">Weekly (7 Days)</b></div>
+          <div style="font-size:13px; font-weight:800; color:#b45309; margin-top:2px;" id="gold-modal-amount">400 Highrise Gold</div>
+        </div>
+      </div>
+
+      <div style="font-size:13px; color:var(--ink-soft); line-height:1.55; margin-bottom:18px;">
+        <b>3 Easy Steps to Activate via Gold:</b>
+        <ol style="margin-left:18px; margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+          <li>Contact <b>@shuvodip</b> on Highrise (or tip/whisper in-game).</li>
+          <li>DM on Instagram <a href="https://www.instagram.com/shuvodipray99/" target="_blank" style="color:#e1306c; font-weight:700;">@shuvodipray99</a> or whisper your account email.</li>
+          <li>Once 400G (Weekly) or 1000G (Monthly) is received, your hosting access is unlocked immediately!</li>
+        </ol>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <a href="https://www.instagram.com/shuvodipray99/" target="_blank" class="btn-pill-ink" style="width:100%; justify-content:center; padding:12px; font-size:14px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          <span>Message on Instagram (@shuvodipray99) &rarr;</span>
+        </a>
+        <button type="button" onclick="navigator.clipboard.writeText('@shuvodip'); alert('Copied Highrise username @shuvodip to clipboard!');" class="btn-sidebar-sync" style="justify-content:center; padding:10px;">
+          Copy Highrise Username (@shuvodip)
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Deploy Page Footer -->
+  <footer class="cs-footer" style="margin-top:60px; border-top:1px solid var(--border); padding:32px 16px;">
+    <div style="max-width:1160px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; font-family:'Geist Mono',monospace; font-size:12px; color:var(--ink-mute);">
+      <div>
+        <b>zevray*</b> &bull; Built by <a href="https://www.instagram.com/shuvodipray99/" target="_blank" style="color:var(--ink); font-weight:800; text-decoration:none;">@shuvodip</a> on Highrise &bull; 24/7 Cloud Bot Engine
+      </div>
+      <div style="display:flex; gap:18px; align-items:center;">
+        <a href="/" style="color:var(--ink); text-decoration:none; font-weight:600;">Home</a>
+        <a href="/player" target="_blank" style="color:var(--ink); text-decoration:none; font-weight:600;">Jukebox</a>
+        <a href="https://www.instagram.com/shuvodipray99/" target="_blank" style="color:#e1306c; text-decoration:none; font-weight:700;">Instagram (@shuvodipray99)</a>
+      </div>
+    </div>
+  </footer>
 
   <script>
     const SUPABASE_URL = "__SUPABASE_URL__";
@@ -4123,21 +4908,66 @@ Click OK to open your printable backup.`
       currentCurrency = curr;
       const inrBtn = document.getElementById('curr-inr-btn');
       const usdBtn = document.getElementById('curr-usd-btn');
+      const hrgBtn = document.getElementById('curr-hrg-btn');
       if (inrBtn) inrBtn.classList.toggle('active', curr === 'INR');
       if (usdBtn) usdBtn.classList.toggle('active', curr === 'USD');
+      if (hrgBtn) hrgBtn.classList.toggle('active', curr === 'HRG');
 
       const weeklyPriceEl = document.getElementById('price-weekly-val');
       const monthlyPriceEl = document.getElementById('price-monthly-val');
       const methodNoticeEl = document.getElementById('payment-method-notice');
+      const weeklyBtn = document.getElementById('btn-plan-weekly');
+      const monthlyBtn = document.getElementById('btn-plan-monthly');
 
       if (curr === 'INR') {
         if (weeklyPriceEl) weeklyPriceEl.innerHTML = '₹78';
         if (monthlyPriceEl) monthlyPriceEl.innerHTML = '₹479';
         if (methodNoticeEl) methodNoticeEl.innerHTML = '⚡ <b>Razorpay:</b> UPI (GPay, PhonePe, Paytm), All Cards, Netbanking & Wallets';
-      } else {
+        if (weeklyBtn) {
+          weeklyBtn.innerHTML = 'Get 7 Days Access &rarr;';
+          weeklyBtn.onclick = () => startPayment('weekly');
+        }
+        if (monthlyBtn) {
+          monthlyBtn.innerHTML = 'Get 30 Days Access &rarr;';
+          monthlyBtn.onclick = () => startPayment('monthly');
+        }
+      } else if (curr === 'USD') {
         if (weeklyPriceEl) weeklyPriceEl.innerHTML = '$1.30';
         if (monthlyPriceEl) monthlyPriceEl.innerHTML = '$5.70';
         if (methodNoticeEl) methodNoticeEl.innerHTML = '🌐 <b>Razorpay:</b> PayPal Only';
+        if (weeklyBtn) {
+          weeklyBtn.innerHTML = 'Get 7 Days Access &rarr;';
+          weeklyBtn.onclick = () => startPayment('weekly');
+        }
+        if (monthlyBtn) {
+          monthlyBtn.innerHTML = 'Get 30 Days Access &rarr;';
+          monthlyBtn.onclick = () => startPayment('monthly');
+        }
+      } else if (curr === 'HRG') {
+        if (weeklyPriceEl) weeklyPriceEl.innerHTML = '400 <span style="font-size:18px; font-weight:700;">Gold</span>';
+        if (monthlyPriceEl) monthlyPriceEl.innerHTML = '1,000 <span style="font-size:18px; font-weight:700;">Gold</span>';
+        if (methodNoticeEl) methodNoticeEl.innerHTML = '🪙 <b>Highrise Gold:</b> 400 Gold (Weekly) / 1,000 Gold (Monthly). Say contact <b>@shuvodip</b> on HR or DM on Instagram <a href="https://www.instagram.com/shuvodipray99/" target="_blank" style="color:var(--ink); font-weight:800; text-decoration:underline;">@shuvodipray99</a>.';
+        if (weeklyBtn) {
+          weeklyBtn.innerHTML = '🪙 Pay 400 Gold (Contact @shuvodip) &rarr;';
+          weeklyBtn.onclick = () => openGoldModal('weekly', 400);
+        }
+        if (monthlyBtn) {
+          monthlyBtn.innerHTML = '🪙 Pay 1,000 Gold (Contact @shuvodip) &rarr;';
+          monthlyBtn.onclick = () => openGoldModal('monthly', 1000);
+        }
+      }
+    }
+
+    function openGoldModal(plan, gold) {
+      const modal = document.getElementById('gold-modal');
+      const planNameEl = document.getElementById('gold-modal-plan-name');
+      const amountEl = document.getElementById('gold-modal-amount');
+      if (planNameEl) planNameEl.innerText = (plan === 'weekly' ? 'Weekly Access (7 Days)' : 'Monthly Access (30 Days)');
+      if (amountEl) amountEl.innerText = (gold === 400 ? '400 Highrise Gold' : '1,000 Highrise Gold');
+      if (modal && typeof modal.showModal === 'function') {
+        modal.showModal();
+      } else {
+        alert("To pay with " + gold + " Highrise Gold:\n\n1. Contact @shuvodip on Highrise\n2. DM on Instagram: https://www.instagram.com/shuvodipray99/\n3. Send your account email to activate instantly!");
       }
     }
 
@@ -4996,9 +5826,37 @@ async def handle_deploy_render(request: web.Request) -> web.Response:
             return web.json_response({"success": False, "error": f"Error communicating with Render: {e}"}, status=500)
 
 
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+
+
+def _create_static_file_handler(file_path: str):
+    async def _handler(request: web.Request) -> web.StreamResponse:
+        if os.path.isfile(file_path):
+            return web.FileResponse(file_path)
+        return web.Response(status=404, text="Not Found")
+    return _handler
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_root)
+
+    # Static files and Favicons
+    if os.path.isdir(STATIC_DIR):
+        app.router.add_static("/static/", path=STATIC_DIR, name="static")
+        for fav_file in [
+            "favicon.ico",
+            "favicon-16x16.png",
+            "favicon-32x32.png",
+            "apple-touch-icon.png",
+            "android-chrome-192x192.png",
+            "android-chrome-512x512.png",
+            "site.webmanifest",
+        ]:
+            fpath = os.path.join(STATIC_DIR, fav_file)
+            if os.path.isfile(fpath):
+                app.router.add_get(f"/{fav_file}", _create_static_file_handler(fpath))
+
     app.router.add_get("/status", handle_status_api)
     app.router.add_get("/api/status", handle_status_api)
     app.router.add_get("/health", handle_health)
