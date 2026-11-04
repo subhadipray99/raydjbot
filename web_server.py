@@ -219,6 +219,7 @@ def get_base_url(request: web.Request) -> str:
 
 async def handle_status_api(request: web.Request) -> web.Response:
     """JSON status API endpoint."""
+    import casino
     base_url = get_base_url(request)
     summary = BotStatus.get_summary()
     return web.json_response({
@@ -246,6 +247,17 @@ async def handle_status_api(request: web.Request) -> web.Response:
         "last_self_ping": summary["last_self_ping"],
         "last_mesh_ping": summary["last_mesh_ping"],
         "music_state": music_manager.get_state(),
+        "casino": casino.get_casino_stats(),
+    })
+
+
+async def handle_casino_api(request: web.Request) -> web.Response:
+    """Return casino statistics, player wallets, and pending payout queue."""
+    import casino
+    return web.json_response({
+        "stats": casino.get_casino_stats(),
+        "wallets": casino.get_all_wallets(),
+        "pending_payouts": casino.get_pending_payouts(),
     })
 
 
@@ -5002,6 +5014,7 @@ def create_app() -> web.Application:
     app.router.add_post("/api/user-config", handle_user_config_api)
     app.router.add_get("/api/bot-health-check", handle_bot_health_check)
     app.router.add_get("/api/player-state", handle_player_state)
+    app.router.add_get("/api/casino", handle_casino_api)
     app.router.add_get("/audio/current.mp3", handle_audio_current)
     app.router.add_get("/audio/current", handle_audio_current)
     app.router.add_get("/radio.mp3", handle_radio_stream)

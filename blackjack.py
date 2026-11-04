@@ -328,7 +328,7 @@ class BlackjackManager:
             return False, f"⚠️ Maximum bet is {casino.DEFAULT_MAX_BET} Gold."
 
         # Deduct bet from casino funds
-        success, err, deducted_source = casino.deduct_bet(user_id, bet)
+        success, err, deducted_source = casino.deduct_bet(user_id, bet, username)
         if not success:
             return False, f"⚠️ {err}"
 

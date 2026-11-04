@@ -68,13 +68,21 @@ def get_player_profile(user_id: str, username: str = "") -> dict:
 
 
 def deposit(user_id: str, username: str, amount: int) -> int:
-    """Credit gold tipped to the bot into user's playable wallet."""
+    """Credit gold tipped to the bot or tip jar into user's playable wallet."""
     if amount <= 0:
         return 0
     data = _load_json(CASINO_WALLETS_FILE, {})
     user_str = str(user_id)
+
+    # Check if existing profile matches by username if user_str not in data
+    if user_str not in data and username:
+        for uid, p in data.items():
+            if p.get("username", "").lower() == username.lower():
+                user_str = uid
+                break
+
     if user_str not in data:
-        get_player_profile(user_id, username)
+        get_player_profile(user_str, username)
         data = _load_json(CASINO_WALLETS_FILE, {})
 
     prof = data[user_str]
@@ -84,7 +92,7 @@ def deposit(user_id: str, username: str, amount: int) -> int:
     prof["last_active"] = int(time.time())
     _save_json(CASINO_WALLETS_FILE, data)
     _sync_to_db_async()
-    logger.info(f"[Casino] Credited {amount} Gold to @{username} (ID: {user_id}). Wallet now: {prof['wallet']}")
+    logger.info(f"[Casino] Credited {amount} Gold to @{username} (ID: {user_str}). Wallet now: {prof['wallet']}")
     return prof["wallet"]
 
 
@@ -114,7 +122,7 @@ def set_wallet(user_id: str, username: str, amount: int) -> int:
     return admin_set_wallet(user_id, username, amount)
 
 
-def deduct_bet(user_id: str, amount: int) -> tuple[bool, str, str]:
+def deduct_bet(user_id: str, amount: int, username: str = "") -> tuple[bool, str, str]:
     """
     Deduct bet from user's funds.
     Prefers playable wallet chips first; if wallet is insufficient, draws from winnings.
@@ -125,10 +133,19 @@ def deduct_bet(user_id: str, amount: int) -> tuple[bool, str, str]:
 
     data = _load_json(CASINO_WALLETS_FILE, {})
     user_str = str(user_id)
-    if user_str not in data:
-        return False, "You do not have any gold in your wallet. Tip the bot to deposit chips!", ""
+    prof = data.get(user_str)
 
-    prof = data[user_str]
+    # If not found by user_id, check by username fallback
+    if not prof and username:
+        for uid, p in data.items():
+            if p.get("username", "").lower() == username.lower():
+                prof = p
+                user_str = uid
+                break
+
+    if not prof:
+        return False, "You do not have any gold in your wallet. Tip the bot or room tip jar to deposit chips!", ""
+
     wallet = int(prof.get("wallet", 0))
     winnings = int(prof.get("winnings", 0))
     total_avail = wallet + winnings
@@ -418,7 +435,14 @@ async def _sync_worker():
             return
         wallets = _load_json(CASINO_WALLETS_FILE, {})
         payouts = _load_json(CASINO_PAYOUTS_FILE, {})
-        await db.save_room_attribute(rid, "casino_wallets", wallets)
-        await db.save_room_attribute(rid, "casino_payouts", payouts)
+
+        # Embed inside top_tipper JSONB column to persist in Supabase without requiring table migrations
+        cloud_state = await db.load_room_state(rid)
+        curr_tipper = cloud_state.get("top_tipper") if cloud_state else {}
+        if not isinstance(curr_tipper, dict):
+            curr_tipper = {}
+        curr_tipper["casino_wallets"] = wallets
+        curr_tipper["casino_payouts"] = payouts
+        await db.save_room_attribute(rid, "top_tipper", curr_tipper)
     except Exception as e:
         logger.debug(f"[Casino DB Sync] Notice: {e}")

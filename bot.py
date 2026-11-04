@@ -231,6 +231,8 @@ class HighriseBot(BaseBot):
     def __init__(self):
         super().__init__()
         self.bot_id: str | None = None
+        self.room_owner_id: str | None = None
+        self.bot_username: str | None = None
         self.session_metadata: SessionMetadata | None = None
         self._has_announced: bool = False
         self.user_positions: dict[str, Position | AnchorPosition] = {}
@@ -392,14 +394,26 @@ class HighriseBot(BaseBot):
         """Triggered when connection to room is established."""
         self.session_metadata = session_metadata
         self.bot_id = str(session_metadata.user_id)
+        self.room_owner_id = str(session_metadata.room_info.owner_id) if (session_metadata and session_metadata.room_info) else None
         import time as _t
         BotStatus.is_connected = True
         BotStatus.bot_id = self.bot_id
         BotStatus.connected_at = _t.time()
-        logger.info(f"Bot successfully connected to room! Bot User ID: {self.bot_id}")
+        logger.info(f"Bot successfully connected to room! Bot User ID: {self.bot_id} | Room Owner ID: {self.room_owner_id}")
 
         # Start the music queue runner with this bot instance for room announcements
         music_manager.start(self)
+
+        # Retrieve bot's in-room username
+        try:
+            room_users_resp = await self.highrise.get_room_users()
+            for r_u, _ in room_users_resp.content:
+                if r_u.id == self.bot_id:
+                    self.bot_username = r_u.username
+                    logger.info(f"Identified Bot In-Room Username: @{self.bot_username}")
+                    break
+        except Exception as u_err:
+            logger.debug(f"Could not fetch bot username: {u_err}")
 
         # Hydrate persistent room state from Supabase if available
         try:
@@ -429,11 +443,14 @@ class HighriseBot(BaseBot):
                     outfit_data["active_by_room"][config.ROOM_ID] = act_outfit
                     outfit_data["active"] = act_outfit
                     outfit._save_data(outfit_data)
-                # 5. Casino state
-                if cloud_state.get("casino_wallets") and isinstance(cloud_state["casino_wallets"], dict):
-                    casino._save_json(casino.CASINO_WALLETS_FILE, cloud_state["casino_wallets"])
-                if cloud_state.get("casino_payouts") and isinstance(cloud_state["casino_payouts"], dict):
-                    casino._save_json(casino.CASINO_PAYOUTS_FILE, cloud_state["casino_payouts"])
+                # 5. Casino state (hydrate from direct column or embedded top_tipper JSONB)
+                tipper_embed = cloud_state.get("top_tipper") if isinstance(cloud_state.get("top_tipper"), dict) else {}
+                c_wallets = cloud_state.get("casino_wallets") or tipper_embed.get("casino_wallets")
+                c_payouts = cloud_state.get("casino_payouts") or tipper_embed.get("casino_payouts")
+                if c_wallets and isinstance(c_wallets, dict):
+                    casino._save_json(casino.CASINO_WALLETS_FILE, c_wallets)
+                if c_payouts and isinstance(c_payouts, dict):
+                    casino._save_json(casino.CASINO_PAYOUTS_FILE, c_payouts)
         except Exception as hyd_err:
             logger.debug(f"[DB] Hydration notice: {hyd_err}")
 
@@ -572,38 +589,68 @@ class HighriseBot(BaseBot):
                 logger.error(f"Error sending reaction back: {e}")
 
     async def on_tip(self, sender: User, receiver: User, tip: CurrencyItem | Item) -> None:
-        """Triggered when someone tips the bot in the room."""
-        if receiver.id == self.bot_id:
-            if isinstance(tip, CurrencyItem):
-                amount = int(tip.amount)
-                currency = str(tip.type)
-                is_new_top, top_info = tips.record_tip(
-                    config.ROOM_ID, sender.id, sender.username, amount, currency
-                )
+        """Triggered when someone tips in the room (supports tipping the bot, the room owner, or the Tip Jar)."""
+        try:
+            rec_id = str(getattr(receiver, "id", "") or "")
+            rec_user = str(getattr(receiver, "username", "") or "").lower()
+            sender_id = str(getattr(sender, "id", "") or "")
+            sender_user = str(getattr(sender, "username", "") or "")
 
-                # Casino wallet deposit for Gold tips
-                if currency.lower() == "gold":
-                    new_wallet = casino.deposit(sender.id, sender.username, amount)
-                    try:
-                        await self.highrise.send_whisper(
-                            sender.id,
-                            f"🪙 Deposited {amount} Gold to your Blackjack wallet! (Wallet Balance: {new_wallet} Gold)\n"
-                            f"👉 Type /b play <bet> to play Blackjack!"
-                        )
-                    except Exception:
-                        pass
+            bot_id = str(self.bot_id or "")
+            owner_id = str(getattr(self, "room_owner_id", "") or "")
+            bot_user = str(getattr(self, "bot_username", "") or "").lower()
+            owner_user = str(config.ROOM_OWNER or "").lower()
 
-                if is_new_top:
-                    msg = (
-                        f"🎉 WOW! Huge thank you @{sender.username} for the tip of {amount} {currency}! ❤️\n"
-                        f"👑 @{sender.username} is now the #1 TOP TIPPER in the room!"
+            # Check if this tip was sent to the bot, the room owner, or the room's Tip Jar
+            is_for_bot_or_room = (
+                (bot_id and rec_id == bot_id)
+                or (owner_id and rec_id == owner_id)
+                or (bot_user and rec_user == bot_user)
+                or (owner_user and rec_user == owner_user)
+            )
+
+            # Extract amount and currency
+            amount = int(getattr(tip, "amount", 0) or 0)
+            currency_raw = str(getattr(tip, "type", "gold") or "gold").strip().lower()
+            is_gold = ("gold" in currency_raw) or (currency_raw not in ("bubbles", "bubble"))
+
+            logger.info(
+                f"[on_tip] Tip event: from @{sender_user} ({sender_id}) to @{rec_user} ({rec_id}) "
+                f"| item: {tip} | amount: {amount} | is_for_bot_or_room: {is_for_bot_or_room} | is_gold: {is_gold}"
+            )
+
+            if not is_for_bot_or_room:
+                return
+
+            if amount <= 0:
+                return
+
+            # Record in room tip leaderboard
+            is_new_top, top_info = tips.record_tip(
+                config.ROOM_ID, sender_id, sender_user, amount, "gold" if is_gold else currency_raw
+            )
+
+            # Deposit into Casino wallet if Gold
+            if is_gold:
+                new_wallet = casino.deposit(sender_id, sender_user, amount)
+                logger.info(f"[Casino] Credited {amount} Gold to @{sender_user} wallet. New balance: {new_wallet} Gold")
+                try:
+                    await self.highrise.send_whisper(
+                        sender_id,
+                        f"🪙 Deposited {amount} Gold to your Blackjack wallet! (Wallet Balance: {new_wallet} Gold)\n"
+                        f"👉 Type /b play <bet> to play Blackjack!"
                     )
-                else:
-                    msg = f"Thank you so much @{sender.username} for the generous tip of {amount} {currency}! ❤️"
-            else:
-                msg = f"Thank you so much @{sender.username} for the gift tip! ❤️"
+                except Exception as w_err:
+                    logger.debug(f"Could not whisper tip deposit: {w_err}")
 
-            logger.info(f"Tip received: {msg}")
+            if is_new_top:
+                msg = (
+                    f"🎉 WOW! Huge thank you @{sender_user} for the tip of {amount} {'Gold' if is_gold else currency_raw}! ❤️\n"
+                    f"👑 @{sender_user} is now the #1 TOP TIPPER in the room!"
+                )
+            else:
+                msg = f"Thank you so much @{sender_user} for the generous tip of {amount} {'Gold' if is_gold else currency_raw}! ❤️"
+
             await self.highrise.chat(msg)
             try:
                 await self.highrise.send_emote("emoji-celebrate")
@@ -612,6 +659,8 @@ class HighriseBot(BaseBot):
                     await self.highrise.send_emote("dance-pennywise")
                 except Exception:
                     pass
+        except Exception as e:
+            logger.error(f"[on_tip] Unexpected error handling tip: {e}", exc_info=True)
 
     def _extract_command(self, raw_message: str) -> tuple[str, list[str]] | None:
         """Support both '/' and '!' prefixes for commands."""
@@ -1643,12 +1692,12 @@ class HighriseBot(BaseBot):
                 f"• House Gross Margin: {profit:+d} Gold"
             )
 
-        elif cmd == "setwallet":
+        elif cmd in ("setwallet", "addwallet", "credit"):
             if not user_is_admin:
                 await reply(f"🔒 Casino administration is reserved for the room owner (@{config.ROOM_OWNER}).")
                 return
             if len(args) < 2:
-                await reply("Usage: !setwallet @username <amount>")
+                await reply(f"Usage: !{cmd} @username <amount>")
                 return
             target_name = args[0].lstrip("@")
             try:
@@ -1656,15 +1705,19 @@ class HighriseBot(BaseBot):
             except ValueError:
                 await reply("Amount must be a whole number of Gold.")
                 return
+
             target_id = None
-            try:
-                room_users_resp = await self.highrise.get_room_users()
-                for u, _ in room_users_resp.content:
-                    if u.username.lower() == target_name.lower():
-                        target_id = u.id
-                        break
-            except Exception:
-                pass
+            if target_name.lower() == user.username.lower():
+                target_id = user.id
+            else:
+                try:
+                    room_users_resp = await self.highrise.get_room_users()
+                    for u, _ in room_users_resp.content:
+                        if u.username.lower() == target_name.lower():
+                            target_id = u.id
+                            break
+                except Exception:
+                    pass
             if not target_id:
                 wallets = casino.get_all_wallets()
                 for uid, w in wallets.items():
@@ -1672,7 +1725,11 @@ class HighriseBot(BaseBot):
                         target_id = uid
                         break
             if not target_id:
-                await reply(f"Could not find user @{target_name} in room or casino records.")
-                return
-            casino.set_wallet(target_id, target_name, amt)
-            await reply(f"🪙 Updated @{target_name}'s playing wallet to {amt} Gold.")
+                target_id = f"user_{target_name.lower()}"
+
+            if cmd == "setwallet":
+                new_bal = casino.set_wallet(target_id, target_name, amt)
+                await reply(f"🪙 Updated @{target_name}'s playing wallet to {new_bal} Gold.")
+            else:
+                new_bal = casino.deposit(target_id, target_name, amt)
+                await reply(f"🪙 Added {amt} Gold to @{target_name}'s playing wallet! (New Balance: {new_bal} Gold)")
