@@ -3237,6 +3237,32 @@ DEPLOY_HTML = """<!DOCTYPE html>
     }
     .btn-sidebar-sync:hover { opacity: 0.9; }
 
+    .btn-preset-pill {
+      background: #ffffff;
+      border: 1.5px solid var(--ink);
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink);
+      padding: 7px 10px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s ease;
+      box-shadow: 2px 2px 0 var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-preset-pill:hover {
+      background: #fdfcf7;
+      transform: translate(-1px, -1px);
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .btn-preset-pill:active {
+      transform: translate(1px, 1px);
+      box-shadow: 0 0 0 var(--ink);
+    }
+
     /* Pulsing Status Dot */
     .status-dot {
       width: 10px;
@@ -3999,6 +4025,48 @@ DEPLOY_HTML = """<!DOCTYPE html>
           </div>
         </div>
 
+        <!-- Card 1c: Bot Wardrobe & Look Manager -->
+        <div class="sidebar-card" id="sidebar-wardrobe-card">
+          <div class="sidebar-card-header">
+            <span class="sidebar-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>
+              Bot Wardrobe & Look
+            </span>
+            <span id="wardrobe-count-badge" style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:800; color:var(--ink); background:#f0ede1; border:1px solid var(--border-dark); padding:2px 6px; border-radius:4px;">SYNCING...</span>
+          </div>
+          <div style="font-size:12px; color:var(--ink-soft); line-height:1.5;">
+            <p style="margin-bottom:10px;">
+              Equip stylish preset outfits or any clothing item the bot owns with 1 click.
+            </p>
+            
+            <div style="font-size:11px; font-weight:700; color:var(--ink); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">1-Click Presets:</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;">
+              <button type="button" onclick="equipPresetWeb('dj')" class="btn-preset-pill">🎧 Signature DJ</button>
+              <button type="button" onclick="equipPresetWeb('suit')" class="btn-preset-pill">🤵 Sharp Suit</button>
+              <button type="button" onclick="equipPresetWeb('street')" class="btn-preset-pill">🛹 Streetwear</button>
+              <button type="button" onclick="equipPresetWeb('camo')" class="btn-preset-pill">🪖 Camo SpecOps</button>
+              <button type="button" onclick="equipPresetWeb('goth')" class="btn-preset-pill">🖤 Goth Punk</button>
+              <button type="button" onclick="equipPresetWeb('puffer')" class="btn-preset-pill">❄️ Winter Puffer</button>
+            </div>
+
+            <div style="background:#f7f6ed; border:1px solid var(--border-dark); border-radius:10px; padding:10px; margin-bottom:10px;">
+              <div style="font-size:11px; font-weight:700; color:var(--ink); margin-bottom:6px;">Equip Specific Inventory Item:</div>
+              <div style="display:flex; gap:6px;">
+                <select id="wardrobe-item-select" style="width:100%; font-family:'Geist Mono',monospace; font-size:11px; padding:6px; border:1px solid var(--border-dark); border-radius:6px; background:#fff;">
+                  <option value="">Loading owned items...</option>
+                </select>
+                <button type="button" onclick="equipSelectedItemWeb()" style="background:var(--ink); color:#fff; border:none; border-radius:6px; font-size:11px; font-weight:700; padding:6px 12px; cursor:pointer; white-space:nowrap;">Equip</button>
+              </div>
+            </div>
+
+            <div id="wardrobe-feedback" style="display:none; font-family:'Geist Mono',monospace; font-size:11px; font-weight:700; padding:8px 10px; border-radius:8px; margin-bottom:10px; border:1px solid transparent;"></div>
+
+            <div style="font-size:11px; color:var(--ink-mute); line-height:1.45; background:#fff; border:1px dashed var(--border); border-radius:8px; padding:8px 10px;">
+              💡 <b>Tip:</b> Gift any clothing item to your bot in Highrise—it will thank you and automatically add it to this permanent wardrobe!
+            </div>
+          </div>
+        </div>
+
         <!-- Card 2: Quick Links -->
         <div class="sidebar-card">
           <div class="sidebar-card-header">
@@ -4115,6 +4183,9 @@ DEPLOY_HTML = """<!DOCTYPE html>
             <div class="cmd-row"><code>/stop</code><span>Stop active emote loop</span></div>
             <div class="cmd-row"><code>/f1, /f2</code><span>Teleport to floor spawns</span></div>
             <div class="cmd-row"><code>!fit</code><span>Save current bot outfit</span></div>
+            <div class="cmd-row"><code>!fit list</code><span>View preset outfits</span></div>
+            <div class="cmd-row"><code>!copyfit @user</code><span>Clone player's outfit</span></div>
+            <div class="cmd-row"><code>!wardrobe</code><span>List items bot owns</span></div>
           </div>
         </div>
 
@@ -4422,6 +4493,131 @@ DEPLOY_HTML = """<!DOCTYPE html>
       }
       navigator.clipboard.writeText(input.value);
       alert('Copied Bot Health URL to clipboard! Paste it into cron-job.org or UptimeRobot.');
+    }
+
+    // ---------------- WARDROBE & LOOK MANAGER ----------------
+    async function loadWardrobeWeb() {
+      try {
+        const res = await fetch('/api/bot-wardrobe');
+        const data = await res.json();
+        const badge = document.getElementById('wardrobe-count-badge');
+        const sel = document.getElementById('wardrobe-item-select');
+        if (data.status === 'success') {
+          const inv = data.inventory || [];
+          if (badge) badge.innerText = `${inv.length} Items`;
+          if (sel) {
+            sel.innerHTML = '<option value="">-- Choose Item from Inventory --</option>';
+            const cats = data.categories || {};
+            for (const [catName, items] of Object.entries(cats)) {
+              if (items && items.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = catName.toUpperCase() + ` (${items.length})`;
+                for (const it of items) {
+                  const opt = document.createElement('option');
+                  opt.value = it.id;
+                  opt.innerText = it.id;
+                  optgroup.appendChild(opt);
+                }
+                sel.appendChild(optgroup);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load wardrobe:', e);
+      }
+    }
+
+    async function equipPresetWeb(preset) {
+      const fb = document.getElementById('wardrobe-feedback');
+      if (fb) {
+        fb.style.display = 'block';
+        fb.style.background = '#fef3c7';
+        fb.style.color = '#92400e';
+        fb.style.borderColor = '#d97706';
+        fb.innerText = `Equipping ${preset}...`;
+      }
+      try {
+        const res = await fetch('/api/bot-outfit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preset })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          if (fb) {
+            fb.style.background = '#dcfce7';
+            fb.style.color = '#15803d';
+            fb.style.borderColor = '#16a34a';
+            fb.innerText = `✨ ${data.message || 'Outfit equipped!'}`;
+            setTimeout(() => { fb.style.display = 'none'; }, 4000);
+          }
+          loadWardrobeWeb();
+        } else {
+          if (fb) {
+            fb.style.background = '#fee2e2';
+            fb.style.color = '#b91c1c';
+            fb.style.borderColor = '#dc2626';
+            fb.innerText = `❌ ${data.error || 'Failed to equip'}`;
+          }
+        }
+      } catch (e) {
+        if (fb) {
+          fb.style.background = '#fee2e2';
+          fb.style.color = '#b91c1c';
+          fb.style.borderColor = '#dc2626';
+          fb.innerText = `❌ Error: ${e.message}`;
+        }
+      }
+    }
+
+    async function equipSelectedItemWeb() {
+      const sel = document.getElementById('wardrobe-item-select');
+      const item_id = sel ? sel.value : '';
+      if (!item_id) {
+        alert('Please select an item from the wardrobe list first.');
+        return;
+      }
+      const fb = document.getElementById('wardrobe-feedback');
+      if (fb) {
+        fb.style.display = 'block';
+        fb.style.background = '#fef3c7';
+        fb.style.color = '#92400e';
+        fb.style.borderColor = '#d97706';
+        fb.innerText = `Equipping ${item_id}...`;
+      }
+      try {
+        const res = await fetch('/api/bot-outfit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          if (fb) {
+            fb.style.background = '#dcfce7';
+            fb.style.color = '#15803d';
+            fb.style.borderColor = '#16a34a';
+            fb.innerText = `✨ Equipped ${item_id}!`;
+            setTimeout(() => { fb.style.display = 'none'; }, 4000);
+          }
+          loadWardrobeWeb();
+        } else {
+          if (fb) {
+            fb.style.background = '#fee2e2';
+            fb.style.color = '#b91c1c';
+            fb.style.borderColor = '#dc2626';
+            fb.innerText = `❌ ${data.error || 'Failed to equip'}`;
+          }
+        }
+      } catch (e) {
+        if (fb) {
+          fb.style.background = '#fee2e2';
+          fb.style.color = '#b91c1c';
+          fb.style.borderColor = '#dc2626';
+          fb.innerText = `❌ Error: ${e.message}`;
+        }
+      }
     }
 
     // ---------------- DEPLOY FORM SUBMISSION ----------------
@@ -5323,6 +5519,7 @@ Click OK to open your printable backup.`
       });
 
       refreshBotStatus();
+      loadWardrobeWeb();
     }
     initUser();
   </script>

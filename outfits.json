@@ -1,97 +1,296 @@
 {
-  "active": null,
+  "active": [
+    {
+      "id": "body-flesh",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": 27,
+      "account_bound": false
+    },
+    {
+      "id": "eye-n_basic2018malesquaresleepy",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": 7,
+      "account_bound": false
+    },
+    {
+      "id": "eyebrow-n_basic2018newbrows07",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": 0,
+      "account_bound": false
+    },
+    {
+      "id": "nose-n_basic2018newnose05",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": 0,
+      "account_bound": false
+    },
+    {
+      "id": "mouth-basic2018chippermouth",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": -1,
+      "account_bound": false
+    },
+    {
+      "id": "freckle-n_basic2018freckle04",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": 0,
+      "account_bound": false
+    },
+    {
+      "id": "hair_front-n_malenew05",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": 1,
+      "account_bound": false
+    },
+    {
+      "id": "hair_back-n_malenew05",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": 1,
+      "account_bound": false
+    },
+    {
+      "id": "glasses-n_room32019shieldsunglassesblack",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": null,
+      "account_bound": false
+    },
+    {
+      "id": "shirt-n_room32019denimjackethoodie",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": null,
+      "account_bound": false
+    },
+    {
+      "id": "pants-n_starteritems2019cuffedjeanswhite",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": null,
+      "account_bound": false
+    },
+    {
+      "id": "shoes-n_room32019socksneakersgrey",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": null,
+      "account_bound": false
+    },
+    {
+      "id": "bag-n_room32019fannypackblack",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": null,
+      "account_bound": false
+    },
+    {
+      "id": "watch-n_room32019blackwatch",
+      "type": "clothing",
+      "amount": 1,
+      "active_palette": null,
+      "account_bound": false
+    }
+  ],
   "active_by_room": {
     "64005ecfb3d3644258e0040e": [
       {
         "id": "body-flesh",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": 27
+        "active_palette": 27,
+        "account_bound": false
       },
       {
         "id": "eye-n_basic2018malesquaresleepy",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": 7
+        "active_palette": 7,
+        "account_bound": false
       },
       {
         "id": "eyebrow-n_basic2018newbrows07",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": 0
+        "active_palette": 0,
+        "account_bound": false
       },
       {
         "id": "nose-n_basic2018newnose05",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": 0
+        "active_palette": 0,
+        "account_bound": false
       },
       {
         "id": "mouth-basic2018chippermouth",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": -1
+        "active_palette": -1,
+        "account_bound": false
       },
       {
         "id": "freckle-n_basic2018freckle04",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": 0
+        "active_palette": 0,
+        "account_bound": false
       },
       {
         "id": "hair_front-n_malenew05",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": 1
+        "active_palette": 1,
+        "account_bound": false
       },
       {
         "id": "hair_back-n_malenew05",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": 1
+        "active_palette": 1,
+        "account_bound": false
       },
       {
         "id": "glasses-n_starteritems2019squareframesblack",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": null
+        "active_palette": null,
+        "account_bound": false
       },
       {
         "id": "shirt-n_flashysuit",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": null
+        "active_palette": null,
+        "account_bound": false
       },
       {
         "id": "pants-n_starteritems2019cuffedjeansblack",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": null
+        "active_palette": null,
+        "account_bound": false
       },
       {
         "id": "shoes-n_room12019bootsblack",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": null
+        "active_palette": null,
+        "account_bound": false
       },
       {
         "id": "watch-n_room32019blackwatch",
         "type": "clothing",
         "amount": 1,
-        "account_bound": false,
-        "active_palette": null
+        "active_palette": null,
+        "account_bound": false
+      }
+    ],
+    "test_room": [
+      {
+        "id": "body-flesh",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": 27,
+        "account_bound": false
+      },
+      {
+        "id": "eye-n_basic2018malesquaresleepy",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": 7,
+        "account_bound": false
+      },
+      {
+        "id": "eyebrow-n_basic2018newbrows07",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": 0,
+        "account_bound": false
+      },
+      {
+        "id": "nose-n_basic2018newnose05",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": 0,
+        "account_bound": false
+      },
+      {
+        "id": "mouth-basic2018chippermouth",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": -1,
+        "account_bound": false
+      },
+      {
+        "id": "freckle-n_basic2018freckle04",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": 0,
+        "account_bound": false
+      },
+      {
+        "id": "hair_front-n_malenew05",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": 1,
+        "account_bound": false
+      },
+      {
+        "id": "hair_back-n_malenew05",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": 1,
+        "account_bound": false
+      },
+      {
+        "id": "glasses-n_room32019shieldsunglassesblack",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": null,
+        "account_bound": false
+      },
+      {
+        "id": "shirt-n_room32019denimjackethoodie",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": null,
+        "account_bound": false
+      },
+      {
+        "id": "pants-n_starteritems2019cuffedjeanswhite",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": null,
+        "account_bound": false
+      },
+      {
+        "id": "shoes-n_room32019socksneakersgrey",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": null,
+        "account_bound": false
+      },
+      {
+        "id": "bag-n_room32019fannypackblack",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": null,
+        "account_bound": false
+      },
+      {
+        "id": "watch-n_room32019blackwatch",
+        "type": "clothing",
+        "amount": 1,
+        "active_palette": null,
+        "account_bound": false
       }
     ]
   },
