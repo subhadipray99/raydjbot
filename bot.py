@@ -500,9 +500,9 @@ class HighriseBot(BaseBot):
         except Exception as hyd_err:
             logger.debug(f"[DB] Hydration notice: {hyd_err}")
 
-        # Restore saved active outfit on connect (ensures !fit and !copyfit persist across room reloads)
+        # Restore saved active outfit on connect if SDK supports it
         saved_outfit = outfit.get_active_outfit(config.ROOM_ID)
-        if saved_outfit and len(saved_outfit) > 0:
+        if saved_outfit and len(saved_outfit) > 0 and hasattr(self.highrise, "set_outfit"):
             try:
                 res = await self.highrise.set_outfit(saved_outfit)
                 if isinstance(res, Error):
@@ -511,7 +511,7 @@ class HighriseBot(BaseBot):
                     logger.info(f"Successfully restored saved bot outfit ({len(saved_outfit)} items).")
             except Exception as e:
                 logger.warning(f"Error restoring outfit on start: {e}")
-        else:
+        elif hasattr(self.highrise, "get_my_outfit"):
             # First-time run or no active outfit saved yet: capture current avatar from Highrise and persist it!
             try:
                 my_outfit_resp = await self.highrise.get_my_outfit()
