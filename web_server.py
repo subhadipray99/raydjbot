@@ -763,6 +763,117 @@ async def handle_debug_download(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+async def handle_bot_wardrobe_api(request: web.Request) -> web.Response:
+    """Return active outfit, inventory, categorized items, and available presets."""
+    import outfit
+    from highrise.models import Error
+
+    room_id = request.query.get("room_id", config.ROOM_ID)
+    active = outfit.get_active_outfit(room_id)
+    active_dicts = [outfit.item_to_dict(it) for it in active] if active else []
+
+    inventory_items = []
+    bot_inst = broadcaster.bot
+    if bot_inst and hasattr(bot_inst, "highrise") and bot_inst.highrise:
+        try:
+            inv_resp = await bot_inst.highrise.get_inventory()
+            if hasattr(inv_resp, "items") and not isinstance(inv_resp, Error):
+                inventory_items = inv_resp.items
+        except Exception as e:
+            logger.debug(f"Web API inventory fetch notice: {e}")
+
+    inv_dicts = [outfit.item_to_dict(it) for it in inventory_items]
+    categories = outfit.get_bot_inventory_categories(inventory_items)
+
+    return web.json_response({
+        "status": "success",
+        "room_id": room_id,
+        "active_outfit": active_dicts,
+        "inventory": inv_dicts,
+        "categories": categories,
+        "presets": outfit.get_preset_metadata()
+    })
+
+
+async def handle_bot_outfit_post(request: web.Request) -> web.Response:
+    """Equip an outfit preset or specific inventory item via Web API."""
+    import outfit
+    from highrise.models import Item, Error
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    bot_inst = broadcaster.bot
+    if not bot_inst or not hasattr(bot_inst, "highrise") or not bot_inst.highrise:
+        return web.json_response({"error": "Highrise bot is not currently connected to the room."}, status=503)
+
+    room_id = body.get("room_id", config.ROOM_ID)
+    preset_name = body.get("preset", "").strip().lower()
+    item_id = body.get("item_id", "").strip()
+
+    # 1. Equip Preset
+    if preset_name:
+        new_outfit = outfit.get_full_preset(preset_name)
+        if not new_outfit:
+            return web.json_response({"error": f"Unknown preset '{preset_name}'"}, status=404)
+
+        res = await bot_inst.highrise.set_outfit(new_outfit)
+        if isinstance(res, Error):
+            return web.json_response({"error": f"Highrise rejected outfit: {res.message}"}, status=400)
+
+        await outfit.save_active_outfit_async(room_id, new_outfit)
+        return web.json_response({
+            "status": "success",
+            "message": f"Successfully equipped preset '{preset_name}'!",
+            "active_outfit": [outfit.item_to_dict(it) for it in new_outfit]
+        })
+
+    # 2. Equip Single Item
+    if item_id:
+        try:
+            inv_resp = await bot_inst.highrise.get_inventory()
+            bot_items = inv_resp.items if (hasattr(inv_resp, "items") and not isinstance(inv_resp, Error)) else []
+            owned_ids = {it.id for it in bot_items}
+            for b in outfit.BASE_FACE:
+                owned_ids.add(b.id)
+
+            if item_id not in owned_ids:
+                try:
+                    buy_res = await bot_inst.highrise.buy_item(item_id)
+                    if buy_res == "success":
+                        owned_ids.add(item_id)
+                except Exception:
+                    pass
+
+            if item_id not in owned_ids:
+                return web.json_response({
+                    "error": f"Bot does not own item '{item_id}' in its inventory. Please gift it to the bot first."
+                }, status=400)
+
+            cur_resp = await bot_inst.highrise.get_my_outfit()
+            cur_outfit = cur_resp.outfit if (hasattr(cur_resp, "outfit") and not isinstance(cur_resp, Error)) else []
+            cat = outfit.get_item_category(item_id)
+            new_outfit = [it for it in cur_outfit if outfit.get_item_category(it.id) != cat]
+            new_outfit.append(Item(type="clothing", amount=1, id=item_id))
+
+            res = await bot_inst.highrise.set_outfit(new_outfit)
+            if isinstance(res, Error):
+                return web.json_response({"error": f"Highrise error: {res.message}"}, status=400)
+
+            await outfit.save_active_outfit_async(room_id, new_outfit)
+            return web.json_response({
+                "status": "success",
+                "message": f"Successfully equipped item '{item_id}'!",
+                "active_outfit": [outfit.item_to_dict(it) for it in new_outfit]
+            })
+        except Exception as err:
+            return web.json_response({"error": str(err)}, status=500)
+
+    return web.json_response({"error": "Provide 'preset' or 'item_id'"}, status=400)
+
+
 LANDING_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5799,6 +5910,8 @@ def create_app() -> web.Application:
     app.router.add_get("/api/bot-health-check", handle_bot_health_check)
     app.router.add_get("/api/player-state", handle_player_state)
     app.router.add_get("/api/casino", handle_casino_api)
+    app.router.add_get("/api/bot-wardrobe", handle_bot_wardrobe_api)
+    app.router.add_post("/api/bot-outfit", handle_bot_outfit_post)
     app.router.add_get("/audio/current.mp3", handle_audio_current)
     app.router.add_get("/audio/current", handle_audio_current)
     app.router.add_get("/radio.mp3", handle_radio_stream)

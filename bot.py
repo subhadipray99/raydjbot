@@ -500,13 +500,22 @@ class HighriseBot(BaseBot):
         except Exception as hyd_err:
             logger.debug(f"[DB] Hydration notice: {hyd_err}")
 
-        # Restore saved active outfit on connect if SDK supports it
+        # Restore saved active outfit on connect with smart inventory validation
         saved_outfit = outfit.get_active_outfit(config.ROOM_ID)
         if saved_outfit and len(saved_outfit) > 0 and hasattr(self.highrise, "set_outfit"):
             try:
                 res = await self.highrise.set_outfit(saved_outfit)
                 if isinstance(res, Error):
-                    logger.warning(f"Could not restore saved outfit on start: {res.message}")
+                    logger.warning(f"Saved outfit could not be applied directly ({res.message}). Running smart inventory fallback...")
+                    inv_resp = await self.highrise.get_inventory()
+                    bot_items = inv_resp.items if (hasattr(inv_resp, "items") and not isinstance(inv_resp, Error)) else []
+                    matched_outfit, _, _ = outfit.smart_match_outfit(saved_outfit, bot_items, [])
+                    retry_res = await self.highrise.set_outfit(matched_outfit)
+                    if not isinstance(retry_res, Error):
+                        logger.info(f"Successfully restored smart-matched bot outfit ({len(matched_outfit)} items).")
+                        await outfit.save_active_outfit_async(config.ROOM_ID, matched_outfit)
+                    else:
+                        logger.warning(f"Could not apply smart-matched outfit: {retry_res.message}")
                 else:
                     logger.info(f"Successfully restored saved bot outfit ({len(saved_outfit)} items).")
             except Exception as e:
@@ -681,6 +690,37 @@ class HighriseBot(BaseBot):
             if not is_for_bot_or_room:
                 return
 
+            # Check if this tip is a clothing item gifted to the bot
+            item_type = str(getattr(tip, "type", "") or "").lower()
+            if isinstance(tip, Item) or item_type == "clothing":
+                item_id = str(getattr(tip, "id", "") or "")
+                logger.info(f"🎁 Received gifted clothing item '{item_id}' from @{sender_user}!")
+                await self.highrise.chat(f"🎁 Thank you so much @{sender_user} for gifting me \"{item_id}\"! Added to my wardrobe.")
+                try:
+                    await self.highrise.send_emote("emote-bow")
+                except Exception:
+                    pass
+
+                # If gifted by room owner or admin, auto-equip the new item immediately
+                is_admin_user = (
+                    sender_user.lower() in ("shuvodip", "subhadipray99", (config.ROOM_OWNER or "").lower())
+                    or sender_id in ("63f3bbdf56dab79de656aea7", getattr(config, "ROOM_OWNER_ID", ""))
+                )
+                if is_admin_user and item_id:
+                    try:
+                        cur_resp = await self.highrise.get_my_outfit()
+                        if hasattr(cur_resp, "outfit") and cur_resp.outfit:
+                            target_cat = outfit.get_item_category(item_id)
+                            new_outfit = [it for it in cur_resp.outfit if outfit.get_item_category(it.id) != target_cat]
+                            new_outfit.append(Item(type="clothing", amount=1, id=item_id))
+                            res = await self.highrise.set_outfit(new_outfit)
+                            if not isinstance(res, Error):
+                                await outfit.save_active_outfit_async(config.ROOM_ID, new_outfit)
+                                await self.highrise.chat(f"✨ Now wearing my newly gifted {target_cat}: \"{item_id}\"!")
+                    except Exception as equip_err:
+                        logger.warning(f"Could not auto-equip gifted item: {equip_err}")
+                return
+
             if amount <= 0:
                 return
 
@@ -773,7 +813,7 @@ class HighriseBot(BaseBot):
             logger.error(f"Error handling on_whisper from {getattr(user, 'username', 'unknown')}: {e}", exc_info=True)
 
     async def _handle_copyfit(self, caller: User, target_name: str, reply) -> None:
-        """Helper to clone a user's outfit onto the bot."""
+        """Helper to clone a user's outfit onto the bot using smart inventory matching."""
         try:
             users_resp = await self.highrise.get_room_users()
             if not isinstance(users_resp, GetRoomUsersRequest.GetRoomUsersResponse):
@@ -797,21 +837,48 @@ class HighriseBot(BaseBot):
                 return
 
             target_outfit = target_outfit_resp.outfit
-            res = await self.highrise.set_outfit(target_outfit)
+
+            # 1. Fetch bot's own inventory
+            bot_inventory = []
+            try:
+                inv_resp = await self.highrise.get_inventory()
+                if not isinstance(inv_resp, Error) and hasattr(inv_resp, "items"):
+                    bot_inventory = inv_resp.items
+            except Exception as inv_err:
+                logger.debug(f"Could not fetch bot inventory: {inv_err}")
+
+            # 2. Fetch bot's current outfit
+            bot_current = []
+            try:
+                cur_resp = await self.highrise.get_my_outfit()
+                if not isinstance(cur_resp, Error) and hasattr(cur_resp, "outfit"):
+                    bot_current = cur_resp.outfit
+            except Exception:
+                pass
+
+            # 3. Smart partial-clone matching
+            final_outfit, applied, skipped = outfit.smart_match_outfit(target_outfit, bot_inventory, bot_current)
+
+            # 4. Set outfit on Highrise
+            res = await self.highrise.set_outfit(final_outfit)
             if isinstance(res, Error):
-                await reply(
-                    f"⚠️ Cannot clone full outfit: {res.message}.\n"
-                    f"(Highrise bots can only equip free starter items or items in their account inventory)"
-                )
+                await reply(f"⚠️ Cannot clone outfit: {res.message}")
+                return
+
+            # 5. Persist consistently to Supabase and outfits.json
+            await outfit.save_active_outfit_async(config.ROOM_ID, final_outfit)
+            try:
+                await self.highrise.send_emote("dance-macarena")
+            except Exception:
+                pass
+
+            if skipped:
+                skip_msg = f" (Skipped {len(skipped)} item{'s' if len(skipped) > 1 else ''} not owned by bot - gift them to me to wear them!)"
+                await reply(f"👔 Cloned {len(applied)} items from @{target_user.username}!{skip_msg}")
             else:
-                await outfit.save_active_outfit_async(config.ROOM_ID, target_outfit)
-                try:
-                    await self.highrise.send_emote("dance-macarena")
-                except Exception:
-                    pass
-                await reply(f"👔 Successfully cloned @{target_user.username}'s outfit! Looking sharp.")
+                await reply(f"👔 Successfully cloned @{target_user.username}'s complete outfit! Looking sharp.")
         except Exception as e:
-            logger.error(f"Error copying outfit: {e}")
+            logger.error(f"Error copying outfit: {e}", exc_info=True)
             await reply(f"Failed to copy outfit: {e}")
 
     async def handle_command(self, user: User, cmd: str, args: list[str], is_whisper: bool = False) -> None:
@@ -1609,11 +1676,12 @@ class HighriseBot(BaseBot):
                     f"👗 Bot Wardrobe Commands (Owner: @{config.ROOM_OWNER}):\n"
                     f"• !fit - Save whatever the bot is currently wearing\n"
                     f"• !fit <preset> - Equip preset (Presets: {preset_names})\n"
-                    f"• !copyfit [@user] - Clone someone's outfit onto bot\n"
+                    f"• !fit clone [@user] - Smart clone someone's outfit\n"
+                    f"• !fit equip <item_id> - Equip specific item from inventory\n"
+                    f"• !fit items (or !wardrobe) - View categorized items owned\n"
                     f"• !fit save <name> - Save current look as a named preset\n"
                     f"• !fit load <name> - Equip saved preset\n"
-                    f"• !fit list - View all presets with details\n"
-                    f"• !wardrobe - Check owned items in bot inventory"
+                    f"• !fit list - View all presets with details"
                 )
                 return
 
@@ -1628,9 +1696,73 @@ class HighriseBot(BaseBot):
                 await reply("\n".join(lines))
                 return
 
-            if subcmd == "copy":
+            if subcmd in ("copy", "clone"):
                 target_str = args[1] if len(args) > 1 else user.username
                 await self._handle_copyfit(user, target_str, reply)
+                return
+
+            if subcmd == "equip":
+                if len(args) < 2:
+                    await reply("Usage: !fit equip <item_id> (e.g. !fit equip shirt-n_flashysuit)")
+                    return
+                req_item_id = args[1].strip()
+                try:
+                    # 1. Check if bot owns this item
+                    inv_resp = await self.highrise.get_inventory()
+                    bot_items = inv_resp.items if (hasattr(inv_resp, "items") and not isinstance(inv_resp, Error)) else []
+                    owned_ids = {it.id for it in bot_items}
+
+                    # If not owned, try 0-cost shop claim
+                    if req_item_id not in owned_ids:
+                        try:
+                            buy_res = await self.highrise.buy_item(req_item_id)
+                            if buy_res == "success":
+                                owned_ids.add(req_item_id)
+                        except Exception:
+                            pass
+
+                    if req_item_id not in owned_ids:
+                        await reply(f"⚠️ Bot does not own '{req_item_id}'! Please gift it to the bot in-room to wear it.")
+                        return
+
+                    # 2. Get current outfit and replace matching category
+                    cur_resp = await self.highrise.get_my_outfit()
+                    cur_outfit = cur_resp.outfit if (hasattr(cur_resp, "outfit") and not isinstance(cur_resp, Error)) else []
+                    cat = outfit.get_item_category(req_item_id)
+                    new_outfit = [it for it in cur_outfit if outfit.get_item_category(it.id) != cat]
+                    new_outfit.append(Item(type="clothing", amount=1, id=req_item_id))
+
+                    res = await self.highrise.set_outfit(new_outfit)
+                    if isinstance(res, Error):
+                        await reply(f"⚠️ Could not equip '{req_item_id}': {res.message}")
+                    else:
+                        await outfit.save_active_outfit_async(config.ROOM_ID, new_outfit)
+                        try:
+                            await self.highrise.send_emote("dance-shoppingcart")
+                        except Exception:
+                            pass
+                        await reply(f"✨ Successfully equipped {cat}: '{req_item_id}'!")
+                except Exception as equip_err:
+                    logger.error(f"Error equipping item {req_item_id}: {equip_err}")
+                    await reply(f"Failed to equip item: {equip_err}")
+                return
+
+            if subcmd in ("items", "inventory", "wardrobe"):
+                try:
+                    inv_resp = await self.highrise.get_inventory()
+                    if hasattr(inv_resp, "items") and not isinstance(inv_resp, Error):
+                        cats = outfit.get_bot_inventory_categories(inv_resp.items)
+                        summary = (
+                            f"🎒 Bot Wardrobe ({len(inv_resp.items)} items):\n"
+                            f"• Tops: {len(cats['tops'])} | Bottoms: {len(cats['bottoms'])} | Shoes: {len(cats['shoes'])}\n"
+                            f"• Hair: {len(cats['hair'])} | Accessories: {len(cats['accessories'])}\n"
+                            f"Type !fit equip <item_id> or !fit <preset> to dress the bot!"
+                        )
+                        await reply(summary)
+                    else:
+                        await reply("Could not fetch bot inventory.")
+                except Exception as e:
+                    await reply(f"Wardrobe error: {e}")
                 return
 
             if subcmd == "save":
@@ -1692,9 +1824,15 @@ class HighriseBot(BaseBot):
                 return
             try:
                 inv_resp = await self.highrise.get_inventory()
-                if hasattr(inv_resp, "items"):
-                    items_count = len(inv_resp.items)
-                    await reply(f"🎒 Bot Wardrobe: {items_count} clothing items in inventory. (Use !fit to change dress)")
+                if hasattr(inv_resp, "items") and not isinstance(inv_resp, Error):
+                    cats = outfit.get_bot_inventory_categories(inv_resp.items)
+                    summary = (
+                        f"🎒 Bot Wardrobe ({len(inv_resp.items)} items):\n"
+                        f"• Tops: {len(cats['tops'])} | Bottoms: {len(cats['bottoms'])} | Shoes: {len(cats['shoes'])}\n"
+                        f"• Hair: {len(cats['hair'])} | Accessories: {len(cats['accessories'])}\n"
+                        f"Type !fit equip <item_id> or !fit <preset> to dress the bot!"
+                    )
+                    await reply(summary)
                 else:
                     await reply("Could not access bot inventory.")
             except Exception as e:

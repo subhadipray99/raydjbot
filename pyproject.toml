@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "aiohttp>=3.9.0",
-    "highrise-bot-sdk>=23.1.0b13",
+    "highrise-bot-sdk>=25.1.0",
     "imageio-ffmpeg>=0.5.0",
     "python-dotenv>=1.0.0",
     "setuptools<70",

@@ -288,7 +288,106 @@ def list_available_presets() -> dict[str, str]:
 
 
 def get_item_category(item_id: str) -> str:
-    """Extracts Highrise category prefix from item id (e.g. 'shirt-n_...' -> 'shirt')."""
+    """Extracts Highrise category prefix from item id (e.g. 'shirt-n_...' -> 'shirt', 'hair_front-...' -> 'hair_front')."""
+    if not item_id:
+        return "unknown"
     if "-" in item_id:
-        return item_id.split("-")[0]
+        prefix = item_id.split("-")[0]
+        return prefix
     return item_id
+
+
+def smart_match_outfit(
+    target_outfit: list[Item],
+    bot_inventory: list[Item],
+    current_outfit: list[Item] | None = None
+) -> tuple[list[Item], list[str], list[str]]:
+    """Smart partial outfit matching.
+    
+    Equips all items from target_outfit that the bot owns in its inventory.
+    For categories where the bot does not own the target's item, it retains the bot's
+    existing item from current_outfit (or falls back to BASE_FACE defaults).
+    
+    Returns:
+        tuple of (final_outfit_list, applied_item_ids, skipped_item_ids)
+    """
+    owned_ids = {it.id for it in (bot_inventory or [])}
+    # Always include BASE_FACE items in ownership pool as they are universally available starter items
+    for b in BASE_FACE:
+        owned_ids.add(b.id)
+
+    current_by_cat: dict[str, Item] = {}
+    if current_outfit:
+        for it in current_outfit:
+            cat = get_item_category(it.id)
+            current_by_cat[cat] = it
+
+    # Ensure baseline face features exist
+    for b in BASE_FACE:
+        cat = get_item_category(b.id)
+        if cat not in current_by_cat:
+            current_by_cat[cat] = b
+
+    applied_ids: list[str] = []
+    skipped_ids: list[str] = []
+    target_by_cat: dict[str, Item] = {}
+
+    for it in target_outfit:
+        cat = get_item_category(it.id)
+        # Check ownership
+        if it.id in owned_ids:
+            target_by_cat[cat] = it
+            applied_ids.append(it.id)
+        else:
+            skipped_ids.append(it.id)
+
+    # Merge: Target items take priority where owned; current items fill the rest
+    merged_by_cat = dict(current_by_cat)
+    merged_by_cat.update(target_by_cat)
+
+    final_outfit = list(merged_by_cat.values())
+    return final_outfit, applied_ids, skipped_ids
+
+
+def get_bot_inventory_categories(items: list[Item]) -> dict[str, list[dict]]:
+    """Group bot inventory items into human-readable categories for chat and web portal display."""
+    cats: dict[str, list[dict]] = {
+        "tops": [],
+        "bottoms": [],
+        "shoes": [],
+        "hair": [],
+        "accessories": [],
+        "face": [],
+        "other": []
+    }
+    for it in items:
+        c = get_item_category(it.id)
+        d = item_to_dict(it)
+        if c in ("shirt", "jacket", "hoodie", "top", "dress"):
+            cats["tops"].append(d)
+        elif c in ("pants", "shorts", "skirt", "jeans"):
+            cats["bottoms"].append(d)
+        elif c in ("shoes", "boots", "sneakers", "socks"):
+            cats["shoes"].append(d)
+        elif "hair" in c:
+            cats["hair"].append(d)
+        elif c in ("glasses", "bag", "watch", "necklace", "hat", "mask", "gloves", "aura", "wings"):
+            cats["accessories"].append(d)
+        elif c in ("body", "eye", "eyebrow", "nose", "mouth", "freckle"):
+            cats["face"].append(d)
+        else:
+            cats["other"].append(d)
+    return cats
+
+
+def get_preset_metadata() -> list[dict]:
+    """Structured list of built-in presets for frontend portal."""
+    results = []
+    for k, v in PRESETS.items():
+        results.append({
+            "id": k,
+            "name": k.title(),
+            "description": v["description"],
+            "item_count": len(v["items"])
+        })
+    return results
