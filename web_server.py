@@ -4185,7 +4185,9 @@ DEPLOY_HTML = """<!DOCTYPE html>
             <div class="cmd-row"><code>!fit</code><span>Save current bot outfit</span></div>
             <div class="cmd-row"><code>!fit list</code><span>View preset outfits</span></div>
             <div class="cmd-row"><code>!copyfit @user</code><span>Clone player's outfit</span></div>
+            <div class="cmd-row"><code>!inspect @user</code><span>Show item IDs worn</span></div>
             <div class="cmd-row"><code>!wardrobe</code><span>List items bot owns</span></div>
+            <div class="cmd-row"><code>!fit equip &lt;id&gt;</code><span>Equip item by ID</span></div>
           </div>
         </div>
 

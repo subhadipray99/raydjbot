@@ -881,6 +881,57 @@ class HighriseBot(BaseBot):
             logger.error(f"Error copying outfit: {e}", exc_info=True)
             await reply(f"Failed to copy outfit: {e}")
 
+    async def _handle_inspect_outfit(self, caller: User, target_name: str, reply) -> None:
+        """Inspect and print exact item IDs worn by a player or the bot."""
+        try:
+            target_user = None
+            clean_target = target_name.lstrip("@").lower() if target_name else caller.username.lower()
+
+            if clean_target in ("bot", "self"):
+                my_resp = await self.highrise.get_my_outfit()
+                if hasattr(my_resp, "outfit") and my_resp.outfit:
+                    lines = [f"👗 Bot Item IDs ({len(my_resp.outfit)} items):"]
+                    for it in my_resp.outfit:
+                        cat = outfit.get_item_category(it.id)
+                        lines.append(f"• [{cat}] {it.id}")
+                    await reply("\n".join(lines[:7]))
+                    if len(lines) > 7:
+                        await reply("\n".join(lines[7:14]))
+                else:
+                    await reply("Could not retrieve bot outfit.")
+                return
+
+            users_resp = await self.highrise.get_room_users()
+            if isinstance(users_resp, GetRoomUsersRequest.GetRoomUsersResponse):
+                for r_user, _ in users_resp.content:
+                    if r_user.username.lower() == clean_target:
+                        target_user = r_user
+                        break
+
+            if not target_user:
+                if clean_target in (caller.username.lower(), "me"):
+                    target_user = caller
+                else:
+                    await reply(f"User '@{clean_target}' not found in room.")
+                    return
+
+            outfit_resp = await self.highrise.get_user_outfit(target_user.id)
+            if not hasattr(outfit_resp, "outfit") or not outfit_resp.outfit:
+                await reply(f"Could not retrieve outfit for @{target_user.username}.")
+                return
+
+            lines = [f"🔍 Item IDs for @{target_user.username}:"]
+            for it in outfit_resp.outfit:
+                cat = outfit.get_item_category(it.id)
+                lines.append(f"• [{cat}] {it.id}")
+
+            await reply("\n".join(lines[:7]))
+            if len(lines) > 7:
+                await reply("\n".join(lines[7:14]))
+        except Exception as e:
+            logger.error(f"Error inspecting outfit: {e}")
+            await reply(f"Error inspecting outfit: {e}")
+
     async def handle_command(self, user: User, cmd: str, args: list[str], is_whisper: bool = False) -> None:
         """Central command dispatcher."""
         async def reply(text: str):
@@ -1159,8 +1210,10 @@ class HighriseBot(BaseBot):
                 f"⚙️ Admin & Setup Commands (Owner: @{config.ROOM_OWNER}):\n"
                 f"• !fit <preset> - Change bot dress (Presets: dj, suit, street, camo, goth, chill, puffer)\n"
                 f"• !copyfit [@user] - Clone someone's outfit onto bot\n"
+                f"• !inspect [@user] - Print exact item IDs worn by a player or bot\n"
+                f"• !wardrobe [category] - View exact item IDs owned by bot (tops/bottoms/shoes/etc)\n"
+                f"• !fit equip <item_id> - Equip specific item from inventory\n"
                 f"• !fit save <name> | !fit load <name> | !fit list\n"
-                f"• !wardrobe - Check owned items in bot inventory\n"
                 f"• !setpos [front/left/right/back] - Set bot spot to your location\n"
                 f"• !turn - Rotate bot 90 degrees\n"
                 f"• !face <front|left|right|back> - Turn bot direction\n"
@@ -1701,6 +1754,11 @@ class HighriseBot(BaseBot):
                 await self._handle_copyfit(user, target_str, reply)
                 return
 
+            if subcmd in ("inspect", "check", "ids"):
+                target_str = args[1] if len(args) > 1 else user.username
+                await self._handle_inspect_outfit(user, target_str, reply)
+                return
+
             if subcmd == "equip":
                 if len(args) < 2:
                     await reply("Usage: !fit equip <item_id> (e.g. !fit equip shirt-n_flashysuit)")
@@ -1751,14 +1809,24 @@ class HighriseBot(BaseBot):
                 try:
                     inv_resp = await self.highrise.get_inventory()
                     if hasattr(inv_resp, "items") and not isinstance(inv_resp, Error):
+                        filter_cat = args[1].lower() if len(args) > 1 else None
                         cats = outfit.get_bot_inventory_categories(inv_resp.items)
-                        summary = (
-                            f"🎒 Bot Wardrobe ({len(inv_resp.items)} items):\n"
-                            f"• Tops: {len(cats['tops'])} | Bottoms: {len(cats['bottoms'])} | Shoes: {len(cats['shoes'])}\n"
-                            f"• Hair: {len(cats['hair'])} | Accessories: {len(cats['accessories'])}\n"
-                            f"Type !fit equip <item_id> or !fit <preset> to dress the bot!"
-                        )
-                        await reply(summary)
+                        if filter_cat and filter_cat in cats:
+                            items_in_cat = cats[filter_cat]
+                            lines = [f"🎒 Owned {filter_cat.title()} ({len(items_in_cat)}):"]
+                            for it in items_in_cat:
+                                lines.append(f"• {it['id']}")
+                            await reply("\n".join(lines[:8]))
+                            if len(lines) > 8:
+                                await reply("\n".join(lines[8:16]))
+                        else:
+                            summary = (
+                                f"🎒 Bot Wardrobe ({len(inv_resp.items)} items):\n"
+                                f"• Tops: {len(cats['tops'])} | Bottoms: {len(cats['bottoms'])} | Shoes: {len(cats['shoes'])}\n"
+                                f"• Hair: {len(cats['hair'])} | Accessories: {len(cats['accessories'])}\n"
+                                f"Type !fit items <category> (e.g. !fit items tops) to view IDs!"
+                            )
+                            await reply(summary)
                     else:
                         await reply("Could not fetch bot inventory.")
                 except Exception as e:
@@ -1818,6 +1886,13 @@ class HighriseBot(BaseBot):
             target_str = args[0] if args else user.username
             await self._handle_copyfit(user, target_str, reply)
 
+        elif cmd in ("inspect", "inspectfit"):
+            if not user_is_admin:
+                await reply(f"🔒 Inspection is reserved for the room owner (@{config.ROOM_OWNER}).")
+                return
+            target_str = args[0] if args else user.username
+            await self._handle_inspect_outfit(user, target_str, reply)
+
         elif cmd in ("wardrobe", "inventory"):
             if not user_is_admin:
                 await reply(f"🔒 Wardrobe inspection is reserved for the room owner (@{config.ROOM_OWNER}).")
@@ -1825,14 +1900,24 @@ class HighriseBot(BaseBot):
             try:
                 inv_resp = await self.highrise.get_inventory()
                 if hasattr(inv_resp, "items") and not isinstance(inv_resp, Error):
+                    filter_cat = args[0].lower() if args else None
                     cats = outfit.get_bot_inventory_categories(inv_resp.items)
-                    summary = (
-                        f"🎒 Bot Wardrobe ({len(inv_resp.items)} items):\n"
-                        f"• Tops: {len(cats['tops'])} | Bottoms: {len(cats['bottoms'])} | Shoes: {len(cats['shoes'])}\n"
-                        f"• Hair: {len(cats['hair'])} | Accessories: {len(cats['accessories'])}\n"
-                        f"Type !fit equip <item_id> or !fit <preset> to dress the bot!"
-                    )
-                    await reply(summary)
+                    if filter_cat and filter_cat in cats:
+                        items_in_cat = cats[filter_cat]
+                        lines = [f"🎒 Owned {filter_cat.title()} ({len(items_in_cat)}):"]
+                        for it in items_in_cat:
+                            lines.append(f"• {it['id']}")
+                        await reply("\n".join(lines[:8]))
+                        if len(lines) > 8:
+                            await reply("\n".join(lines[8:16]))
+                    else:
+                        summary = (
+                            f"🎒 Bot Wardrobe ({len(inv_resp.items)} items):\n"
+                            f"• Tops: {len(cats['tops'])} | Bottoms: {len(cats['bottoms'])} | Shoes: {len(cats['shoes'])}\n"
+                            f"• Hair: {len(cats['hair'])} | Accessories: {len(cats['accessories'])}\n"
+                            f"Type !wardrobe <category> (e.g. !wardrobe tops) to view IDs!"
+                        )
+                        await reply(summary)
                 else:
                     await reply("Could not access bot inventory.")
             except Exception as e:
