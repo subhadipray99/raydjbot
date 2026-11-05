@@ -292,6 +292,34 @@ class HighriseBot(BaseBot):
                 logger.debug(f"[Bot] Subscription watchdog notice: {e}")
             await asyncio.sleep(600)  # Check every 10 minutes
 
+    async def _room_presence_watchdog_loop(self) -> None:
+        """Periodic watchdog verifying that the bot's WebSocket session with Highrise is truly active and responsive.
+        If Highrise drops the room connection silently without triggering a close frame, this watchdog detects the failure
+        and forces a clean reconnect."""
+        await asyncio.sleep(45)  # Let room connection settle
+        while True:
+            try:
+                if self.highrise and hasattr(self.highrise, "get_room_users"):
+                    users_resp = await asyncio.wait_for(self.highrise.get_room_users(), timeout=10.0)
+                    if isinstance(users_resp, Error):
+                        logger.warning(f"[Watchdog] Room presence check returned error: {users_resp.message}. Forcing reconnect...")
+                        BotStatus.is_connected = False
+                        if hasattr(self.highrise, "ws") and self.highrise.ws:
+                            await self.highrise.ws.close()
+                        break
+            except asyncio.TimeoutError:
+                logger.warning("[Watchdog] Highrise room presence check timed out after 10s. Forcing clean reconnect...")
+                BotStatus.is_connected = False
+                if self.highrise and hasattr(self.highrise, "ws") and self.highrise.ws:
+                    try:
+                        await self.highrise.ws.close()
+                    except Exception:
+                        pass
+                break
+            except Exception as e:
+                logger.debug(f"[Watchdog] Room presence check notice: {e}")
+            await asyncio.sleep(60)  # Check every 60 seconds
+
     async def _start_user_emote_loop(self, user: User, emote_id: str, emote_name: str, reply, target_user_id: str | None = None) -> None:
         """Continuously loop an emote for a user until /stop or new emote."""
         target_id = target_user_id or user.id
@@ -502,6 +530,9 @@ class HighriseBot(BaseBot):
         # Start periodic subscription validity watchdog
         asyncio.create_task(self._subscription_watchdog_loop())
 
+        # Start periodic room presence connection watchdog
+        asyncio.create_task(self._room_presence_watchdog_loop())
+
         # Start Blackjack 60s inactivity auto-stand watchdog
         asyncio.create_task(blackjack_manager.auto_stand_watchdog(self))
 
@@ -527,6 +558,11 @@ class HighriseBot(BaseBot):
                 return
 
             self.welcomed_users.add(user.id)
+
+            # Ensure bot stays locked at saved position when human users enter
+            saved_pos = position.get_saved_position(config.ROOM_ID)
+            if saved_pos:
+                asyncio.create_task(self._apply_saved_position_delayed(saved_pos, delay=0.8))
 
             # 1. Public room chat welcome greeting (ensures user immediately sees the welcome on screen!)
             custom_welcome = get_custom_welcome(config.ROOM_ID)
@@ -706,29 +742,35 @@ class HighriseBot(BaseBot):
 
     async def on_chat(self, user: User, message: str) -> None:
         """Triggered on public room chat messages."""
-        logger.info(f"[{user.username}]: {message}")
-        parsed = self._extract_command(message)
-        if not parsed:
-            # Check for friendly chat greetings like "hi", "hello", "hey"
-            clean_msg = message.strip().lower().rstrip("!.,")
-            if clean_msg in ("hi", "hello", "hey", "hii", "hiii", "yo"):
-                try:
-                    await self.highrise.send_emote("emote-wave")
-                    await self.highrise.chat(f"Hey @{user.username}! Welcome to {config.ROOM_TITLE}. Type /play <song> or /emotes!")
-                except Exception:
-                    pass
-            return
-        cmd, args = parsed
-        await self.handle_command(user, cmd, args, is_whisper=False)
+        try:
+            logger.info(f"[{user.username}]: {message}")
+            parsed = self._extract_command(message)
+            if not parsed:
+                # Check for friendly chat greetings like "hi", "hello", "hey"
+                clean_msg = message.strip().lower().rstrip("!.,")
+                if clean_msg in ("hi", "hello", "hey", "hii", "hiii", "yo"):
+                    try:
+                        await self.highrise.send_emote("emote-wave")
+                        await self.highrise.chat(f"Hey @{user.username}! Welcome to {config.ROOM_TITLE}. Type /play <song> or /emotes!")
+                    except Exception:
+                        pass
+                return
+            cmd, args = parsed
+            await self.handle_command(user, cmd, args, is_whisper=False)
+        except Exception as e:
+            logger.error(f"Error handling on_chat from {getattr(user, 'username', 'unknown')}: {e}", exc_info=True)
 
     async def on_whisper(self, user: User, message: str) -> None:
         """Triggered on private whisper messages."""
-        logger.info(f"[Whisper from {user.username}]: {message}")
-        parsed = self._extract_command(message)
-        if not parsed:
-            return
-        cmd, args = parsed
-        await self.handle_command(user, cmd, args, is_whisper=True)
+        try:
+            logger.info(f"[Whisper from {user.username}]: {message}")
+            parsed = self._extract_command(message)
+            if not parsed:
+                return
+            cmd, args = parsed
+            await self.handle_command(user, cmd, args, is_whisper=True)
+        except Exception as e:
+            logger.error(f"Error handling on_whisper from {getattr(user, 'username', 'unknown')}: {e}", exc_info=True)
 
     async def _handle_copyfit(self, caller: User, target_name: str, reply) -> None:
         """Helper to clone a user's outfit onto the bot."""
@@ -775,10 +817,19 @@ class HighriseBot(BaseBot):
     async def handle_command(self, user: User, cmd: str, args: list[str], is_whisper: bool = False) -> None:
         """Central command dispatcher."""
         async def reply(text: str):
-            if is_whisper:
-                await self.highrise.send_whisper(user.id, text)
-            else:
-                await self.highrise.chat(text)
+            if not text:
+                return
+            clean_text = text.strip()
+            # Highrise enforced character ceiling (250 chars max per message)
+            if len(clean_text) > 240:
+                clean_text = clean_text[:237] + "..."
+            try:
+                if is_whisper:
+                    await asyncio.wait_for(self.highrise.send_whisper(user.id, clean_text), timeout=5.0)
+                else:
+                    await asyncio.wait_for(self.highrise.chat(clean_text), timeout=5.0)
+            except Exception as rep_err:
+                logger.warning(f"Failed to send reply to {user.username}: {rep_err}")
 
         user_is_admin = await self.is_admin(user)
 
@@ -790,8 +841,17 @@ class HighriseBot(BaseBot):
 
             query = " ".join(args)
             await reply(f"🔍 Searching music for: \"{query}\"...")
-            success, msg, track = await music_manager.search_and_queue(query, user.username)
-            await reply(msg)
+            try:
+                success, msg, track = await asyncio.wait_for(
+                    music_manager.search_and_queue(query, user.username),
+                    timeout=20.0
+                )
+                await reply(msg)
+            except asyncio.TimeoutError:
+                await reply(f"⚠️ Search for \"{query}\" timed out after 20s. Please try again with song and artist name.")
+            except Exception as search_err:
+                logger.error(f"Error searching and queuing track '{query}': {search_err}", exc_info=True)
+                await reply(f"⚠️ Could not queue \"{query}\". Please try another song.")
 
         elif cmd in ("skip", "s"):
             # If user has an active Blackjack game, /s stands in the game

@@ -8,14 +8,30 @@ logger = logging.getLogger("HighriseOutfit")
 
 OUTFITS_FILE = os.path.join(os.path.dirname(__file__), "outfits.json")
 
+def make_item(id: str, amount: int = 1, type: str = "clothing", active_palette: int | None = None, account_bound: bool = False) -> Item:
+    """Safe factory creating a Highrise Item, tolerating unsupported attributes across SDK versions."""
+    item = Item(type=type, amount=amount, id=id)
+    if active_palette is not None:
+        try:
+            setattr(item, "active_palette", active_palette)
+        except Exception:
+            pass
+    if account_bound:
+        try:
+            setattr(item, "account_bound", account_bound)
+        except Exception:
+            pass
+    return item
+
+
 # Core facial features and body flesh (Standard Highrise Starter Base)
 BASE_FACE = [
-    Item(type='clothing', amount=1, id='body-flesh', active_palette=27),
-    Item(type='clothing', amount=1, id='eye-n_basic2018malesquaresleepy', active_palette=7),
-    Item(type='clothing', amount=1, id='eyebrow-n_basic2018newbrows07', active_palette=0),
-    Item(type='clothing', amount=1, id='nose-n_basic2018newnose05', active_palette=0),
-    Item(type='clothing', amount=1, id='mouth-basic2018chippermouth', active_palette=-1),
-    Item(type='clothing', amount=1, id='freckle-n_basic2018freckle04', active_palette=0),
+    make_item(id='body-flesh', active_palette=27),
+    make_item(id='eye-n_basic2018malesquaresleepy', active_palette=7),
+    make_item(id='eyebrow-n_basic2018newbrows07', active_palette=0),
+    make_item(id='nose-n_basic2018newnose05', active_palette=0),
+    make_item(id='mouth-basic2018chippermouth', active_palette=-1),
+    make_item(id='freckle-n_basic2018freckle04', active_palette=0),
 ]
 
 # Curated Stylish Starter/Free Presets
@@ -23,82 +39,82 @@ PRESETS = {
     "dj": {
         "description": "Signature DJ look with yellow hoodie, shield shades, white cuffed jeans & fanny pack",
         "items": [
-            Item(type='clothing', amount=1, id='hair_front-n_malenew05', active_palette=1),
-            Item(type='clothing', amount=1, id='hair_back-n_malenew05', active_palette=1),
-            Item(type='clothing', amount=1, id='glasses-n_room32019shieldsunglassesblack'),
-            Item(type='clothing', amount=1, id='shirt-n_room32019denimjackethoodie'),
-            Item(type='clothing', amount=1, id='pants-n_starteritems2019cuffedjeanswhite'),
-            Item(type='clothing', amount=1, id='shoes-n_room32019socksneakersgrey'),
-            Item(type='clothing', amount=1, id='bag-n_room32019fannypackblack'),
-            Item(type='clothing', amount=1, id='watch-n_room32019blackwatch'),
+            make_item(id='hair_front-n_malenew05', active_palette=1),
+            make_item(id='hair_back-n_malenew05', active_palette=1),
+            make_item(id='glasses-n_room32019shieldsunglassesblack'),
+            make_item(id='shirt-n_room32019denimjackethoodie'),
+            make_item(id='pants-n_starteritems2019cuffedjeanswhite'),
+            make_item(id='shoes-n_room32019socksneakersgrey'),
+            make_item(id='bag-n_room32019fannypackblack'),
+            make_item(id='watch-n_room32019blackwatch'),
         ]
     },
     "suit": {
         "description": "Flashy Black-Tie Suit with formal boots & black glasses",
         "items": [
-            Item(type='clothing', amount=1, id='hair_front-n_malenew05', active_palette=1),
-            Item(type='clothing', amount=1, id='hair_back-n_malenew05', active_palette=1),
-            Item(type='clothing', amount=1, id='glasses-n_starteritems2019squareframesblack'),
-            Item(type='clothing', amount=1, id='shirt-n_flashysuit'),
-            Item(type='clothing', amount=1, id='pants-n_starteritems2019cuffedjeansblack'),
-            Item(type='clothing', amount=1, id='shoes-n_room12019bootsblack'),
-            Item(type='clothing', amount=1, id='watch-n_room32019blackwatch'),
+            make_item(id='hair_front-n_malenew05', active_palette=1),
+            make_item(id='hair_back-n_malenew05', active_palette=1),
+            make_item(id='glasses-n_starteritems2019squareframesblack'),
+            make_item(id='shirt-n_flashysuit'),
+            make_item(id='pants-n_starteritems2019cuffedjeansblack'),
+            make_item(id='shoes-n_room12019bootsblack'),
+            make_item(id='watch-n_room32019blackwatch'),
         ]
     },
     "street": {
         "description": "Red Hypebeast Streetwear with dreads, aviator shields & high tops",
         "items": [
-            Item(type='clothing', amount=1, id='hair_front-n_malenew30', active_palette=1),
-            Item(type='clothing', amount=1, id='hair_back-n_malenew30', active_palette=1),
-            Item(type='clothing', amount=1, id='glasses-n_room32019aviatorshieldsyellow'),
-            Item(type='clothing', amount=1, id='shirt-n_room32019hoodiered'),
-            Item(type='clothing', amount=1, id='pants-n_room32019baggytrackpantsred'),
-            Item(type='clothing', amount=1, id='shoes-n_room12019hightopsred'),
-            Item(type='clothing', amount=1, id='bag-n_room32019sidebagblack'),
+            make_item(id='hair_front-n_malenew30', active_palette=1),
+            make_item(id='hair_back-n_malenew30', active_palette=1),
+            make_item(id='glasses-n_room32019aviatorshieldsyellow'),
+            make_item(id='shirt-n_room32019hoodiered'),
+            make_item(id='pants-n_room32019baggytrackpantsred'),
+            make_item(id='shoes-n_room12019hightopsred'),
+            make_item(id='bag-n_room32019sidebagblack'),
         ]
     },
     "camo": {
         "description": "Tactical Stealth look with camo tech pants, black tee & sock sneakers",
         "items": [
-            Item(type='clothing', amount=1, id='hair_front-n_malenew27', active_palette=1),
-            Item(type='clothing', amount=1, id='hair_back-n_malenew27', active_palette=1),
-            Item(type='clothing', amount=1, id='glasses-n_room32019shieldsunglassesblack'),
-            Item(type='clothing', amount=1, id='shirt-n_starteritems2019maletshirtblack'),
-            Item(type='clothing', amount=1, id='pants-n_room22019techpantscamo'),
-            Item(type='clothing', amount=1, id='shoes-n_room32019socksneakersblack'),
-            Item(type='clothing', amount=1, id='bag-n_room32019fannypackblack'),
+            make_item(id='hair_front-n_malenew27', active_palette=1),
+            make_item(id='hair_back-n_malenew27', active_palette=1),
+            make_item(id='glasses-n_room32019shieldsunglassesblack'),
+            make_item(id='shirt-n_starteritems2019maletshirtblack'),
+            make_item(id='pants-n_room22019techpantscamo'),
+            make_item(id='shoes-n_room32019socksneakersblack'),
+            make_item(id='bag-n_room32019fannypackblack'),
         ]
     },
     "goth": {
         "description": "Goth Rocker with skull sweater, ripped black denim & goth necklace",
         "items": [
-            Item(type='clothing', amount=1, id='hair_front-n_malenew05', active_palette=1),
-            Item(type='clothing', amount=1, id='hair_back-n_malenew05', active_palette=1),
-            Item(type='clothing', amount=1, id='necklace-n_12'),
-            Item(type='clothing', amount=1, id='shirt-f_skullsweaterblack'),
-            Item(type='clothing', amount=1, id='pants-n_room12019rippedpantsblack'),
-            Item(type='clothing', amount=1, id='shoes-n_room12019bootsblack'),
+            make_item(id='hair_front-n_malenew05', active_palette=1),
+            make_item(id='hair_back-n_malenew05', active_palette=1),
+            make_item(id='necklace-n_12'),
+            make_item(id='shirt-f_skullsweaterblack'),
+            make_item(id='pants-n_room12019rippedpantsblack'),
+            make_item(id='shoes-n_room12019bootsblack'),
         ]
     },
     "chill": {
         "description": "Summer Chill with vintage white jersey, shorts & white converse",
         "items": [
-            Item(type='clothing', amount=1, id='hair_front-n_malenew25', active_palette=1),
-            Item(type='clothing', amount=1, id='hair_back-n_malenew25', active_palette=1),
-            Item(type='clothing', amount=1, id='shirt-n_room32019jerseywhite'),
-            Item(type='clothing', amount=1, id='pants-n_starteritems2019mensshortsblack'),
-            Item(type='clothing', amount=1, id='shoes-n_starteritems2018conversewhite'),
-            Item(type='clothing', amount=1, id='watch-n_room32019blackwatch'),
+            make_item(id='hair_front-n_malenew25', active_palette=1),
+            make_item(id='hair_back-n_malenew25', active_palette=1),
+            make_item(id='shirt-n_room32019jerseywhite'),
+            make_item(id='pants-n_starteritems2019mensshortsblack'),
+            make_item(id='shoes-n_starteritems2018conversewhite'),
+            make_item(id='watch-n_room32019blackwatch'),
         ]
     },
     "puffer": {
         "description": "Cozy Green Puffer Jacket with blue cuffed jeans & black sneakers",
         "items": [
-            Item(type='clothing', amount=1, id='hair_front-n_malenew05', active_palette=1),
-            Item(type='clothing', amount=1, id='hair_back-n_malenew05', active_palette=1),
-            Item(type='clothing', amount=1, id='shirt-n_room32019malepuffyjacketgreen'),
-            Item(type='clothing', amount=1, id='pants-n_starteritems2019cuffedjeansblue'),
-            Item(type='clothing', amount=1, id='shoes-n_room12019sneakersblack'),
+            make_item(id='hair_front-n_malenew05', active_palette=1),
+            make_item(id='hair_back-n_malenew05', active_palette=1),
+            make_item(id='shirt-n_room32019malepuffyjacketgreen'),
+            make_item(id='pants-n_starteritems2019cuffedjeansblue'),
+            make_item(id='shoes-n_room12019sneakersblack'),
         ]
     }
 }
@@ -129,10 +145,10 @@ def item_to_dict(item: Item) -> dict:
 
 
 def dict_to_item(d: dict) -> Item:
-    return Item(
-        type=d.get("type", "clothing"),
-        amount=d.get("amount", 1),
+    return make_item(
         id=d["id"],
+        amount=d.get("amount", 1),
+        type=d.get("type", "clothing"),
         account_bound=d.get("account_bound", False),
         active_palette=d.get("active_palette")
     )

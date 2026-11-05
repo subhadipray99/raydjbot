@@ -126,6 +126,20 @@ class RadioBroadcaster:
                 self._active_proc.terminate()
             except Exception:
                 pass
+
+            async def _force_kill(p):
+                try:
+                    await asyncio.sleep(0.5)
+                    if p and p.returncode is None:
+                        p.kill()
+                except Exception:
+                    pass
+
+            try:
+                asyncio.create_task(_force_kill(self._active_proc))
+            except Exception:
+                pass
+
         return True, f"⏭️ Skipped: \"{title}\""
 
     def start(self, bot_instance=None):
@@ -150,13 +164,15 @@ class RadioBroadcaster:
 
                 track = music_manager.current
                 if track:
-                    # Stream the current track
-                    await self._play_track(track)
-                    # Once finished or skipped, reset current
-                    music_manager.current = None
-                    music_manager.started_at = 0.0
-                    music_manager._queue_updated_event.set()
-                    self._skip_flag = False
+                    try:
+                        # Stream the current track
+                        await self._play_track(track)
+                    finally:
+                        # Once finished, skipped, or errored, ALWAYS reset current
+                        music_manager.current = None
+                        music_manager.started_at = 0.0
+                        music_manager._queue_updated_event.set()
+                        self._skip_flag = False
                 else:
                     # Queue is empty and autoplay disabled: stream silence keeping the station alive 24/7
                     await self._stream_idle_silence_tick()
@@ -195,9 +211,13 @@ class RadioBroadcaster:
 
         download_task = asyncio.create_task(music_manager.ensure_track_audio_file(track))
         slice_idx = 0
+        start_wait = time.time()
+        max_download_wait = 35.0  # Max 35s downloading before falling back
 
         while not download_task.done():
-            if self._skip_flag:
+            if self._skip_flag or (time.time() - start_wait > max_download_wait):
+                if time.time() - start_wait > max_download_wait:
+                    logger.warning(f"Audio download for '{track.title}' exceeded {max_download_wait}s timeout. Aborting download.")
                 download_task.cancel()
                 return None
             # Broadcast frame-aligned silence slice so Highrise never times out
@@ -254,8 +274,13 @@ class RadioBroadcaster:
             )
             self._active_proc = proc
 
-            # Read first chunk to ensure stream opened successfully
-            first_chunk = await proc.stdout.read(4096)
+            # Read first chunk with a 10s timeout to ensure stream opened successfully
+            try:
+                first_chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=10.0)
+            except asyncio.TimeoutError:
+                logger.warning(f"FFmpeg startup read timed out for '{track.title}' from '{source[:60]}...'")
+                return False
+
             if not first_chunk:
                 stderr_data = await proc.stderr.read()
                 err_msg = stderr_data.decode("utf-8", errors="ignore").strip()
@@ -274,12 +299,26 @@ class RadioBroadcaster:
                 except Exception:
                     pass
 
+            max_duration = (track.duration_sec if track.duration_sec > 0 else 300) + 15
+
             while True:
                 if self._skip_flag:
                     logger.info(f"Track '{track.title}' was skipped.")
                     break
 
-                chunk = await proc.stdout.read(4096)
+                # Duration watchdog: never let a track run indefinitely past its duration
+                elapsed = time.time() - music_manager.started_at
+                if elapsed > max_duration:
+                    logger.info(f"Track '{track.title}' reached natural max duration ({elapsed:.1f}s / {max_duration}s). Finishing playback.")
+                    break
+
+                # Read chunk with a 10s socket stall timeout
+                try:
+                    chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=10.0)
+                except asyncio.TimeoutError:
+                    logger.warning(f"FFmpeg stream read timed out (no data for 10s) for '{track.title}'. Ending track playback.")
+                    break
+
                 if not chunk:
                     logger.info(f"Track '{track.title}' completed playback.")
                     break
@@ -319,7 +358,11 @@ class RadioBroadcaster:
             if proc:
                 try:
                     proc.terminate()
-                    await proc.wait()
+                    try:
+                        await asyncio.wait_for(proc.wait(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        proc.kill()
+                        await asyncio.wait_for(proc.wait(), timeout=0.5)
                 except Exception:
                     pass
             self._active_proc = None

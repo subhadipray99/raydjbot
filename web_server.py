@@ -19,7 +19,7 @@ logger = logging.getLogger("WebServer")
 start_time = time.time()
 
 # In-memory log buffer for live diagnostics
-recent_logs = collections.deque(maxlen=150)
+recent_logs = collections.deque(maxlen=1000)
 
 class MemoryLogHandler(logging.Handler):
     def emit(self, record):
